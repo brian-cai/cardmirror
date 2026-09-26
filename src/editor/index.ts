@@ -170,7 +170,8 @@ import {
   CHROME_SCALE_MIN_PCT,
   CHROME_SCALE_MAX_PCT,
   migrateAutoUpdateOptOut, migrateDistinguishShadingDefault, migrateHighSchoolTimerDefault, effectiveDocTypeFormat } from './settings.js';
-import { openSaveAs } from './save-as-ui.js';
+import { openSaveAs, type SaveAsResult } from './save-as-ui.js';
+import { buildPrintHtml, printHtmlInBrowser } from './pdf-export.js';
 import { highlightColorLabel, shadingColorLabel } from './color-palette.js';
 import { viewportSpellcheckPlugin } from './viewport-spellcheck.js';
 import { commentsPlugin, commentsKey, loadThreads, getCommentsState, gcOrphanThreads, newCommentId, setCommentIdSessionResolver } from './comments-plugin.js';
@@ -546,6 +547,8 @@ const homeBtn = document.getElementById('home-btn') as HTMLButtonElement | null;
 const openBtn = document.getElementById('open-btn') as HTMLButtonElement;
 const newBtn = document.getElementById('new-btn') as HTMLButtonElement | null;
 const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
+/** Save As (format, presets, PDF) — beside Save, enabled alongside it. */
+const saveAsBtn = document.getElementById('save-as-btn') as HTMLButtonElement | null;
 const autosaveBtn = document.getElementById('autosave-btn') as HTMLButtonElement | null;
 const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
 const referenceBtn = document.getElementById('reference-btn') as HTMLButtonElement | null;
@@ -1295,6 +1298,7 @@ export function enableMultiDocMode(opts: {
   // The shared exportBtn is enabled by the multi-pane shell once
   // any pane has a view focused — for safety, enable it here too.
   exportBtn.disabled = false;
+  if (saveAsBtn) saveAsBtn.disabled = false;
 }
 
 /** All mark names any formatting-panel button cares about — the fused
@@ -2091,7 +2095,9 @@ const ribbonContext: RibbonContext = {
     void runSaveFlow();
   },
   saveAs: () => {
-    void runSaveAsFlow();
+    // The explicit Save As (command, menu, ribbon button) is the one entry
+    // that offers PDF — close / quit prompts need a real save of the doc.
+    void runSaveAsFlow({ allowPdf: true });
   },
   saveSendDoc: () => {
     void runSaveSendDocFlow();
@@ -4209,7 +4215,8 @@ function initRibbonResizer(): void {
                                  //     fine — display:none is idempotent.
     ['comments-ops-panel'],      // (h) Comments toggle + add-comment.
     ['open-btn', 'new-btn',      // (i) File ops: open, new, save,
-     'export-btn', 'autosave-btn'], //     autosave-toggle.
+     'export-btn', 'save-as-btn', //     save as, autosave-toggle.
+     'autosave-btn'],
     ['view-ops-panel'],          // (j) Read mode + nav-pane toggle.
     ['settings-btn',             // (k) Settings + keyboard-shortcuts
      'reference-btn'],           //     reference. Genuinely last —
@@ -4389,6 +4396,7 @@ if (timerToggleBtn) {
   button('new-btn', 'newDocument');
   button('home-btn', 'goHome', 'Home');
   button('export-btn', 'save');
+  button('save-as-btn', 'saveAs');
   button('settings-btn', 'openSettings');
   button('reference-btn', 'openShortcutsReference');
   button('read-mode-btn', 'toggleReadMode');
@@ -6204,6 +6212,7 @@ function mountView(doc: PMNode, threads: Thread[] = []): void {
   // the doc comment on `syncCardIntrinsicWidth` for why.
   setupCardIntrinsicWidthSync();
   exportBtn.disabled = false;
+  if (saveAsBtn) saveAsBtn.disabled = false;
   // Initial paint: do the heavy update synchronously so the user sees
   // the right thing immediately on doc load.
   navPanel.update(doc);
@@ -8124,35 +8133,36 @@ function bakePrivateThreadsIntoDoc(
   return { doc: state.doc, threads };
 }
 
-/** Serialize the active doc into bytes in the given format. Shared
- *  by the Save and Save-As flows. The `opts` arg controls export-
- *  time filtering (read mode, drop analytics / undertags / comments)
- *  and the opt-in baking of private notes / AI threads into comments. */
-async function serializeForSave(
-  format: 'cmir' | 'docx',
-  opts: {
-    includeComments: boolean;
-    includeAnalytics: boolean;
-    includeUndertags: boolean;
-    readMode: boolean;
-    /** Bake private notes into the file as real comments (opt-in). */
-    includeNotes?: boolean;
-    /** Bake AI threads into the file as real comments (opt-in). */
-    includeAiThreads?: boolean;
-    /** Keep only the cards that contain a reading marker, flat. */
-    markedCardsOnly?: boolean;
-    /** Card numbers: keep the live skeleton, freeze as heading text, or
-     *  remove. Omitted → freeze when the export drops numbered content
-     *  (analytics / read mode / marked cards), else keep. */
-    numbering?: NumberingExportMode;
-    /** The write is the user's own working file (Save in place, a
-     *  conflicted copy of it), not an export made for someone else. */
-    workingCopy?: boolean;
-  },
-  /** Stable doc identity to embed (`.cmir` field / `.docx` docProps).
-   *  Omitted for derived/lossy exports, which stay clean (no identity). */
-  docId?: string,
-): Promise<Uint8Array> {
+/** Export-time filtering shared by every Save / Save As format. */
+interface SaveExportOptions {
+  includeComments: boolean;
+  includeAnalytics: boolean;
+  includeUndertags: boolean;
+  readMode: boolean;
+  /** Bake private notes into the file as real comments (opt-in). */
+  includeNotes?: boolean;
+  /** Bake AI threads into the file as real comments (opt-in). */
+  includeAiThreads?: boolean;
+  /** Keep only the cards that contain a reading marker, flat. */
+  markedCardsOnly?: boolean;
+  /** Card numbers: keep the live skeleton, freeze as heading text, or
+   *  remove. Omitted → freeze when the export drops numbered content
+   *  (analytics / read mode / marked cards), else keep. */
+  numbering?: NumberingExportMode;
+  /** The write is the user's own working file (Save in place, a
+   *  conflicted copy of it), not an export made for someone else. */
+  workingCopy?: boolean;
+}
+
+/** The active doc as it will be exported: card numbers settled, the
+ *  preset's filtering applied (read mode, drop analytics / undertags /
+ *  comments) and, opt-in, private notes / AI threads baked in as comments.
+ *  Returns the doc plus every comment thread it carries. Shared by
+ *  `serializeForSave` and the PDF export. */
+function buildExportDoc(
+  format: 'cmir' | 'docx' | 'pdf',
+  opts: SaveExportOptions,
+): { doc: PMNode; threads: Thread[] } {
   const liveDoc = view ? view.state.doc : currentDoc;
   // Card numbers are settled FIRST, on the full document, so the strips
   // below cannot renumber what survives: frozen as heading text or removed,
@@ -8170,8 +8180,9 @@ async function serializeForSave(
     // Exports to Word only — never the user's working file, in either
     // format (see bakesUnreadRedOnSave: baked red is read back as marker
     // text and deleted with the marker).
+    // A PDF is a printed export, so it keeps the red like Word.
     markUnreadAfterMarker: bakesUnreadRedOnSave(
-      format,
+      format === 'pdf' ? 'docx' : format,
       opts.workingCopy === true,
       settings.get('markUnreadAfterMarker'),
     ),
@@ -8193,7 +8204,20 @@ async function serializeForSave(
     exportDocNode = baked.doc;
     extraThreads.push(...baked.threads);
   }
-  const allThreads = [...baseThreads, ...extraThreads];
+  return { doc: exportDocNode, threads: [...baseThreads, ...extraThreads] };
+}
+
+/** Serialize the active doc into bytes in the given format. Shared
+ *  by the Save and Save-As flows. The `opts` arg controls export-
+ *  time filtering (see `buildExportDoc`). */
+async function serializeForSave(
+  format: 'cmir' | 'docx',
+  opts: SaveExportOptions,
+  /** Stable doc identity to embed (`.cmir` field / `.docx` docProps).
+   *  Omitted for derived/lossy exports, which stay clean (no identity). */
+  docId?: string,
+): Promise<Uint8Array> {
+  const { doc: exportDocNode, threads: allThreads } = buildExportDoc(format, opts);
   const threadsOpt = allThreads.length > 0 ? { threads: allThreads } : {};
   if (format === 'cmir') {
     // Async gzip: the DEFLATE runs off the main thread, so autosave's
@@ -8269,14 +8293,49 @@ async function confirmDocxDropsLiveLinks(): Promise<boolean> {
   });
 }
 
+/** Save As → PDF. Builds the export doc with the dialog's preset (live card
+ *  numbers frozen to text — a printed page has no live skeleton — and live
+ *  views materialized, as for Word), renders it to a self-contained page and
+ *  prints that: straight to a file on the desktop, through the browser's
+ *  print dialog on the web. The working doc's file, name and dirty state
+ *  are untouched. */
+async function runPdfExport(choice: SaveAsResult, nearPath: string | null): Promise<void> {
+  const { doc } = buildExportDoc('pdf', {
+    includeComments: choice.includeComments,
+    includeAnalytics: choice.includeAnalytics,
+    includeUndertags: choice.includeUndertags,
+    readMode: choice.readMode,
+    includeNotes: choice.includeNotes,
+    includeAiThreads: choice.includeAiThreads,
+    markedCardsOnly: choice.markedCardsOnly,
+    numbering: choice.numbering === 'keep' ? 'freeze' : choice.numbering,
+  });
+  const html = buildPrintHtml(flattenSelfRefs(doc, newHeadingId), basenameWithoutExt(choice.filename));
+  const electron = getElectronHost();
+  if (!electron) {
+    await printHtmlInBrowser(html);
+    return;
+  }
+  const bytes = await warnIfSlow(electron.htmlToPdf(html), choice.filename);
+  if (!bytes) {
+    void alertDialog('Saving as PDF needs a newer version of the CardMirror desktop app.');
+    return;
+  }
+  const result = await getHost().saveAs(choice.filename, bytes, {
+    filters: [{ name: 'PDF (.pdf)', extensions: ['pdf'] }],
+    ...(nearPath ? { nearPath } : {}),
+  });
+  if (result) flashSaveSuccess();
+}
+
 /** Hardened Save-As entry: the flow must NEVER reject — callers range from
  *  fire-and-forget buttons (`void runSaveAsFlow()`) to close/quit handlers
  *  where an escaped rejection silently aborts the close (field bug
  *  2026-07-12: "click Save As → nothing happens"). A crash anywhere in the
  *  flow now surfaces as an explicit dialog and reads as a failed save. */
-export async function runSaveAsFlow(): Promise<boolean> {
+export async function runSaveAsFlow(opts: { allowPdf?: boolean } = {}): Promise<boolean> {
   try {
-    return await runSaveAsFlowInner();
+    return await runSaveAsFlowInner(opts);
   } catch (err) {
     console.error('Save As flow crashed:', err);
     void alertDialog(
@@ -8286,7 +8345,7 @@ export async function runSaveAsFlow(): Promise<boolean> {
   }
 }
 
-async function runSaveAsFlowInner(): Promise<boolean> {
+async function runSaveAsFlowInner(opts: { allowPdf?: boolean }): Promise<boolean> {
   const file = activeFile();
   const suggestedName = basenameWithoutExt(file.filename ?? 'untitled');
   // Existing on-disk handle wins (preserves the file's current
@@ -8296,8 +8355,15 @@ async function runSaveAsFlowInner(): Promise<boolean> {
   const choice = await openSaveAs({
     initialFilename: suggestedName,
     defaultFormat,
+    allowPdf: opts.allowPdf,
   });
   if (!choice) return false;
+  // PDF is always a separate export — the working doc isn't saved, so
+  // report false (nothing that waits on a save may proceed on it).
+  if (choice.format === 'pdf') {
+    await runPdfExport(choice, typeof file.handle === 'string' ? file.handle : null);
+    return false;
+  }
   // Writing to .docx flattens live views / linked copies — confirm first.
   if (choice.format === 'docx' && !(await confirmDocxDropsLiveLinks())) return false;
   // A full-fidelity save (everything included, not read-mode) IS the
@@ -9024,6 +9090,9 @@ async function runSaveFlowInner(): Promise<boolean> {
 exportBtn.addEventListener('click', () => {
   void runSaveFlow();
 });
+
+// Save As: always the dialog (new name / format / preset, or PDF).
+saveAsBtn?.addEventListener('click', () => ribbonContext.saveAs());
 
 // ─── Save visual feedback ──────────────────────────────────────────
 // On every successful save (manual or autosave) we briefly swap the
@@ -11084,7 +11153,8 @@ async function saveRecoveryEntry(entry: JournalEntry): Promise<boolean> {
     initialFilename: entry.filename || 'Untitled',
     defaultFormat: entry.format ?? 'cmir',
   });
-  if (!choice) return false;
+  // PDF isn't offered here (no `allowPdf`); the guard narrows the type.
+  if (!choice || choice.format === 'pdf') return false;
   try {
     const bytes = await reserializeJournalAs(entry, choice.format);
     const filters =
