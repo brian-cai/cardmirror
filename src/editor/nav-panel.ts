@@ -28,7 +28,7 @@ import {
 import { registerOpenContextMenu, clearOpenContextMenu } from './context-menu-registry.js';
 import { dragController, type DragItem, type DragSurface } from './drag-controller.js';
 import { isTransclusionNode, zoneIdentity } from './transclusion.js';
-import { isSelfRef, resolveSelfProjection } from './self-transclusion.js';
+import { isSelfRef, resolveSelfProjection, typesHoldingSelfRef } from './self-transclusion.js';
 import { transclusionDivergenceKey } from './transclusion-divergence-plugin.js';
 
 /** Outline entries including the content projected by intra-doc live windows
@@ -39,8 +39,9 @@ import { transclusionDivergenceKey } from './transclusion-divergence-plugin.js';
 function collectOutlineWithWindows(doc: PMNode): HeadingEntry[] {
   const base = collectHeadings(doc);
   const projected: HeadingEntry[] = [];
+  const holders = typesHoldingSelfRef(doc.type.schema);
   doc.descendants((node, pos) => {
-    if (!isSelfRef(node)) return true;
+    if (!isSelfRef(node)) return holders.has(node.type);
     const proj = resolveSelfProjection(doc, String(node.attrs['source_heading_id'] ?? ''));
     if (proj.missing || proj.content.size === 0) return false;
     const wrapped = doc.type.create(null, proj.content);
