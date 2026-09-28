@@ -1363,6 +1363,10 @@ class Slot {
       cancelIdle(rec.heavyUpdateTimer);
       rec.heavyUpdateTimer = null;
     }
+    if (rec.journalTimer !== null) {
+      window.clearTimeout(rec.journalTimer);
+      rec.journalTimer = null;
+    }
     if (rec.autosaveTimer !== null) {
       window.clearTimeout(rec.autosaveTimer);
       rec.autosaveTimer = null;
