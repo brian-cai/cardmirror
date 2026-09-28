@@ -92,6 +92,12 @@ import {
   isReadAllowed,
 } from './read-scope.js';
 import { promises as fs } from 'node:fs';
+import {
+  parseHistoryEnvelope,
+  readHistoryHeader,
+  type HistoryEnvelopeIpc,
+  type HistoryHeader,
+} from './session-history-file.js';
 import * as path from 'node:path';
 import { gzip as zlibGzip, gunzip as zlibGunzip } from 'node:zlib';
 import { promisify } from 'node:util';
@@ -1696,16 +1702,6 @@ const HISTORY_EXTENSION = '.cmir-history';
 const HISTORY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const HISTORY_MAX_TOTAL_BYTES = 500 * 1024 * 1024;
 
-interface HistoryEnvelopeIpc {
-  v: 1;
-  roomId: string;
-  docTitle: string;
-  startedAt: number;
-  updatedAt: number;
-  changeTimes: { peer: string; counter: number; at: number }[];
-  snapshotB64: string;
-}
-
 /** Write-side IPC shape: raw snapshot bytes. Encoding happens HERE —
  *  Buffer's native base64 costs ~2ms where the renderer's JS encoder
  *  cost 463ms per write on a 20 MB tournament master. */
@@ -1724,38 +1720,6 @@ function historyPathFor(roomId: string): string {
   // this string becomes a filename.
   const safe = roomId.replace(/[^a-zA-Z0-9_-]/g, '_');
   return path.join(journalsDir(), `${safe}${HISTORY_EXTENSION}`);
-}
-
-function parseHistoryEnvelope(text: string): HistoryEnvelopeIpc | null {
-  try {
-    const p = JSON.parse(text) as Partial<HistoryEnvelopeIpc>;
-    if (
-      p?.v !== 1 ||
-      typeof p.roomId !== 'string' ||
-      !p.roomId ||
-      typeof p.snapshotB64 !== 'string' ||
-      !p.snapshotB64 ||
-      typeof p.startedAt !== 'number' ||
-      typeof p.updatedAt !== 'number' ||
-      !Array.isArray(p.changeTimes)
-    ) {
-      return null;
-    }
-    return {
-      v: 1,
-      roomId: p.roomId,
-      docTitle: typeof p.docTitle === 'string' ? p.docTitle : 'Untitled',
-      startedAt: p.startedAt,
-      updatedAt: p.updatedAt,
-      changeTimes: p.changeTimes.filter(
-        (t): t is { peer: string; counter: number; at: number } =>
-          typeof t?.peer === 'string' && typeof t?.counter === 'number' && typeof t?.at === 'number',
-      ),
-      snapshotB64: p.snapshotB64,
-    };
-  } catch {
-    return null;
-  }
 }
 
 // Same per-key write chain as journals: two in-flight writes to one
@@ -1856,21 +1820,14 @@ ipcMain.handle('host:list-history', async () => {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw err;
   }
-  const rows: { roomId: string; docTitle: string; startedAt: number; updatedAt: number; sizeBytes: number }[] = [];
+  const rows: HistoryHeader[] = [];
   for (const name of entries) {
     if (!name.endsWith(HISTORY_EXTENSION)) continue;
     const fullPath = path.join(journalsDir(), name);
     try {
-      const text = await fs.readFile(fullPath, 'utf8');
-      const env = parseHistoryEnvelope(text);
-      if (!env) continue;
-      rows.push({
-        roomId: env.roomId,
-        docTitle: env.docTitle,
-        startedAt: env.startedAt,
-        updatedAt: env.updatedAt,
-        sizeBytes: Buffer.byteLength(text),
-      });
+      // Header only: the snapshot (most of the file) isn't needed to list it.
+      const header = await readHistoryHeader(fullPath);
+      if (header) rows.push(header);
     } catch (err) {
       console.warn(`Skipping unreadable history file ${name}:`, err);
     }
