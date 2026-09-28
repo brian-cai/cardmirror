@@ -35,7 +35,7 @@ import {
   effectivePluginDefaultKeys,
   foldKeyString,
   type AnyCommandId,
-} from './ribbon-commands.js';
+} from './ribbon-command-meta.js';
 import { pluginCommandIds } from './plugin-registry.js';
 import { RIBBON_GROUPS } from './ribbon-groups.js';
 import { isRibbonCommandAvailable } from './ribbon-availability.js';

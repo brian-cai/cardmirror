@@ -8,7 +8,7 @@
  * module-load assertion at the bottom enforces this.
  */
 
-import { RIBBON_COMMAND_IDS, type RibbonCommandId } from './ribbon-commands.js';
+import { RIBBON_COMMAND_IDS, type RibbonCommandId } from './ribbon-command-meta.js';
 
 export interface RibbonGroup {
   title: string;

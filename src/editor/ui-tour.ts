@@ -27,7 +27,7 @@
  */
 
 import { settings, hasCustomizedSettings } from './settings.js';
-import { formatKeyForDisplay } from './ribbon-commands.js';
+import { formatKeyForDisplay } from './ribbon-command-meta.js';
 import { quickCardSearchUI, onQuickCardSearchOpen } from './quick-card-search-ui.js';
 
 export interface TourStep {
