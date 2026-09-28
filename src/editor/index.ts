@@ -18,7 +18,8 @@ import { collectCardsWithMatchingCite } from './copy-matching-cite.js';
 import { baseKeymap } from 'prosemirror-commands';
 import { Node as PMNode, type Mark } from 'prosemirror-model';
 import { schema, newHeadingId } from '../schema/index.js';
-import { fromDocxFull, toDocx, serializeNative, serializeNativeAsync, parseNative, parseNativeSalvage, NativeDamagedError, readDocIdFromBytes, stampDocId, setSaveHealListener } from '../index.js';
+import { toDocx, serializeNative, serializeNativeAsync, parseNative, parseNativeSalvage, NativeDamagedError, readDocIdFromBytes, stampDocId, setSaveHealListener } from '../index.js';
+import { openDocxOffThread } from './docx-open.js';
 import { transformForExport, countMarkedCards } from '../export/transform-for-export.js';
 import type { Thread, Comment } from './comments-plugin.js';
 import type { LocalComment } from './learn-store.js';
@@ -6899,7 +6900,7 @@ async function routeOpenedFile(opened: OpenedFile): Promise<void> {
       docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
       docId = parsed.docId;
     } else {
-      const result = await fromDocxFull(openBytes);
+      const result = await openDocxOffThread(openBytes);
       docNode = result.doc;
       docThreads = result.threads;
       docId = result.docId;
@@ -7094,7 +7095,7 @@ async function loadFileInPlace(file: {
     docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
     docId = parsed.docId;
   } else {
-    const result = await fromDocxFull(openBytes);
+    const result = await openDocxOffThread(openBytes);
     docNode = result.doc;
     docThreads = result.threads;
     docId = result.docId;
@@ -8759,7 +8760,7 @@ async function reloadActiveFromDisk(handle: string): Promise<void> {
       docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
       docId = parsed.docId;
     } else {
-      const result = await fromDocxFull(openBytes);
+      const result = await openDocxOffThread(openBytes);
       docNode = result.doc;
       docThreads = result.threads;
       docId = result.docId;
@@ -10474,7 +10475,7 @@ async function mountResumedSession(roomId: string): Promise<void> {
 }
 
 /** Mount a SpawnWindowPayload into this freshly-spawned window.
- *  Parses the bytes (cmir → parseNative, docx → fromDocxFull),
+ *  Parses the bytes (cmir → parseNative, docx → fromDocxFull, off-thread),
  *  mounts the result, and sets the doc-state module vars. */
 async function mountFromSpawnPayload(
   payload: Awaited<ReturnType<ReturnType<typeof getHost>['getInitialDoc']>>,
@@ -10515,7 +10516,7 @@ async function mountFromSpawnPayload(
       docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
       docId = parsed.docId;
     } else {
-      const result = await fromDocxFull(openBytes);
+      const result = await openDocxOffThread(openBytes);
       docNode = result.doc;
       docThreads = result.threads;
       docId = result.docId;

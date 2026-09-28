@@ -38,7 +38,8 @@ import { EditorView } from 'prosemirror-view';
 import { setViewDocPath } from './transclusion-doc-path.js';
 import { Node as PMNode } from 'prosemirror-model';
 import { schema, newHeadingId } from '../schema/index.js';
-import { fromDocxFull, parseNative, serializeNativeAsync, NativeDamagedError, NATIVE_FILE_EXTENSION } from '../index.js';
+import { parseNative, serializeNativeAsync, NativeDamagedError, NATIVE_FILE_EXTENSION } from '../index.js';
+import { openDocxOffThread } from './docx-open.js';
 import { settings } from './settings.js';
 import { MARK_UNREAD_TOGGLE } from './mark-unread-plugin.js';
 import { PMD_READ_MODE_TOGGLE } from './read-mode-plugin.js';
@@ -2625,7 +2626,7 @@ class MultiPaneShell {
     let parsed: { doc: PMNode; threads: import('./comments-plugin.js').Thread[]; docId: string | null };
     try {
       const bytes = await maybeDecryptForOpen(file.bytes, file.name);
-      parsed = file.format === 'docx' ? await fromDocxFull(bytes) : parseNative(bytes);
+      parsed = file.format === 'docx' ? await openDocxOffThread(bytes) : parseNative(bytes);
     } catch (err) {
       if (err instanceof OpenCancelledError) return;
       showToast(`Reload failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -3089,7 +3090,7 @@ class MultiPaneShell {
     if (!isDocxBytes) {
       ({ doc, threads, docId } = parseNative(openBytes));
     } else {
-      ({ doc, threads, docId } = await fromDocxFull(openBytes));
+      ({ doc, threads, docId } = await openDocxOffThread(openBytes));
     }
     const slot = this.slots[target];
     // With the setting on, an Untitled doc nobody has touched gives up its
