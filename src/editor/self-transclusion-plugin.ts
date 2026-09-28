@@ -29,7 +29,7 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import type { Transaction, EditorState } from 'prosemirror-state';
 import type { Node as PMNode, Fragment } from 'prosemirror-model';
-import { isSelfRef, makeProjectionResolver } from './self-transclusion.js';
+import { isSelfRef, makeProjectionResolver, typesHoldingSelfRef } from './self-transclusion.js';
 import { rewriteHeadingIdsInFragment } from './transclusion.js';
 
 export const selfRefPluginKey = new PluginKey('selfRefContent');
@@ -86,9 +86,10 @@ function editsInsideView(tr: Transaction): boolean {
 function rederiveTransaction(state: EditorState): Transaction | null {
   const doc = state.doc;
   const resolve = makeProjectionResolver(doc);
+  const holders = typesHoldingSelfRef(doc.type.schema);
   const edits: { from: number; to: number; content: Fragment }[] = [];
   doc.descendants((node, pos) => {
-    if (!isSelfRef(node)) return true;
+    if (!isSelfRef(node)) return holders.has(node.type);
     const target = rewriteHeadingIdsInFragment(
       resolve(String(node.attrs['source_heading_id'] ?? '')).content,
       () => '',
