@@ -139,7 +139,7 @@ import {
   commandAliasesFor,
   effectivePluginDefaultKeys,
   type AnyCommandId,
-} from './ribbon-commands.js';
+} from './ribbon-command-meta.js';
 import { availableRibbonCommandIds } from './ribbon-availability.js';
 import { checkedSliceFromJSON } from '../schema/slice-check.js';
 import { isRightClickContextMenu } from './context-menu-gate.js';

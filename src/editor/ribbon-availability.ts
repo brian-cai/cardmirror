@@ -19,7 +19,7 @@
  * this filtered one, so a hidden command's binding still blocks reuse.
  */
 
-import { RIBBON_COMMAND_IDS, type AnyCommandId, type RibbonCommandId } from './ribbon-commands.js';
+import { RIBBON_COMMAND_IDS, type AnyCommandId, type RibbonCommandId } from './ribbon-command-meta.js';
 import { pluginCommandIds } from './plugin-registry.js';
 import { settings } from './settings.js';
 import { collabEnabled } from './collab/collab-gate.js';

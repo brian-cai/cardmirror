@@ -101,12 +101,14 @@ export const headingIdGuardPlugin: Plugin = new Plugin({
       return acc;
     })();
     const rightfulPos = new Map<string, number>();
+    // Both walks stop at textblocks: a heading is one, and none holds a
+    // heading, so their text runs (most of the doc's nodes) are never visited.
     oldState.doc.descendants((n, pos) => {
       if (HEADING_TYPE_NAMES.has(n.type.name)) {
         const id = n.attrs['id'];
         if (typeof id === 'string' && id) rightfulPos.set(id, mapping.map(pos));
       }
-      return true;
+      return !n.isTextblock;
     });
 
     let fix: Transaction | null = null;
@@ -116,15 +118,15 @@ export const headingIdGuardPlugin: Plugin = new Plugin({
       fix.setNodeMarkup(pos, null, { ...node.attrs, id: newHeadingId() }, node.marks);
     };
     newState.doc.descendants((n, pos) => {
-      if (!HEADING_TYPE_NAMES.has(n.type.name)) return true;
+      if (!HEADING_TYPE_NAMES.has(n.type.name)) return !n.isTextblock;
       const id = n.attrs['id'];
       if (typeof id !== 'string' || !id) {
         remint(pos, n); // fit-synthesized head — stamp it
-        return true;
+        return !n.isTextblock;
       }
       if (claimed.has(id)) {
         remint(pos, n); // a later bearer of an already-claimed id
-        return true;
+        return !n.isTextblock;
       }
       const rightful = rightfulPos.get(id);
       if (rightful !== undefined && rightful !== pos) {
@@ -133,11 +135,11 @@ export const headingIdGuardPlugin: Plugin = new Plugin({
         const atRightful = newState.doc.nodeAt(rightful);
         if (atRightful && atRightful.attrs['id'] === id && rightful > pos) {
           remint(pos, n);
-          return true;
+          return !n.isTextblock;
         }
       }
       claimed.add(id);
-      return true;
+      return !n.isTextblock;
     });
     return fix;
   },

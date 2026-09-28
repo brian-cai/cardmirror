@@ -179,7 +179,34 @@ export function serializeNativeAsync(
   doc: PMNode,
   opts: SerializeNativeOptions = {},
 ): Promise<Uint8Array> {
-  return gzipAsync(buildNativeEnvelope(doc, opts));
+  const last = lastAsyncSerialize;
+  if (last && last.doc === doc && sameSerializeInputs(last.opts, opts)) return last.bytes;
+  const bytes = gzipAsync(buildNativeEnvelope(doc, opts));
+  lastAsyncSerialize = { doc, opts: { ...opts, threads: opts.threads ? [...opts.threads] : undefined }, bytes };
+  // A failed gzip must not be served to the next caller.
+  bytes.catch(() => {
+    if (lastAsyncSerialize?.bytes === bytes) lastAsyncSerialize = null;
+  });
+  return bytes;
+}
+
+/** The last `serializeNativeAsync` call. After a typing pause the crash
+ *  journal (3s) and autosave (5s) each serialize the same doc: a full
+ *  `check()` + `toJSON` + stringify + gzip, twice. Docs and comment threads
+ *  are immutable (an edit makes new ones), so the same doc with the same
+ *  thread objects and id yields the same bytes and the second caller gets
+ *  the first one's. Only `createdAt` differs, by the few seconds between. */
+let lastAsyncSerialize: {
+  doc: PMNode;
+  opts: SerializeNativeOptions;
+  bytes: Promise<Uint8Array>;
+} | null = null;
+
+function sameSerializeInputs(a: SerializeNativeOptions, b: SerializeNativeOptions): boolean {
+  if (a.docId !== b.docId || a.appVersion !== b.appVersion) return false;
+  const ta = a.threads ?? [];
+  const tb = b.threads ?? [];
+  return ta.length === tb.length && ta.every((t, i) => t === tb[i]);
 }
 
 export interface ParseNativeResult {

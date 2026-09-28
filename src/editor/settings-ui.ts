@@ -80,7 +80,7 @@ import { applyTimerProfile } from './timer-profile.js';
 import { showToast } from './toast.js';
 import { setIcon, CUSTOM_BUTTON_ICONS, type IconName } from './icons';
 import { availableRibbonCommandIds } from './ribbon-availability.js';
-import { commandLabelFor, RIBBON_COMMAND_LABELS, type RibbonCommandId, ribbonKeyStringFor, formatKeyForDisplay } from './ribbon-commands.js';
+import { commandLabelFor, RIBBON_COMMAND_LABELS, type RibbonCommandId, ribbonKeyStringFor, formatKeyForDisplay } from './ribbon-command-meta.js';
 import { settingCommandOptions } from './setting-commands.js';
 import {
   FILE_OBJECT_KINDS,

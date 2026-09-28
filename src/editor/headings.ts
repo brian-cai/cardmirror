@@ -82,7 +82,7 @@ export function collectHeadings(
   // heading knows its enclosing zone without a per-heading resolve.
   let zonePos: number | null = null;
   let zoneEnd = 0;
-  doc.descendants((node, pos) => {
+  doc.descendants((node, pos, parent) => {
     const type = node.type.name;
     if (pos >= zoneEnd) zonePos = null; // walked past the current zone
     if (type === 'transclusion_ref') {
@@ -99,12 +99,8 @@ export function collectHeadings(
     if (type in TYPE_TO_LEVEL) {
       const level = TYPE_TO_LEVEL[type]!;
       let cite: string | null = null;
-      if (!skipCite && type === 'tag') {
-        const $pos = doc.resolve(pos);
-        const card = $pos.parent;
-        if (card.type.name === 'card') {
-          cite = collectCiteText(card);
-        }
+      if (!skipCite && type === 'tag' && parent?.type.name === 'card') {
+        cite = cardCiteText(parent);
       }
       out.push({
         type,
@@ -116,9 +112,24 @@ export function collectHeadings(
         zonePos,
       });
     }
-    return true;
+    // No textblock holds a heading (headings are textblocks themselves), so
+    // their text runs, most of the doc's nodes, are never visited.
+    return !node.isTextblock;
   });
   return out;
+}
+
+/** A card's cite text, cached per card node. Nodes are immutable and an edit
+ *  keeps every untouched card's identity, so an outline rebuild only re-reads
+ *  the cards that changed (the cite walk is the bulk of `collectHeadings`). */
+const cardCiteCache = new WeakMap<PMNode, string>();
+function cardCiteText(card: PMNode): string {
+  let cite = cardCiteCache.get(card);
+  if (cite === undefined) {
+    cite = collectCiteText(card);
+    cardCiteCache.set(card, cite);
+  }
+  return cite;
 }
 
 /**
