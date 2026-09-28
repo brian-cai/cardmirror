@@ -3693,9 +3693,9 @@ function buildDocRecord(
         dragController.mapThrough(view, tx.mapping);
         // Sync-arrived headings fold to this pane's current depth (the
         // joined-session initial fill used to land fully expanded) —
-        // parity with single-doc, and it must run before the debounced
-        // rebuild refreshes lastSeenIds.
-        if (isSyncOrigin(tx)) record.navPanel.applyMaxLevelToNewHeadings();
+        // parity with single-doc; the next render folds them before it
+        // refreshes lastSeenIds.
+        if (isSyncOrigin(tx)) record.navPanel.foldNewHeadingsOnNextRender();
         if (record.heavyUpdateTimer !== null) {
           cancelIdle(record.heavyUpdateTimer);
         }

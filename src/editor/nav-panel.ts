@@ -755,6 +755,27 @@ export class NavigationPanel {
     if (!view) return;
     const doc = view.state.doc;
     this.currentDoc = doc;
+    this.foldNewHeadings(doc);
+    this.render(doc);
+  }
+
+  /** The deferred form of `applyMaxLevelToNewHeadings`, for headings that
+   *  arrive via sync: no walk and no render now, the fold runs at the start
+   *  of the next render (the debounced rebuild, or any render before it),
+   *  still before that render refreshes `lastSeenIds`. A partner's edits
+   *  arrive several times a second; folding synchronously re-walked the doc
+   *  and rebuilt the whole list for each batch. */
+  foldNewHeadingsOnNextRender(): void {
+    this.pendingNewHeadingFold = true;
+  }
+
+  private pendingNewHeadingFold = false;
+
+  /** Collapse headings not seen at the last render that have children and
+   *  sit at or below the pane's depth. Existing user-expanded parents are
+   *  left alone. */
+  private foldNewHeadings(doc: PMNode): void {
+    this.pendingNewHeadingFold = false;
     const maxLevel = this.maxLevel;
     const entries = collectHeadings(doc);
     for (let i = 0; i < entries.length; i++) {
@@ -768,7 +789,6 @@ export class NavigationPanel {
         this.collapsed.add(entry.id);
       }
     }
-    this.render(doc);
   }
 
   /** Positions (in `doc`) of the live zones the divergence plugin has flagged.
@@ -789,6 +809,7 @@ export class NavigationPanel {
   }
 
   private render(doc: PMNode): void {
+    if (this.pendingNewHeadingFold) this.foldNewHeadings(doc);
     this.renderList(doc);
     // The rebuild clears the list — drop slots and the dragged rows' grey
     // included. A rebuild mid-drag is routine in a shared document (every

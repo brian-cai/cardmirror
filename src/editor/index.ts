@@ -6087,10 +6087,10 @@ function mountView(doc: PMNode, threads: Thread[] = []): void {
         dragController.mapThrough(view, tx.mapping);
         // Headings that ARRIVE via sync (a joined session's initial fill,
         // a partner's additions mid-session) fold to the pane's current
-        // depth instead of landing fully expanded. Synchronous, before
-        // the debounced rebuild — the hook diffs against lastSeenIds,
-        // which any intervening render would refresh (see its JSDoc).
-        if (isSyncOrigin(tx)) navPanel.applyMaxLevelToNewHeadings();
+        // depth instead of landing fully expanded. Deferred to the next
+        // render, which folds them before refreshing lastSeenIds — no
+        // outline walk + rebuild per partner batch.
+        if (isSyncOrigin(tx)) navPanel.foldNewHeadingsOnNextRender();
       }
       // Selection-only changes refresh just the word-count readout so
       // the read time reflects the selection immediately instead of
