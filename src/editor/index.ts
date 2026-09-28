@@ -8131,7 +8131,10 @@ async function serializeForSave(
     includeUndertags: opts.includeUndertags,
     readMode: opts.readMode,
     markedCardsOnly: opts.markedCardsOnly ?? false,
-    markUnreadAfterMarker: settings.get('markUnreadAfterMarker'),
+    // Word only: the red is a display-only decoration CardMirror redraws
+    // from the marker. Baked into a .cmir it would become real font color
+    // that outlives the setting and a moved marker.
+    markUnreadAfterMarker: format === 'docx' && settings.get('markUnreadAfterMarker'),
   });
   if (view) gcOrphanThreads(view);
   const baseThreads =
