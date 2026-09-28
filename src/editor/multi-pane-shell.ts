@@ -148,6 +148,8 @@ import {
 import { icon, setIcon } from './icons';
 import { formatSpeechFilename } from './speech-filename.js';
 import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
+import { maybeSnapshotVersion } from './version-history.js';
+import { awaitWithSaveWatchdog } from './save-watchdog.js';
 
 type SlotId = 'slot1' | 'slot2' | 'slot3';
 const SLOT_IDS: SlotId[] = ['slot1', 'slot2', 'slot3'];
@@ -311,8 +313,14 @@ async function runAutosaveForRecord(record: DocRecord): Promise<void> {
       ...(threads.length ? { threads } : {}),
       ...(record.docId ? { docId: record.docId } : {}),
     });
+    // Same as the single-doc autosave: the pre-write version snapshot, and
+    // the watchdog without its dialog (the 10s chip still turns a hung write
+    // on a stalled sync folder into feedback instead of silence).
+    maybeSnapshotVersion(record.docId, bytes, 'auto');
     try {
-      await host.saveExisting(record.handle, bytes);
+      await awaitWithSaveWatchdog(host.saveExisting(record.handle, bytes), record.filename, {
+        escalate: false,
+      });
       if (typeof record.handle === 'string') noteSavedInPlace(record.handle);
     } catch (err) {
       // Changed on disk under us (or no baseline for this window): keep
