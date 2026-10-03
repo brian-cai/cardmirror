@@ -3397,7 +3397,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     key: 'showCharacterStyles',
     label: 'Show character styles in ribbon',
     description:
-      'Show the cite / underline / emphasis character-style buttons in the ribbon. When off, just that sub-panel is hidden; the rest of the formatting panel stays visible.',
+      'Show the Cite / Paste / Condense / Shrink buttons in the ribbon. When off, just that group is hidden; the style buttons (Pocket through Clear) stay visible.',
     kind: 'toggle',
     category: 'appearance',
     section: 'Formatting panel',
