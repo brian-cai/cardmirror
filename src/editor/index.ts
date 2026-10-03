@@ -167,7 +167,7 @@ import {
   ZOOM_MAX_PCT,
   CHROME_SCALE_MIN_PCT,
   CHROME_SCALE_MAX_PCT,
-  migrateAutoUpdateOptOut, migrateDistinguishShadingDefault, effectiveDocTypeFormat } from './settings.js';
+  migrateAutoUpdateOptOut, migrateDistinguishShadingDefault, migrateHighSchoolTimerDefault, effectiveDocTypeFormat } from './settings.js';
 import { openSaveAs } from './save-as-ui.js';
 import { highlightColorLabel, shadingColorLabel } from './color-palette.js';
 import { viewportSpellcheckPlugin } from './viewport-spellcheck.js';
@@ -10388,6 +10388,9 @@ async function initSingleDocBoot(): Promise<void> {
     // "Distinguish background color from highlighting" became ON by
     // default (2026-09-21): flip an older install's stored `false` once.
     migrateDistinguishShadingDefault();
+    // High School timer became the default (2026-10-03): move installs
+    // still on the untouched College default over once.
+    migrateHighSchoolTimerDefault();
     // Update checks became opt-OUT (2026-07-27): flip an older
     // install's stored `false` default exactly once, with a one-time
     // notice pointing at the toggle. Runs before the launch check so
