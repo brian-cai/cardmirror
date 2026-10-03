@@ -7339,6 +7339,10 @@ const homeCallbacks: HomeScreenCallbacks = {
   openSettings: () => {
     void loadSettingsUi().then((m) => m.openSettings());
   },
+  mountUpdateChip: (el) => {
+    const chipHost = getElectronHost();
+    if (chipHost) initUpdateChip(el, chipHost);
+  },
   // Clean: Electron gets the folder-recursive modal; web cleans one file at a time.
   clean:
     getHost().kind === 'electron'

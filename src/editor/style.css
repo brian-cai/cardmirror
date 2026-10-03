@@ -2250,7 +2250,8 @@ body:not(.pmd-multi-doc) #app {
 
 /* Update chip (install-on-confirm): accent-outlined, clickable. Hidden
    ([hidden]) until the desktop main process reports an update. */
-#update-chip {
+#update-chip,
+.pmd-home-update {
   cursor: pointer;
   font-family: inherit;
   font-size: inherit;
@@ -2261,11 +2262,13 @@ body:not(.pmd-multi-doc) #app {
   padding: 0 0.6rem;
   line-height: 1.4;
 }
-#update-chip:hover {
+#update-chip:hover,
+.pmd-home-update:hover {
   color: #fff;
   background: var(--pmd-c-accent);
 }
-#update-chip[hidden] {
+#update-chip[hidden],
+.pmd-home-update[hidden] {
   display: none;
 }
 
@@ -4277,6 +4280,12 @@ html.pmd-home-active #speech-doc-banner {
   margin: 0.35rem 0 0;
   color: var(--pmd-c-text-muted);
   font-size: 0.95rem;
+}
+/* Home screen's copy of the update chip (styled with #update-chip). */
+.pmd-home-update {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.75rem;
 }
 .pmd-home-actions {
   display: grid;

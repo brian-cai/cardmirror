@@ -37,6 +37,11 @@ see `DETAILED_CHANGELOG.md`.
   update from, that fork automatically. Desktop only. Thanks to Brian
   (@brian-cai)!
 
+- **Update from the home screen.** When an update is ready (or
+  available), the home screen now shows the same update button as the
+  status bar, under the CardMirror title, so you can install it without
+  opening a document first. Desktop only.
+
 ### Changed
 
 - **Find starts with your highlighted text.** Highlight a word or phrase
