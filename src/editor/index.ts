@@ -170,6 +170,7 @@ import {
   migrateAutoUpdateOptOut, migrateDistinguishShadingDefault, effectiveDocTypeFormat } from './settings.js';
 import { openSaveAs, type SaveAsResult } from './save-as-ui.js';
 import { buildPrintHtml, printHtmlInBrowser } from './pdf-export.js';
+import { convertPdf, PdfOpenError } from './pdf-open.js';
 import { highlightColorLabel, shadingColorLabel } from './color-palette.js';
 import { viewportSpellcheckPlugin } from './viewport-spellcheck.js';
 import { commentsPlugin, commentsKey, loadThreads, getCommentsState, gcOrphanThreads, newCommentId, setCommentIdSessionResolver } from './comments-plugin.js';
@@ -6674,10 +6675,11 @@ function bytesLookLikeDocx(bytes: Uint8Array): boolean {
  *  recognized" or the first filter; users can swap to "Word only"
  *  if they want to narrow). */
 const OPEN_FILE_FILTERS = [
-  { name: 'CardMirror, Word, or recovery journal', extensions: ['cmir', 'cmir-journal', 'docx'] },
+  { name: 'CardMirror, Word, PDF, or recovery journal', extensions: ['cmir', 'cmir-journal', 'docx', 'pdf'] },
   { name: 'CardMirror native (.cmir)', extensions: ['cmir'] },
   { name: 'CardMirror recovery journal (.cmir-journal)', extensions: ['cmir-journal'] },
   { name: 'Microsoft Word (.docx)', extensions: ['docx'] },
+  { name: 'PDF exported from Verbatim or CardMirror (.pdf)', extensions: ['pdf'] },
 ];
 
 /** Resolve an opened file to the doc payload to mount. A `.cmir-journal` is a
@@ -6691,9 +6693,58 @@ const OPEN_FILE_FILTERS = [
 async function resolveOpenedFile(
   opened: OpenedFile,
 ): Promise<
-  | { name: string; bytes: Uint8Array; handle: unknown; format: 'cmir' | 'docx'; recovered: boolean }
+  | {
+      name: string;
+      bytes: Uint8Array;
+      handle: unknown;
+      format: 'cmir' | 'docx';
+      recovered: boolean;
+      /** Already a document (a converted PDF): mount it as is. `bytes` is
+       *  then computed only if a route needs them (a new window, a pane). */
+      doc?: PMNode;
+    }
   | 'corrupt'
+  | { error: string }
 > {
+  // A PDF (a Verbatim or CardMirror export) converts into a NEW, unsaved
+  // document, like a recovered journal: no handle, so Save can never write
+  // .docx / .cmir bytes over the PDF, and it saves as .docx by default.
+  if (isPdfFile(opened)) {
+    showToast(`Converting "${opened.name}"…`, { durationMs: 2500 });
+    // A long PDF says how far along it is, at each quarter (never for a
+    // short one: nothing shows until it has taken a moment).
+    const started = Date.now();
+    let shown = 0;
+    const progress = (fraction: number): void => {
+      const quarter = Math.floor(fraction * 4);
+      if (quarter > shown && quarter < 4 && Date.now() - started > 1500) {
+        shown = quarter;
+        showToast(`Converting "${opened.name}"… ${quarter * 25}%`, { durationMs: 2500 });
+      }
+    };
+    try {
+      const doc = await convertPdf(opened.bytes, progress);
+      const name = `${opened.name.replace(/\.pdf$/i, '')}.docx`;
+      let bytes: Uint8Array | null = null;
+      return {
+        name,
+        get bytes(): Uint8Array {
+          return (bytes ??= serializeNative(doc));
+        },
+        doc,
+        handle: null,
+        format: 'docx',
+        recovered: true,
+      };
+    } catch (err) {
+      return {
+        error:
+          err instanceof PdfOpenError
+            ? err.message
+            : `"${opened.name}" could not be converted (${err instanceof Error ? err.message : String(err)}).`,
+      };
+    }
+  }
   if (opened.name.toLowerCase().endsWith('.cmir-journal')) {
     try {
       const env = JSON.parse(new TextDecoder().decode(opened.bytes)) as {
@@ -6746,6 +6797,13 @@ async function resolveOpenedFile(
     format,
     recovered: false,
   };
+}
+
+/** A PDF by name, or by its bytes starting with the PDF header. */
+function isPdfFile(opened: OpenedFile): boolean {
+  if (opened.name.toLowerCase().endsWith('.pdf')) return true;
+  const b = opened.bytes;
+  return b.length >= 5 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 && b[4] === 0x2d;
 }
 
 /** Save-As filter — only the chosen format's extension. Built per
@@ -6805,6 +6863,10 @@ async function routeOpenedFilesToSlot(opened: OpenedFile[]): Promise<void> {
       showToast(`"${file.name}" is corrupt or could not be read.`);
       continue;
     }
+    if ('error' in src) {
+      showToast(src.error);
+      continue;
+    }
     if (src.handle != null && (await isFileOpenInAnotherWindow(src.handle))) {
       showToast(`"${src.name}" is already open in another window.`);
       continue;
@@ -6831,6 +6893,10 @@ async function routeOpenedFile(opened: OpenedFile): Promise<void> {
   const src = await resolveOpenedFile(opened);
   if (src === 'corrupt') {
     void alertDialog('That .cmir-journal file is corrupt or could not be read.');
+    return;
+  }
+  if ('error' in src) {
+    void alertDialog(src.error);
     return;
   }
   // Cross-window duplicate-open guard: if any other window already has this
@@ -6886,6 +6952,20 @@ async function routeOpenedFile(opened: OpenedFile): Promise<void> {
       console.error('Spawn window failed:', err);
       void alertDialog(`Failed to open in new window: ${err instanceof Error ? err.message : err}`);
     }
+    return;
+  }
+  if (src.doc) {
+    // Already converted (a PDF): no bytes to decrypt or parse.
+    mountOpenedSingleDoc({
+      docNode: src.doc,
+      docThreads: undefined,
+      docId: null,
+      name: src.name,
+      handle: null,
+      format,
+      dirty: true,
+      recordAsRecent: false,
+    });
     return;
   }
   // Password-protected .docx arrives as a compound file, not a zip;
@@ -7088,25 +7168,31 @@ async function loadFileInPlace(file: {
   format: 'cmir' | 'docx';
   /** A recovered (.cmir-journal) doc: mount dirty, don't record a recent. */
   recovered?: boolean;
+  /** Already a document (a converted PDF): skip decrypting and parsing. */
+  doc?: PMNode;
 }): Promise<void> {
-  // Decrypt a password-protected .docx (a compound file, not a zip)
-  // before parsing; passes through for a normal file. Throws
-  // OpenCancelledError / UnsupportedEncryptionError, handled by the
-  // callers' catch.
-  const openBytes = await maybeDecryptForOpen(file.bytes, file.filename);
   let docNode: PMNode;
   let docThreads: Thread[] | undefined;
   let docId: string | null = null;
-  if (!bytesLookLikeDocx(openBytes)) {
-    const parsed = parseNative(openBytes);
-    docNode = parsed.doc;
-    docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
-    docId = parsed.docId;
+  if (file.doc) {
+    docNode = file.doc;
   } else {
-    const result = await fromDocxFull(openBytes);
-    docNode = result.doc;
-    docThreads = result.threads;
-    docId = result.docId;
+    // Decrypt a password-protected .docx (a compound file, not a zip)
+    // before parsing; passes through for a normal file. Throws
+    // OpenCancelledError / UnsupportedEncryptionError, handled by the
+    // callers' catch.
+    const openBytes = await maybeDecryptForOpen(file.bytes, file.filename);
+    if (!bytesLookLikeDocx(openBytes)) {
+      const parsed = parseNative(openBytes);
+      docNode = parsed.doc;
+      docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
+      docId = parsed.docId;
+    } else {
+      const result = await fromDocxFull(openBytes);
+      docNode = result.doc;
+      docThreads = result.threads;
+      docId = result.docId;
+    }
   }
   void clearCurrentJournal();
   mountView(docNode, docThreads);
@@ -7366,6 +7452,10 @@ async function pickAndLoadInPlace(): Promise<boolean> {
     void alertDialog('That .cmir-journal file is corrupt or could not be read.');
     return false;
   }
+  if ('error' in src) {
+    void alertDialog(src.error);
+    return false;
+  }
   if (src.handle != null && (await isFileOpenInAnotherWindow(src.handle))) {
     showToast(`"${src.name}" is already open in another window.`);
     return false;
@@ -7373,10 +7463,11 @@ async function pickAndLoadInPlace(): Promise<boolean> {
   try {
     await loadFileInPlace({
       filename: src.name,
-      bytes: src.bytes,
+      bytes: src.doc ? new Uint8Array() : src.bytes,
       handle: src.handle,
       format: src.format,
       recovered: src.recovered,
+      ...(src.doc ? { doc: src.doc } : {}),
     });
     return true;
   } catch (err) {
