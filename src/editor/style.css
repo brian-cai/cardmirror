@@ -5101,6 +5101,114 @@ body.pmd-nav-resize-active {
   border-color: var(--pmd-c-border-soft);
 }
 
+/* Right-hand header buttons (search tab toggle + close ×). */
+.pmd-nav-header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+/* ---- Search bar ----
+   The magnifier opens a bar under the level buttons (inside the header,
+   so it stays pinned in the multi-pane rail). The outline itself is
+   untouched: the query highlights matching rows in place, and "Hide
+   non-matches" filters the outline down to matches plus their ancestors. */
+.pmd-nav-search-btn.pmd-nav-search-btn-active,
+.pmd-nav-search-btn.pmd-nav-search-btn-active:hover {
+  background: var(--pmd-c-accent);
+  border-color: var(--pmd-c-accent);
+  color: var(--pmd-c-text-on-accent);
+}
+.pmd-nav-panel header {
+  flex-wrap: wrap;
+}
+.pmd-nav-search-bar {
+  display: none;
+  flex: 1 0 100%;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.pmd-nav-searching .pmd-nav-search-bar {
+  display: flex;
+}
+.pmd-nav-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 1.6rem;
+  padding: 0 0.4rem;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--pmd-c-text);
+  background: var(--pmd-c-bg);
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 3px;
+  user-select: text;
+}
+.pmd-nav-search-input:focus {
+  outline: none;
+  border-color: var(--pmd-c-focus);
+  box-shadow: 0 0 0 2px var(--pmd-c-focus-glow);
+}
+.pmd-nav-search-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  color: var(--pmd-c-text-secondary);
+}
+.pmd-nav-search-level {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--pmd-c-text);
+  background: var(--pmd-c-bg);
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 3px;
+  padding: 0.05rem 0.2rem;
+}
+.pmd-nav-search-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pmd-nav-search-option input {
+  margin: 0;
+}
+.pmd-nav-search-status {
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--pmd-c-text-faint);
+}
+.pmd-nav-search-status:empty {
+  display: none;
+}
+.pmd-nav-search-match {
+  background: var(--pmd-c-find-match-strong);
+  color: inherit;
+  border-radius: 2px;
+}
+/* Matched only in the text under the heading: a small marker dot at the
+   row's right edge (inset past the find-bar's own dot slot). */
+.pmd-nav-search-content-dot {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pmd-c-find-match-strong);
+  box-shadow: 0 0 0 1px var(--pmd-c-find-match-current-outline-soft);
+}
+.pmd-nav-item.pmd-nav-search-active {
+  background: var(--pmd-c-drop-soft);
+  border-left-color: var(--pmd-c-drop);
+}
+
 .pmd-nav-list {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -13778,7 +13886,7 @@ body.pmd-mobile .pmd-mobile-drawer .pmd-nav-panel {
 body.pmd-mobile.pmd-nav-hidden .pmd-mobile-drawer .pmd-nav-panel {
   display: flex;
 }
-body.pmd-mobile .pmd-nav-close {
+body.pmd-mobile .pmd-nav-close:not(.pmd-nav-search-btn) {
   display: none;
 }
 /* Touch-height outline rows. */

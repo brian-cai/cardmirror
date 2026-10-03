@@ -83,8 +83,9 @@ import { computeNumbering } from './numbering.js';
 import { isRightClickContextMenu } from './context-menu-gate.js';
 
 /** Minimum nav-pane width — must fit the 4 level buttons + the
- *  close (×) button + row padding; anything narrower clips the ×. */
-const NAV_WIDTH_MIN = 180;
+ *  search and close (×) buttons + row padding; anything narrower clips
+ *  the ×. */
+const NAV_WIDTH_MIN = 210;
 const NAV_WIDTH_MAX = 800;
 
 /** Max gap between two plain clicks on the same nav entry to count as a
@@ -330,6 +331,29 @@ export class NavigationPanel {
     return this.localMaxLevel;
   }
 
+  // ---- Search tab ----
+  /** True while the search bar is open. The outline itself stays — the
+   *  query filters/highlights its rows in place. */
+  private searchMode = false;
+  private searchQuery = '';
+  private searchInput: HTMLInputElement;
+  private searchBtn: HTMLButtonElement;
+  private searchBar: HTMLElement;
+  private searchLevelSelect: HTMLSelectElement;
+  private searchHideBox: HTMLInputElement;
+  private searchContentBox: HTMLInputElement;
+  private searchStatusEl: HTMLElement;
+  private closeBtn: HTMLButtonElement;
+  private closeLabel = '';
+  /** Rendered match rows in order (skeleton rows excluded) — the
+   *  arrow-key stops. */
+  private searchHitRows: HTMLLIElement[] = [];
+  /** Keyboard-highlighted match, indexing `searchHitRows`. */
+  private searchActiveIndex = 0;
+  /** Last search computation, reused while the doc, query and options are
+   *  unchanged (content search walks the whole doc). */
+  private searchCache: { key: string; doc: PMNode; result: SearchResult } | null = null;
+
   constructor(
     parent: HTMLElement,
     opts?: {
@@ -365,6 +389,20 @@ export class NavigationPanel {
     }
     header.appendChild(levelGroup);
 
+    const actions = document.createElement('div');
+    actions.className = 'pmd-nav-header-actions';
+    header.appendChild(actions);
+
+    this.searchBtn = document.createElement('button');
+    this.searchBtn.type = 'button';
+    this.searchBtn.className = 'pmd-nav-close pmd-nav-search-btn';
+    setIcon(this.searchBtn, 'search');
+    this.searchBtn.title = 'Search headings';
+    this.searchBtn.setAttribute('aria-label', 'Search headings');
+    this.searchBtn.setAttribute('aria-pressed', 'false');
+    this.searchBtn.addEventListener('click', () => this.setSearchMode(!this.searchMode));
+    actions.appendChild(this.searchBtn);
+
     // Close × in the top-right — mirrors the ribbon's nav-pane
     // toggle but lives where the user is already looking when
     // they want to dismiss the outline.
@@ -374,14 +412,86 @@ export class NavigationPanel {
     setIcon(closeBtn, 'close');
     // In multi-pane mode the × closes just this document's outline
     // section (via `onClose`); in single-doc it hides the whole pane.
-    const closeLabel = this.onClose ? "Hide this document's outline" : 'Hide navigation pane';
-    closeBtn.title = closeLabel;
-    closeBtn.setAttribute('aria-label', closeLabel);
+    // While the Search tab is open the × closes the search instead.
+    this.closeLabel = this.onClose ? "Hide this document's outline" : 'Hide navigation pane';
+    this.closeBtn = closeBtn;
+    closeBtn.title = this.closeLabel;
+    closeBtn.setAttribute('aria-label', this.closeLabel);
     closeBtn.addEventListener('click', () => {
-      if (this.onClose) this.onClose();
+      if (this.searchMode) this.setSearchMode(false);
+      else if (this.onClose) this.onClose();
       else settings.set('navPaneVisible', false);
     });
-    header.appendChild(closeBtn);
+    actions.appendChild(closeBtn);
+
+    // Search bar (Word's "Search document" box), shown under the level
+    // buttons while the magnifier is on. Inside the header so it stays
+    // pinned with it in the multi-pane rail.
+    this.searchBar = document.createElement('div');
+    this.searchBar.className = 'pmd-nav-search-bar';
+    this.searchInput = document.createElement('input');
+    this.searchInput.type = 'search';
+    this.searchInput.className = 'pmd-nav-search-input';
+    this.searchInput.placeholder = 'Search headings';
+    this.searchInput.setAttribute('aria-label', 'Search headings');
+    this.searchInput.spellcheck = false;
+    this.searchInput.addEventListener('input', () => {
+      this.searchQuery = this.searchInput.value;
+      this.searchActiveIndex = 0;
+      if (this.currentDoc) this.render(this.currentDoc);
+    });
+    this.searchInput.addEventListener('keydown', (e) => this.onSearchKeyDown(e));
+    this.searchBar.appendChild(this.searchInput);
+
+    const optionsRow = document.createElement('div');
+    optionsRow.className = 'pmd-nav-search-options';
+    this.searchLevelSelect = document.createElement('select');
+    this.searchLevelSelect.className = 'pmd-nav-search-level';
+    this.searchLevelSelect.title = 'Which heading level to search';
+    this.searchLevelSelect.setAttribute('aria-label', 'Heading level to search');
+    for (const [value, text] of [
+      [1, 'Pocket'],
+      [2, 'Hat'],
+      [3, 'Block'],
+      [4, 'Tag'],
+      [0, 'All'],
+    ] as const) {
+      const o = document.createElement('option');
+      o.value = String(value);
+      o.textContent = text;
+      this.searchLevelSelect.appendChild(o);
+    }
+    this.searchLevelSelect.addEventListener('change', () =>
+      settings.set('navSearchLevel', Number(this.searchLevelSelect.value)),
+    );
+    optionsRow.appendChild(this.searchLevelSelect);
+    const makeBox = (text: string, title: string, onChange: (on: boolean) => void) => {
+      const label = document.createElement('label');
+      label.className = 'pmd-nav-search-option';
+      label.title = title;
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.addEventListener('change', () => onChange(box.checked));
+      label.append(box, text);
+      optionsRow.appendChild(label);
+      return box;
+    };
+    this.searchHideBox = makeBox(
+      'Hide non-matches',
+      'Hide outline entries that are neither a match nor above one',
+      (on) => settings.set('navSearchHideNonMatches', on),
+    );
+    this.searchContentBox = makeBox(
+      'Search content',
+      'Also match headings whose text underneath contains the search',
+      (on) => settings.set('navSearchContent', on),
+    );
+    this.searchBar.appendChild(optionsRow);
+    this.searchStatusEl = document.createElement('div');
+    this.searchStatusEl.className = 'pmd-nav-search-status';
+    this.searchBar.appendChild(this.searchStatusEl);
+    header.appendChild(this.searchBar);
+    this.syncSearchControls();
 
     this.root.appendChild(header);
     this.updateLevelButtonsActive();
@@ -407,6 +517,7 @@ export class NavigationPanel {
     this.emptyEl.textContent = 'No headings.';
     this.root.appendChild(this.emptyEl);
 
+
     this.installResizeHandle();
 
     // Re-render only when a setting the outline depends on changes —
@@ -421,10 +532,17 @@ export class NavigationPanel {
     // numbering setting re-renders too — same signature the editor's
     // NUMBERING_REFRESH subscribers diff.
     let lastNumberingSig = numberingDisplaySig();
+    let lastSearchSig = searchOptionsSig();
     this.unsubscribeSettings = settings.subscribe((s) => {
       // `navWidth` deliberately NOT applied here — per-window (see the
       // module-init comment above applyNavWidthCss).
       const numberingSig = numberingDisplaySig();
+      const searchSig = searchOptionsSig();
+      if (searchSig !== lastSearchSig) {
+        lastSearchSig = searchSig;
+        this.syncSearchControls();
+        if (this.searchMode && this.currentDoc) this.render(this.currentDoc);
+      }
       if (
         this.currentDoc &&
         (s.showCitePreview !== lastShowCitePreview || numberingSig !== lastNumberingSig)
@@ -881,6 +999,19 @@ export class NavigationPanel {
     this.emptyEl.style.display = 'none';
     this.listEl.style.display = '';
 
+    // Search: matches (and their ancestors, `keep`) are revealed even under
+    // a collapsed parent or past the level filter; "Hide non-matches"
+    // shows ONLY those rows.
+    const search = this.currentSearch(doc, entries);
+    const hideNonMatches = search != null && settings.get('navSearchHideNonMatches');
+    this.searchHitRows = [];
+    this.searchStatusEl.textContent = !search
+      ? ''
+      : search.matchAt.size === 0
+        ? 'No matches'
+        : `${search.matchAt.size} ${search.matchAt.size === 1 ? 'match' : 'matches'}`;
+    if (search && this.searchActiveIndex >= search.matchAt.size) this.searchActiveIndex = 0;
+
     // Skip-tracking: when we encounter a collapsed heading, we hide
     // every following entry whose level is deeper than it, until we
     // hit one at the same or shallower level.
@@ -889,9 +1020,10 @@ export class NavigationPanel {
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i]!;
 
+      let shownByOutline = true;
       if (skipBelowLevel != null) {
-        if (entry.level > skipBelowLevel) continue;
-        skipBelowLevel = null;
+        if (entry.level > skipBelowLevel) shownByOutline = false;
+        else skipBelowLevel = null;
       }
 
       const next = entries[i + 1];
@@ -899,6 +1031,11 @@ export class NavigationPanel {
       const hasChildren = !entry.windowed && next != null && next.level > entry.level;
       const collapsed = entry.id != null && this.collapsed.has(entry.id);
       if (hasChildren && entry.id != null) this.collapsibleIds.add(entry.id);
+      if (shownByOutline && hasChildren && collapsed) skipBelowLevel = entry.level;
+
+      const kept = search != null && search.keep.has(i);
+      if (hideNonMatches ? !kept : !(shownByOutline || kept)) continue;
+      const matchAt = search?.matchAt.get(i);
 
       const li = document.createElement('li');
       li.className = `pmd-nav-item pmd-nav-level-${entry.level} pmd-nav-type-${entry.type}`;
@@ -984,6 +1121,25 @@ export class NavigationPanel {
       // zero width — yielding a squashed row. Normalize to truly empty
       // so the CSS fallback applies.
       label.textContent = entry.text.trim() === '' ? '' : entry.text;
+      if (matchAt != null) {
+        li.classList.add('pmd-nav-search-hit');
+        this.searchHitRows.push(li);
+        const text = entry.text;
+        const qLen = normalizeForSearch(this.searchQuery.trim()).length;
+        if (matchAt >= 0 && normalizeForSearch(text).length === text.length) {
+          const mark = document.createElement('mark');
+          mark.className = 'pmd-nav-search-match';
+          mark.textContent = text.slice(matchAt, matchAt + qLen);
+          label.replaceChildren(text.slice(0, matchAt), mark, text.slice(matchAt + qLen));
+        } else if (matchAt < 0) {
+          // Matched in the text under the heading, not its own text.
+          li.classList.add('pmd-nav-search-content-hit');
+          const dot = document.createElement('span');
+          dot.className = 'pmd-nav-search-content-dot';
+          dot.title = 'Match in the text under this heading';
+          li.appendChild(dot);
+        }
+      }
       li.appendChild(label);
 
       if (entry.cite && settings.get('showCitePreview')) {
@@ -1018,11 +1174,8 @@ export class NavigationPanel {
 
       this.liEntries.set(li, entry);
       this.listEl.appendChild(li);
-
-      if (hasChildren && collapsed) {
-        skipBelowLevel = entry.level;
-      }
     }
+    this.syncSearchActiveRow(false);
   }
 
   /** Run the same skip/stack logic the render loop uses, but
@@ -1101,6 +1254,97 @@ export class NavigationPanel {
       this.collapsed.add(entry.id);
     }
     if (this.currentDoc) this.render(this.currentDoc);
+  }
+
+  // ---------------------------------------------- Search tab ----
+
+  /** Open (true) or close (false) the search bar. Opening focuses and
+   *  selects the field so typing replaces the last query; the query
+   *  survives closing, like Word's pane, but only applies while open. */
+  setSearchMode(on: boolean): void {
+    if (on === this.searchMode) {
+      if (on) this.focusSearchInput();
+      return;
+    }
+    this.searchMode = on;
+    this.root.classList.toggle('pmd-nav-searching', on);
+    this.searchBtn.classList.toggle('pmd-nav-search-btn-active', on);
+    this.searchBtn.setAttribute('aria-pressed', String(on));
+    const label = on ? 'Close search' : this.closeLabel;
+    this.closeBtn.title = label;
+    this.closeBtn.setAttribute('aria-label', label);
+    this.searchActiveIndex = 0;
+    if (this.currentDoc) this.render(this.currentDoc);
+    if (on) this.focusSearchInput();
+  }
+
+  private focusSearchInput(): void {
+    this.searchInput.focus();
+    this.searchInput.select();
+  }
+
+  /** Mirror the persisted search options into the bar's controls. */
+  private syncSearchControls(): void {
+    this.searchLevelSelect.value = String(settings.get('navSearchLevel'));
+    this.searchHideBox.checked = settings.get('navSearchHideNonMatches');
+    this.searchContentBox.checked = settings.get('navSearchContent');
+  }
+
+  private onSearchKeyDown(e: KeyboardEvent): void {
+    if (e.isComposing) return;
+    const hits = this.searchHitRows;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this.searchInput.value) {
+        this.searchInput.value = '';
+        this.searchQuery = '';
+        if (this.currentDoc) this.render(this.currentDoc);
+      } else {
+        this.setSearchMode(false);
+        this.view?.focus();
+      }
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (hits.length === 0) return;
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      this.searchActiveIndex = (this.searchActiveIndex + step + hits.length) % hits.length;
+      this.syncSearchActiveRow(true);
+      // Preview: scroll the editor to the highlighted heading but keep
+      // typing focus in the field (Word's pane does the same).
+      const entry = this.liEntries.get(hits[this.searchActiveIndex]!);
+      if (entry) this.jumpTo(entry, { focus: false });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const li = hits[this.searchActiveIndex] ?? hits[0];
+      const entry = li && this.liEntries.get(li);
+      if (entry) this.jumpTo(entry);
+    }
+  }
+
+  /** Light the keyboard-active match row (skeleton rows are skipped). */
+  private syncSearchActiveRow(scroll: boolean): void {
+    this.searchHitRows.forEach((li, i) => {
+      const active = i === this.searchActiveIndex;
+      li.classList.toggle('pmd-nav-search-active', active);
+      if (active && scroll) li.scrollIntoView?.({ block: 'nearest' });
+    });
+  }
+
+  /** The active search over `entries`, or null when the bar is closed or
+   *  the query is empty. Cached per doc + query + options. */
+  private currentSearch(doc: PMNode, entries: HeadingEntry[]): SearchResult | null {
+    const query = normalizeForSearch(this.searchQuery.trim());
+    if (!this.searchMode || !query) return null;
+    const level = settings.get('navSearchLevel');
+    const content = settings.get('navSearchContent');
+    const key = `${level}|${content}|${query}`;
+    if (this.searchCache && this.searchCache.doc === doc && this.searchCache.key === key) {
+      return this.searchCache.result;
+    }
+    const result = computeSearch(doc, entries, query, level, content);
+    this.searchCache = { key, doc, result };
+    return result;
   }
 
   // ---------------------------------------------- Drag-and-drop ----
@@ -2500,8 +2744,9 @@ export class NavigationPanel {
    * `data-id` attr (per their toDOM); scrolling targets that element,
    * falling back to `domAtPos` when it isn't in the rendered DOM.
    */
-  private jumpTo(entry: HeadingEntry): void {
+  private jumpTo(entry: HeadingEntry, opts?: { focus?: boolean }): void {
     if (!this.view) return;
+    const focus = opts?.focus !== false;
 
     // A windowed (projected) row is backed by the `self_ref` atom at entry.pos —
     // there's no real heading node inside. Select the atom and scroll to its OWN
@@ -2512,7 +2757,7 @@ export class NavigationPanel {
         this.view.dispatch(
           this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, entry.pos)),
         );
-        this.view.focus();
+        if (focus) this.view.focus();
       } catch {
         /* stale position — still try to scroll */
       }
@@ -2531,7 +2776,7 @@ export class NavigationPanel {
         TextSelection.create(this.view.state.doc, entry.pos + 1),
       );
       this.view.dispatch(tr);
-      this.view.focus();
+      if (focus) this.view.focus();
     } catch {
       // Fall through to scroll-only behavior if the position is stale.
     }
@@ -2550,6 +2795,82 @@ export class NavigationPanel {
 }
 
 // ---------------------------------------------- Context menu plumbing
+
+/** A nav search: entry index → offset of the match in the heading's own
+ *  text (-1 when it matched only in the text under it), plus `keep` —
+ *  every match and all its ancestors (the clickable skeleton). */
+interface SearchResult {
+  matchAt: Map<number, number>;
+  keep: Set<number>;
+}
+
+function searchOptionsSig(): string {
+  return [
+    settings.get('navSearchLevel'),
+    settings.get('navSearchHideNonMatches'),
+    settings.get('navSearchContent'),
+  ].join('|');
+}
+
+/** Match `query` (already normalized) against the outline. `level` limits
+ *  the searched headings to one outline level (0 = every level). With
+ *  `content`, a non-heading paragraph — or a heading outside the searched
+ *  level — that contains the query credits the nearest searched heading
+ *  above it. */
+function computeSearch(
+  doc: PMNode,
+  entries: HeadingEntry[],
+  query: string,
+  level: number,
+  content: boolean,
+): SearchResult {
+  const searched = (e: HeadingEntry): boolean => level === 0 || e.level === level;
+  const matchAt = new Map<number, number>();
+  entries.forEach((e, i) => {
+    if (!searched(e)) return;
+    const at = normalizeForSearch(e.text).indexOf(query);
+    if (at >= 0) matchAt.set(i, at);
+  });
+
+  if (content) {
+    // Real (non-windowed) searched headings, in doc order, for crediting.
+    const owners = entries
+      .map((e, i) => ({ e, i }))
+      .filter(({ e }) => !e.windowed && searched(e));
+    const ownHeadingPos = new Set(owners.map(({ e }) => e.pos));
+    let o = -1;
+    doc.descendants((node, pos) => {
+      if (!node.isTextblock) return true;
+      if (ownHeadingPos.has(pos)) return false; // its own text was matched above
+      while (o + 1 < owners.length && owners[o + 1]!.e.pos < pos) o++;
+      if (o < 0) return false; // before the first searched heading
+      const owner = owners[o]!.i;
+      if (!matchAt.has(owner) && normalizeForSearch(node.textContent).includes(query)) {
+        matchAt.set(owner, -1);
+      }
+      return false;
+    });
+  }
+
+  const keep = new Set<number>();
+  const stack: number[] = [];
+  entries.forEach((e, i) => {
+    while (stack.length > 0 && entries[stack[stack.length - 1]!]!.level >= e.level) stack.pop();
+    if (matchAt.has(i)) {
+      keep.add(i);
+      for (const a of stack) keep.add(a);
+    }
+    stack.push(i);
+  });
+  return { matchAt, keep };
+}
+
+/** Case- and quote-insensitive search key. The quote swaps are one UTF-16
+ *  unit for one; the rare case fold that isn't is checked at the caller
+ *  before match offsets index the original text. */
+function normalizeForSearch(text: string): string {
+  return text.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+}
 
 interface ContextMenuItemBase {
   kind: 'item';

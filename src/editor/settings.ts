@@ -438,6 +438,15 @@ export interface Settings {
    *  doc's view only (transient, per-pane); this setting is what
    *  every new doc starts at. */
   navMaxLevel: number;
+  /** Nav-pane Search tab: which heading level the search covers — 0 all,
+   *  1 Pocket … 4 Tag (analytics count as Tag level). */
+  navSearchLevel: number;
+  /** Nav-pane Search tab: hide outline rows that aren't a match or an
+   *  ancestor of one (off: the outline stays whole, matches highlighted). */
+  navSearchHideNonMatches: boolean;
+  /** Nav-pane Search tab: also match headings whose body text contains the
+   *  query (credited to the nearest heading at the searched level). */
+  navSearchContent: boolean;
   /** When true, the nav pane scrolls to keep the outline row the cursor
    *  is in visible — the pane follows your place in the document instead
    *  of sitting wherever it was last left.
@@ -1791,6 +1800,9 @@ export const CUSTOM_DASH_STYLES: ReadonlyArray<Settings['customDashStyle']> = [
 const DEFAULTS: Settings = {
   navWidth: 300,
   navMaxLevel: 3,
+  navSearchLevel: 0,
+  navSearchHideNonMatches: true,
+  navSearchContent: false,
   navFollowCursor: true,
   dragInteractions: true,
   copyPreviousCiteNearestOnly: true,
@@ -4736,6 +4748,9 @@ function sanitize(s: Settings): Settings {
   return {
     navWidth: clamp(s.navWidth, 150, 800),
     navMaxLevel: clamp(Math.round(s.navMaxLevel), 1, 4),
+    navSearchLevel: clamp(Math.round(s.navSearchLevel), 0, 4),
+    navSearchHideNonMatches: s.navSearchHideNonMatches !== false,
+    navSearchContent: s.navSearchContent === true,
     navFollowCursor: s.navFollowCursor !== false,
     dragInteractions: s.dragInteractions !== false,
     readerReduceMotion: s.readerReduceMotion === true,
