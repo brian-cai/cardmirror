@@ -18,7 +18,8 @@ import { collectCardsWithMatchingCite } from './copy-matching-cite.js';
 import { baseKeymap } from 'prosemirror-commands';
 import { Node as PMNode, type Mark } from 'prosemirror-model';
 import { schema, newHeadingId } from '../schema/index.js';
-import { fromDocxFull, toDocx, serializeNative, serializeNativeAsync, parseNative, parseNativeSalvage, NativeDamagedError, readDocIdFromBytes, stampDocId, setSaveHealListener } from '../index.js';
+import { toDocx, serializeNative, serializeNativeAsync, parseNative, parseNativeSalvage, NativeDamagedError, readDocIdFromBytes, stampDocId, setSaveHealListener } from '../index.js';
+import { openDocxOffThread } from './docx-open.js';
 import { transformForExport, countMarkedCards } from '../export/transform-for-export.js';
 import type { Thread, Comment } from './comments-plugin.js';
 import type { LocalComment } from './learn-store.js';
@@ -6097,10 +6098,10 @@ function mountView(doc: PMNode, threads: Thread[] = []): void {
         dragController.mapThrough(view, tx.mapping);
         // Headings that ARRIVE via sync (a joined session's initial fill,
         // a partner's additions mid-session) fold to the pane's current
-        // depth instead of landing fully expanded. Synchronous, before
-        // the debounced rebuild — the hook diffs against lastSeenIds,
-        // which any intervening render would refresh (see its JSDoc).
-        if (isSyncOrigin(tx)) navPanel.applyMaxLevelToNewHeadings();
+        // depth instead of landing fully expanded. Deferred to the next
+        // render, which folds them before refreshing lastSeenIds — no
+        // outline walk + rebuild per partner batch.
+        if (isSyncOrigin(tx)) navPanel.foldNewHeadingsOnNextRender();
       }
       // Selection-only changes refresh just the word-count readout so
       // the read time reflects the selection immediately instead of
@@ -6989,7 +6990,7 @@ async function routeOpenedFile(opened: OpenedFile): Promise<void> {
       docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
       docId = parsed.docId;
     } else {
-      const result = await fromDocxFull(openBytes);
+      const result = await openDocxOffThread(openBytes);
       docNode = result.doc;
       docThreads = result.threads;
       docId = result.docId;
@@ -7189,7 +7190,7 @@ async function loadFileInPlace(file: {
       docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
       docId = parsed.docId;
     } else {
-      const result = await fromDocxFull(openBytes);
+      const result = await openDocxOffThread(openBytes);
       docNode = result.doc;
       docThreads = result.threads;
       docId = result.docId;
@@ -8234,7 +8235,10 @@ function buildExportDoc(opts: SaveExportOptions): { doc: PMNode; threads: Thread
     includeUndertags: opts.includeUndertags,
     readMode: opts.readMode,
     markedCardsOnly: opts.markedCardsOnly ?? false,
-    markUnreadAfterMarker: settings.get('markUnreadAfterMarker'),
+    // Word only: the red is a display-only decoration CardMirror redraws
+    // from the marker. Baked into a .cmir it would become real font color
+    // that outlives the setting and a moved marker.
+    markUnreadAfterMarker: format === 'docx' && settings.get('markUnreadAfterMarker'),
   });
   if (view) gcOrphanThreads(view);
   const baseThreads =
@@ -8918,7 +8922,7 @@ async function reloadActiveFromDisk(handle: string): Promise<void> {
       docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
       docId = parsed.docId;
     } else {
-      const result = await fromDocxFull(openBytes);
+      const result = await openDocxOffThread(openBytes);
       docNode = result.doc;
       docThreads = result.threads;
       docId = result.docId;
@@ -10636,7 +10640,7 @@ async function mountResumedSession(roomId: string): Promise<void> {
 }
 
 /** Mount a SpawnWindowPayload into this freshly-spawned window.
- *  Parses the bytes (cmir → parseNative, docx → fromDocxFull),
+ *  Parses the bytes (cmir → parseNative, docx → fromDocxFull, off-thread),
  *  mounts the result, and sets the doc-state module vars. */
 async function mountFromSpawnPayload(
   payload: Awaited<ReturnType<ReturnType<typeof getHost>['getInitialDoc']>>,
@@ -10677,7 +10681,7 @@ async function mountFromSpawnPayload(
       docThreads = parsed.threads.length > 0 ? parsed.threads : undefined;
       docId = parsed.docId;
     } else {
-      const result = await fromDocxFull(openBytes);
+      const result = await openDocxOffThread(openBytes);
       docNode = result.doc;
       docThreads = result.threads;
       docId = result.docId;

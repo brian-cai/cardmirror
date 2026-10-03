@@ -29,7 +29,7 @@ import {
 import { registerOpenContextMenu, clearOpenContextMenu } from './context-menu-registry.js';
 import { dragController, type DragItem, type DragSurface } from './drag-controller.js';
 import { isTransclusionNode, zoneIdentity } from './transclusion.js';
-import { isSelfRef, resolveSelfProjection } from './self-transclusion.js';
+import { isSelfRef, resolveSelfProjection, typesHoldingSelfRef } from './self-transclusion.js';
 import { transclusionDivergenceKey } from './transclusion-divergence-plugin.js';
 
 /** Outline entries including the content projected by intra-doc live windows
@@ -40,8 +40,9 @@ import { transclusionDivergenceKey } from './transclusion-divergence-plugin.js';
 function collectOutlineWithWindows(doc: PMNode): HeadingEntry[] {
   const base = collectHeadings(doc);
   const projected: HeadingEntry[] = [];
+  const holders = typesHoldingSelfRef(doc.type.schema);
   doc.descendants((node, pos) => {
-    if (!isSelfRef(node)) return true;
+    if (!isSelfRef(node)) return holders.has(node.type);
     const proj = resolveSelfProjection(doc, String(node.attrs['source_heading_id'] ?? ''));
     if (proj.missing || proj.content.size === 0) return false;
     const wrapped = doc.type.create(null, proj.content);
@@ -874,6 +875,27 @@ export class NavigationPanel {
     if (!view) return;
     const doc = view.state.doc;
     this.currentDoc = doc;
+    this.foldNewHeadings(doc);
+    this.render(doc);
+  }
+
+  /** The deferred form of `applyMaxLevelToNewHeadings`, for headings that
+   *  arrive via sync: no walk and no render now, the fold runs at the start
+   *  of the next render (the debounced rebuild, or any render before it),
+   *  still before that render refreshes `lastSeenIds`. A partner's edits
+   *  arrive several times a second; folding synchronously re-walked the doc
+   *  and rebuilt the whole list for each batch. */
+  foldNewHeadingsOnNextRender(): void {
+    this.pendingNewHeadingFold = true;
+  }
+
+  private pendingNewHeadingFold = false;
+
+  /** Collapse headings not seen at the last render that have children and
+   *  sit at or below the pane's depth. Existing user-expanded parents are
+   *  left alone. */
+  private foldNewHeadings(doc: PMNode): void {
+    this.pendingNewHeadingFold = false;
     const maxLevel = this.maxLevel;
     const entries = collectHeadings(doc);
     for (let i = 0; i < entries.length; i++) {
@@ -887,7 +909,6 @@ export class NavigationPanel {
         this.collapsed.add(entry.id);
       }
     }
-    this.render(doc);
   }
 
   /** Positions (in `doc`) of the live zones the divergence plugin has flagged.
@@ -908,6 +929,7 @@ export class NavigationPanel {
   }
 
   private render(doc: PMNode): void {
+    if (this.pendingNewHeadingFold) this.foldNewHeadings(doc);
     this.renderList(doc);
     // The rebuild clears the list — drop slots and the dragged rows' grey
     // included. A rebuild mid-drag is routine in a shared document (every

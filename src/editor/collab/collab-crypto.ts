@@ -16,6 +16,8 @@
  * Electron renderer, and Node ≥16 — the same code path everywhere.
  */
 
+import { bytesToBase64, base64ToBytes } from '../../ooxml/base64.js';
+
 export const ROOM_KEY_BYTES = 32;
 
 const SHARE_CODE_PREFIX = 'cmshare1';
@@ -61,38 +63,10 @@ export async function decryptBlob(key: CryptoKey, sealed: Uint8Array): Promise<U
 
 // --- base64 / base64url (portable: browser + Node, no Buffer) ---
 
-// Native base64 (Uint8Array.fromBase64 / .toBase64, Chromium 144+ /
-// Node 25+): a multi-megabyte compaction snapshot used to be decoded by
-// a per-character JS loop over a multi-megabyte binary string — on the
-// join path, behind the "working…" veil (2026-09-01 review, T14). The
-// loop stays as the fallback everywhere the native API is absent.
-type NativeB64 = {
-  fromBase64?: (s: string) => Uint8Array;
-};
-const nativeU8 = Uint8Array as unknown as NativeB64;
-const hasNativeDecode = typeof nativeU8.fromBase64 === 'function';
-const hasNativeEncode =
-  typeof (Uint8Array.prototype as unknown as { toBase64?: unknown }).toBase64 === 'function';
-
-export function bytesToBase64(bytes: Uint8Array): string {
-  if (hasNativeEncode) {
-    return (bytes as unknown as { toBase64: () => string }).toBase64();
-  }
-  let bin = '';
-  const CHUNK = 0x8000; // String.fromCharCode arg-count limit guard
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(bin);
-}
-
-export function base64ToBytes(b64: string): Uint8Array {
-  if (hasNativeDecode) return nativeU8.fromBase64!(b64);
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
+// The shared helpers (native Uint8Array.toBase64 / fromBase64 where
+// present): a multi-megabyte compaction snapshot used to be decoded by a
+// per-character JS loop on the join path (2026-09-01 review, T14).
+export { bytesToBase64, base64ToBytes };
 
 function toBase64Url(bytes: Uint8Array): string {
   return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

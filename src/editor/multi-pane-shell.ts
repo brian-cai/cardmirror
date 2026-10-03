@@ -38,7 +38,8 @@ import { EditorView } from 'prosemirror-view';
 import { setViewDocPath } from './transclusion-doc-path.js';
 import { Node as PMNode } from 'prosemirror-model';
 import { schema, newHeadingId } from '../schema/index.js';
-import { fromDocxFull, parseNative, serializeNativeAsync, NativeDamagedError, NATIVE_FILE_EXTENSION } from '../index.js';
+import { parseNative, serializeNativeAsync, NativeDamagedError, NATIVE_FILE_EXTENSION } from '../index.js';
+import { openDocxOffThread } from './docx-open.js';
 import { settings } from './settings.js';
 import { MARK_UNREAD_TOGGLE } from './mark-unread-plugin.js';
 import { PMD_READ_MODE_TOGGLE } from './read-mode-plugin.js';
@@ -148,6 +149,8 @@ import {
 import { icon, setIcon } from './icons';
 import { formatSpeechFilename } from './speech-filename.js';
 import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
+import { maybeSnapshotVersion } from './version-history.js';
+import { awaitWithSaveWatchdog } from './save-watchdog.js';
 
 type SlotId = 'slot1' | 'slot2' | 'slot3';
 const SLOT_IDS: SlotId[] = ['slot1', 'slot2', 'slot3'];
@@ -311,8 +314,14 @@ async function runAutosaveForRecord(record: DocRecord): Promise<void> {
       ...(threads.length ? { threads } : {}),
       ...(record.docId ? { docId: record.docId } : {}),
     });
+    // Same as the single-doc autosave: the pre-write version snapshot, and
+    // the watchdog without its dialog (the 10s chip still turns a hung write
+    // on a stalled sync folder into feedback instead of silence).
+    maybeSnapshotVersion(record.docId, bytes, 'auto');
     try {
-      await host.saveExisting(record.handle, bytes);
+      await awaitWithSaveWatchdog(host.saveExisting(record.handle, bytes), record.filename, {
+        escalate: false,
+      });
       if (typeof record.handle === 'string') noteSavedInPlace(record.handle);
     } catch (err) {
       // Changed on disk under us (or no baseline for this window): keep
@@ -1354,6 +1363,10 @@ class Slot {
     if (rec.heavyUpdateTimer !== null) {
       cancelIdle(rec.heavyUpdateTimer);
       rec.heavyUpdateTimer = null;
+    }
+    if (rec.journalTimer !== null) {
+      window.clearTimeout(rec.journalTimer);
+      rec.journalTimer = null;
     }
     if (rec.autosaveTimer !== null) {
       window.clearTimeout(rec.autosaveTimer);
@@ -2613,7 +2626,7 @@ class MultiPaneShell {
     let parsed: { doc: PMNode; threads: import('./comments-plugin.js').Thread[]; docId: string | null };
     try {
       const bytes = await maybeDecryptForOpen(file.bytes, file.name);
-      parsed = file.format === 'docx' ? await fromDocxFull(bytes) : parseNative(bytes);
+      parsed = file.format === 'docx' ? await openDocxOffThread(bytes) : parseNative(bytes);
     } catch (err) {
       if (err instanceof OpenCancelledError) return;
       showToast(`Reload failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -3077,7 +3090,7 @@ class MultiPaneShell {
     if (!isDocxBytes) {
       ({ doc, threads, docId } = parseNative(openBytes));
     } else {
-      ({ doc, threads, docId } = await fromDocxFull(openBytes));
+      ({ doc, threads, docId } = await openDocxOffThread(openBytes));
     }
     const slot = this.slots[target];
     // With the setting on, an Untitled doc nobody has touched gives up its
@@ -3681,9 +3694,9 @@ function buildDocRecord(
         dragController.mapThrough(view, tx.mapping);
         // Sync-arrived headings fold to this pane's current depth (the
         // joined-session initial fill used to land fully expanded) —
-        // parity with single-doc, and it must run before the debounced
-        // rebuild refreshes lastSeenIds.
-        if (isSyncOrigin(tx)) record.navPanel.applyMaxLevelToNewHeadings();
+        // parity with single-doc; the next render folds them before it
+        // refreshes lastSeenIds.
+        if (isSyncOrigin(tx)) record.navPanel.foldNewHeadingsOnNextRender();
         if (record.heavyUpdateTimer !== null) {
           cancelIdle(record.heavyUpdateTimer);
         }

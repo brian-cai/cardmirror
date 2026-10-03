@@ -14,7 +14,7 @@
  * by-value prototype needed exists here.
  */
 
-import { Fragment, Slice, type Node as PMNode, type Schema } from 'prosemirror-model';
+import { Fragment, Slice, type Node as PMNode, type NodeType, type Schema } from 'prosemirror-model';
 import { extractSection, rewriteHeadingIdsInFragment, isTransclusionNode } from './transclusion.js';
 
 export const SELF_REF_NODE = 'self_ref';
@@ -104,6 +104,54 @@ function resolveMemo(
 
 /** Resolves a heading's projection, memoized. */
 export type ProjectionResolver = (headingId: string) => Projection;
+
+/** Node types whose content can (at any depth) hold a `self_ref`, read off the
+ *  schema's content expressions. Walks looking for views (the per-edit
+ *  re-derive, the outline) descend only into these: cards, headings and table
+ *  cells can't hold a view, so their text is never visited. That keeps such a
+ *  walk to the top-level blocks instead of every node in the document. */
+const selfRefHolders = new WeakMap<Schema, Set<NodeType>>();
+export function typesHoldingSelfRef(schema: Schema): Set<NodeType> {
+  let holders = selfRefHolders.get(schema);
+  if (holders) return holders;
+  const children = new Map<NodeType, Set<NodeType>>();
+  for (const type of Object.values(schema.nodes)) {
+    const kids = new Set<NodeType>();
+    const seen = new Set<typeof type.contentMatch>();
+    const stack = [type.contentMatch];
+    while (stack.length) {
+      const match = stack.pop()!;
+      if (seen.has(match)) continue;
+      seen.add(match);
+      for (let i = 0; i < match.edgeCount; i++) {
+        const edge = match.edge(i);
+        kids.add(edge.type);
+        stack.push(edge.next);
+      }
+    }
+    children.set(type, kids);
+  }
+  holders = new Set();
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [type, kids] of children) {
+      if (holders.has(type)) continue;
+      for (const kid of kids) {
+        if (isSelfRefType(kid) || holders.has(kid)) {
+          holders.add(type);
+          grew = true;
+          break;
+        }
+      }
+    }
+  }
+  selfRefHolders.set(schema, holders);
+  return holders;
+}
+
+function isSelfRefType(type: NodeType): boolean {
+  return type.name === SELF_REF_NODE;
+}
 
 /**
  * A projection resolver that memoizes across MANY headings in a single pass —

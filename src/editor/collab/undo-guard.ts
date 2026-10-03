@@ -68,16 +68,38 @@ const undoGuardKey = new PluginKey('cm-undo-guard');
 /** heading id → fingerprint of the container that carries it. For a tag /
  *  analytic the container is the enclosing card / analytic unit; a
  *  pocket / hat / block is its own container. */
-export function containerFingerprints(doc: PMNode): Map<string, string> {
+export function containerFingerprints(doc: PMNode): ReadonlyMap<string, string> {
+  const cached = docFingerprints.get(doc);
+  if (cached) return cached;
   const out = new Map<string, string>();
-  doc.descendants((n, _pos, parent) => {
+  doc.forEach((child) => {
+    for (const [id, fp] of childFingerprints(child, doc)) out.set(id, fp);
+  });
+  docFingerprints.set(doc, out);
+  return out;
+}
+
+/** Nodes are immutable and an edit keeps every untouched top-level child's
+ *  identity, so fingerprints are cached per doc (one transaction's new doc is
+ *  the next one's old doc) and per top-level child (a keystroke re-reads only
+ *  the card it landed in, not every card's text). */
+const docFingerprints = new WeakMap<PMNode, Map<string, string>>();
+const childFingerprintCache = new WeakMap<PMNode, [string, string][]>();
+
+function childFingerprints(child: PMNode, doc: PMNode): [string, string][] {
+  const cached = childFingerprintCache.get(child);
+  if (cached) return cached;
+  const out: [string, string][] = [];
+  const visit = (n: PMNode, parent: PMNode | null): boolean => {
     if (!HEADING_TYPE_NAMES.has(n.type.name)) return true;
     const id = n.attrs['id'];
     if (typeof id !== 'string' || !id) return true;
     const container = n.type.name === 'tag' || n.type.name === 'analytic' ? (parent ?? n) : n;
-    out.set(id, `${container.type.name}|${container.childCount}|${container.textContent}`);
+    out.push([id, `${container.type.name}|${container.childCount}|${container.textContent}`]);
     return true;
-  });
+  };
+  if (visit(child, doc)) child.descendants((n, _pos, parent) => visit(n, parent));
+  childFingerprintCache.set(child, out);
   return out;
 }
 
@@ -105,14 +127,19 @@ export function createUndoGuard(opts: UndoGuardOptions): UndoGuard {
       apply: (tr: Transaction, value: null, oldState: EditorState, newState: EditorState) => {
         if (!tr.docChanged) return value;
         const sync = tr.getMeta(loroSyncPluginKey) as { type?: string } | undefined;
-        const before = containerFingerprints(oldState.doc);
-        const after = containerFingerprints(newState.doc);
         if (sync?.type === 'non-local-updates') {
           if (lastEventBy !== 'import') return value; // undo/redo result: marks persist
-          for (const [id, fp] of after) if (before.get(id) !== fp) partnerTouched.add(id);
+          const before = containerFingerprints(oldState.doc);
+          for (const [id, fp] of containerFingerprints(newState.doc)) {
+            if (before.get(id) !== fp) partnerTouched.add(id);
+          }
           return value;
         }
         if (sync !== undefined) return value; // the binding's own echoes
+        // A local edit only ever clears marks — none set, nothing to do.
+        if (partnerTouched.size === 0) return value;
+        const before = containerFingerprints(oldState.doc);
+        const after = containerFingerprints(newState.doc);
         // A local, user-originated transaction: containers it creates or
         // deletes start clean — the intent covers the partner's prior edits.
         for (const id of after.keys()) if (!before.has(id)) partnerTouched.delete(id);
