@@ -15,6 +15,7 @@
 
 import { relativeTime } from '../disk-conflict.js';
 import { pushOverlay, popOverlay } from '../overlay-stack.js';
+import { isBackdropClick } from '../backdrop-click.js';
 import { installModalKeys, captureFocusForDialog, armDialogFocus } from '../text-prompt.js';
 import {
   listSessionRecords,
@@ -192,7 +193,7 @@ export function pickSessionToJoin(candidates: RejoinCandidate[]): Promise<Rejoin
 
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) finish(null);
+      if (isBackdropClick(e, overlay)) finish(null);
     });
     removeKeys = installModalKeys(dialog, overlayToken, (e) => {
       if (e.key === 'Escape') {

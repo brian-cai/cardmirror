@@ -8220,7 +8220,10 @@ interface SaveExportOptions {
  *  comments) and, opt-in, private notes / AI threads baked in as comments.
  *  Returns the doc plus every comment thread it carries. Shared by
  *  `serializeForSave` and the PDF export. */
-function buildExportDoc(opts: SaveExportOptions): { doc: PMNode; threads: Thread[] } {
+function buildExportDoc(
+  format: 'cmir' | 'docx' | 'pdf',
+  opts: SaveExportOptions,
+): { doc: PMNode; threads: Thread[] } {
   const liveDoc = view ? view.state.doc : currentDoc;
   // Card numbers are settled FIRST, on the full document, so the strips
   // below cannot renumber what survives: frozen as heading text or removed,
@@ -8237,8 +8240,9 @@ function buildExportDoc(opts: SaveExportOptions): { doc: PMNode; threads: Thread
     markedCardsOnly: opts.markedCardsOnly ?? false,
     // Word only: the red is a display-only decoration CardMirror redraws
     // from the marker. Baked into a .cmir it would become real font color
-    // that outlives the setting and a moved marker.
-    markUnreadAfterMarker: format === 'docx' && settings.get('markUnreadAfterMarker'),
+    // that outlives the setting and a moved marker. A PDF is a printed
+    // page, so it keeps the red like Word.
+    markUnreadAfterMarker: format !== 'cmir' && settings.get('markUnreadAfterMarker'),
   });
   if (view) gcOrphanThreads(view);
   const baseThreads =
@@ -8270,7 +8274,7 @@ async function serializeForSave(
    *  Omitted for derived/lossy exports, which stay clean (no identity). */
   docId?: string,
 ): Promise<Uint8Array> {
-  const { doc: exportDocNode, threads: allThreads } = buildExportDoc(opts);
+  const { doc: exportDocNode, threads: allThreads } = buildExportDoc(format, opts);
   const threadsOpt = allThreads.length > 0 ? { threads: allThreads } : {};
   if (format === 'cmir') {
     // Async gzip: the DEFLATE runs off the main thread, so autosave's
@@ -8353,7 +8357,7 @@ async function confirmDocxDropsLiveLinks(): Promise<boolean> {
  *  print dialog on the web. The working doc's file, name and dirty state
  *  are untouched. */
 async function runPdfExport(choice: SaveAsResult, nearPath: string | null): Promise<void> {
-  const { doc } = buildExportDoc({
+  const { doc } = buildExportDoc('pdf', {
     includeComments: choice.includeComments,
     includeAnalytics: choice.includeAnalytics,
     includeUndertags: choice.includeUndertags,
