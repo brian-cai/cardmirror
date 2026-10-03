@@ -1865,15 +1865,15 @@ const DEFAULTS: Settings = {
   customColorOverrides: {},
   navPaneVisible: true,
   formatNavPaneByType: true,
-  timerProfile: 'college',
+  timerProfile: 'highSchool',
   timerProfiles: {
     highSchool: { speechPresets: [3, 5, 8, 10], prepMinutes: 8 },
     college: { speechPresets: [3, 6, 9, 12], prepMinutes: 10 },
     pomodoro: { speechPresets: [25, 15, 5, 45], prepMinutes: 0 },
   },
-  timerSpeechPresets: [3, 6, 9, 12],
+  timerSpeechPresets: [3, 5, 8, 10],
   timerShowFourthPreset: false,
-  timerPrepMinutes: 10,
+  timerPrepMinutes: 8,
   timerFlashEnabled: true,
   timerFlashSeconds: [5, 3, 1],
   timerSoundEnabled: false,
@@ -2633,7 +2633,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     key: 'timerProfile',
     label: 'Timer profile',
     description:
-      "Picks which set of durations the timer is currently running on. Each profile remembers its own customizations, so changing values below saves to the active profile (no separate 'custom' option). Defaults: High school = 3/5/8 + 8 min prep, College = 3/6/9 + 10 min prep, Pomodoro = 25/15/5 + 0 prep.",
+      "Picks which set of durations the timer is currently running on. Each profile remembers its own customizations, so changing values below saves to the active profile (no separate 'custom' option). Defaults: High school (the default profile) = 3/5/8 + 8 min prep, College = 3/6/9 + 10 min prep, Pomodoro = 25/15/5 + 0 prep.",
     kind: 'timerProfile',
     category: 'general',
     section: 'Timer',
@@ -4928,9 +4928,9 @@ function sanitize(s: Settings): Settings {
     // Default-on: only an explicit `false` disables it.
     formatNavPaneByType: s.formatNavPaneByType === false ? false : true,
     timerProfile:
-      s.timerProfile === 'highSchool' || s.timerProfile === 'pomodoro'
+      s.timerProfile === 'college' || s.timerProfile === 'pomodoro'
         ? s.timerProfile
-        : 'college',
+        : 'highSchool',
     timerProfiles: sanitizeTimerProfiles(s.timerProfiles),
     timerSpeechPresets: sanitizeSpeechPresets(s.timerSpeechPresets, [3, 6, 9, 12]),
     timerShowFourthPreset: !!s.timerShowFourthPreset,
@@ -6183,6 +6183,35 @@ export function migrateAutoUpdateOptOut(onMigrated: () => void): void {
  *  to `true` exactly once per install (marker outside the blob); a user
  *  who turns it back off stays off. Display-only, so no notice. Runs on
  *  every edition (the cue is a stylesheet class). */
+/** One-shot migration for the High School timer default (2026-10-03):
+ *  installs still on the untouched College profile (the old default — same
+ *  durations and prep as shipped) switch to High School once. Anyone who
+ *  customized College's durations, or picked another profile, is left alone;
+ *  switching back to College afterwards sticks (marker outside the blob). */
+export function migrateHighSchoolTimerDefault(): void {
+  const MARKER = 'cm-hs-timer-default-migrated';
+  try {
+    if (localStorage.getItem(MARKER) !== null) return;
+    localStorage.setItem(MARKER, '1');
+  } catch {
+    return;
+  }
+  if (settings.get('timerProfile') !== 'college') return;
+  const college = settings.get('timerProfiles').college;
+  const shipped = { speechPresets: [3, 6, 9, 12], prepMinutes: 10 };
+  const untouched =
+    college.prepMinutes === shipped.prepMinutes &&
+    college.speechPresets.length === shipped.speechPresets.length &&
+    college.speechPresets.every((m, i) => m === shipped.speechPresets[i]) &&
+    settings.get('timerPrepMinutes') === shipped.prepMinutes &&
+    settings.get('timerSpeechPresets').every((m, i) => m === shipped.speechPresets[i]);
+  if (!untouched) return;
+  const hs = settings.get('timerProfiles').highSchool;
+  settings.set('timerProfile', 'highSchool');
+  settings.set('timerSpeechPresets', [...hs.speechPresets]);
+  settings.set('timerPrepMinutes', hs.prepMinutes);
+}
+
 export function migrateDistinguishShadingDefault(): void {
   const MARKER = 'cm-distinguish-shading-migrated';
   try {
