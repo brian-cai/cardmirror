@@ -434,9 +434,16 @@ const skipCloseConfirm = new Set<number>();
 let quitInitiated = false;
 
 function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
+  // Open filling the usable area (minus menu bar / Dock / taskbar) of the
+  // display the pointer is on, rather than a fixed 1400×900 that leaves
+  // most of a large screen empty. A normal window, not OS full screen —
+  // it can still be resized and moved.
+  const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const win = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    x: workArea.x,
+    y: workArea.y,
+    width: workArea.width,
+    height: workArea.height,
     // Explicit 0×0 minimum: Electron + Chromium will otherwise
     // advertise its own default minimum to the WM (~800×600 on some
     // Linux compositors). Pinning both to 0 advertises "no minimum"
