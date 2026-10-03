@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The "Cycle Timer Preset" command and the Settings profile picker both go
  * through `timer-profile.ts`. Cover the cycle order (College → High School →
@@ -57,5 +58,40 @@ describe('timer profile cycling', () => {
       college: 'College',
       pomodoro: 'Pomodoro',
     });
+  });
+});
+
+describe('High School timer default', () => {
+  it('is the shipped default', async () => {
+    const { SETTINGS_DEFAULTS } = await import('../../src/editor/settings.js');
+    expect(SETTINGS_DEFAULTS.timerProfile).toBe('highSchool');
+    expect(SETTINGS_DEFAULTS.timerPrepMinutes).toBe(8);
+  });
+
+  it('moves an untouched College install to High School once', async () => {
+    const { migrateHighSchoolTimerDefault } = await import('../../src/editor/settings.js');
+    seedProfiles();
+    applyTimerProfile('college');
+    localStorage.removeItem('cm-hs-timer-default-migrated');
+    migrateHighSchoolTimerDefault();
+    expect(settings.get('timerProfile')).toBe('highSchool');
+    expect(settings.get('timerPrepMinutes')).toBe(8);
+    // Choosing College again afterwards sticks.
+    applyTimerProfile('college');
+    migrateHighSchoolTimerDefault();
+    expect(settings.get('timerProfile')).toBe('college');
+  });
+
+  it('leaves a customized College profile alone', async () => {
+    const { migrateHighSchoolTimerDefault } = await import('../../src/editor/settings.js');
+    settings.set('timerProfiles', {
+      highSchool: { speechPresets: [3, 5, 8, 10], prepMinutes: 8 },
+      college: { speechPresets: [3, 6, 9, 12], prepMinutes: 7 },
+      pomodoro: { speechPresets: [25, 15, 5, 45], prepMinutes: 0 },
+    } as never);
+    applyTimerProfile('college');
+    localStorage.removeItem('cm-hs-timer-default-migrated');
+    migrateHighSchoolTimerDefault();
+    expect(settings.get('timerProfile')).toBe('college');
   });
 });
