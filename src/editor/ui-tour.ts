@@ -112,7 +112,7 @@ function buildSteps(opts: { includeCreateDoc: boolean }): TourStep[] {
       id: 'styles',
       title: 'Structural styles',
       body:
-        'Turn a paragraph into a Pocket, Hat, Block, Tag, Analytic, or Undertag with one ' +
+        'Turn a paragraph into a Pocket, Hat, Block, Tag, or Analytic with one ' +
         'click — or one keystroke (F4–F7 and friends; the keyboard reference lists them all).',
       target: el('formatting-panel'),
     },
