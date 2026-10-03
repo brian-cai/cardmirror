@@ -5,6 +5,10 @@ behavior, rationale, and (where useful) the implementation context
 behind a change. For a shorter, jargon-free summary of what's new
 in each release, see `CHANGELOG.md`.
 
+## 1.13.2 — 2026-10-03
+
+See CHANGELOG.md.
+
 ## 1.13.1 — 2026-10-02
 
 ### Added: file-search folder priority (highest / preferred)

@@ -5,9 +5,19 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
-## Unreleased
+## 1.13.2 — 2026-10-03
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
 
 ### Added
+
+- **Ctrl/Cmd+Shift+F searches the navigation pane.** The new Search
+  Navigation Pane command opens the pane if it's hidden and puts the
+  cursor in its heading search. Rebind it under Settings → Keyboard
+  shortcuts. Toggle Slot Expand / Restore (three-pane mode), which used
+  this shortcut, is now unbound by default — give it a key there if you
+  use it.
 
 - **Move your whole setup to another computer.** Settings → General →
   Back up settings now also saves the words you added to the
@@ -16,6 +26,12 @@ see `DETAILED_CHANGELOG.md`.
   default; the file stores them as plain text). Importing a file that
   has keys asks whether to use them or keep your own. Thanks to Brian
   (@brian-cai)!
+
+### Fixed
+
+- **Settings search finds buttons.** Searching "export", "import" or
+  "backup" now finds Back up settings, and "updates" finds the update
+  controls; before, only section titles matched.
 
 ## 1.13.1 — 2026-10-02
 
