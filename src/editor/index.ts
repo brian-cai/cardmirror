@@ -3195,7 +3195,8 @@ type FormattingPanelId =
   | 'applyEmphasis'
   | 'clearToNormal'
   | 'shrink'
-  | 'pasteAsText';
+  | 'pasteAsText'
+  | 'condenseDefault';
 const FORMATTING_PANEL_BUTTONS: Record<FormattingPanelId, string> = {
   setPocket: 'style-pocket-btn',
   setHat: 'style-hat-btn',
@@ -3211,6 +3212,8 @@ const FORMATTING_PANEL_BUTTONS: Record<FormattingPanelId, string> = {
   shrink: 'shrink-btn',
   // Verbatim's Paste (F2): pastes the clipboard as plain text.
   pasteAsText: 'paste-text-btn',
+  // Verbatim's Condense (F3): follows the ¶ paragraph-integrity toggle.
+  condenseDefault: 'condense-btn',
 };
 const FORMATTING_PANEL_SHORT_LABEL: Record<FormattingPanelId, string> = {
   setPocket: 'Pocket',
@@ -3225,6 +3228,7 @@ const FORMATTING_PANEL_SHORT_LABEL: Record<FormattingPanelId, string> = {
   clearToNormal: 'Clear',
   shrink: 'Shrink',
   pasteAsText: 'Paste',
+  condenseDefault: 'Condense',
 };
 // Right-clicking a style button selects every instance of that style in
 // the document as a shadow selection (same display + bulk-operation
