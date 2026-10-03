@@ -50,7 +50,7 @@ export function makeFakeFileIndexClient(listing: { files: FakeFileListing[] }): 
       if (params.formats !== 'both') {
         pool = pool.filter((f) => fileFormat(f.path) === params.formats);
       }
-      const ranked = searchFiles(pool, params.query, params.tiebreak);
+      const ranked = searchFiles(pool, params.query, params.tiebreak, params.folderPriority);
       const pins = new Set(params.pins);
       const ordered =
         !params.partitionPins || pins.size === 0
@@ -82,6 +82,7 @@ export function makeFakeFileIndexClient(listing: { files: FakeFileListing[] }): 
         query: params.query,
         sep: '/',
         tiebreak: params.tiebreak,
+        folderPriority: params.folderPriority,
         pins: params.pins,
         limit: params.limit,
       });

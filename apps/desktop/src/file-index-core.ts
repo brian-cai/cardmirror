@@ -284,7 +284,7 @@ export function createFileIndexCore(opts: {
     async query(q: FileIndexQuery): Promise<FileIndexQueryResult> {
       await ensureLoaded();
       const entries = visibleEntries(q.roots, q.exclusions, q.formats);
-      const ranked = searchFiles(entries, q.query, q.tiebreak);
+      const ranked = searchFiles(entries, q.query, q.tiebreak, q.folderPriority);
       // ★ manual pins float above the rest (preserving rank inside each
       // partition) in `f`-mode only — the everything search keeps pure
       // rank order, matching the pre-service palette. Flags either way.
@@ -310,6 +310,7 @@ export function createFileIndexCore(opts: {
         query: q.query,
         sep: path.sep,
         tiebreak: q.tiebreak,
+        folderPriority: q.folderPriority,
         pins: q.pins,
         limit: q.limit,
       });

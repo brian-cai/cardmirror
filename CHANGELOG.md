@@ -9,6 +9,15 @@ see `DETAILED_CHANGELOG.md`.
 
 ### Added
 
+- **File search: folder priority.** Two new lists under Settings →
+  Files → File search tell file search which folders matter most.
+  Matches from a **Highest priority** folder always list first. Matches
+  from a **Preferred** folder beat equally good matches elsewhere, but a
+  better match from another folder still comes first. You can add single
+  files as well as folders, and a subfolder listed in the other section
+  follows its own setting. With nothing typed, highest-priority files
+  list first, then preferred ones. Desktop only.
+
 - **Switch Window (Ctrl+Tab).** In one-window-per-document mode, jump to
   another CardMirror window by name instead of hunting through the
   operating system's switcher: Ctrl+Tab opens Search Everything on your

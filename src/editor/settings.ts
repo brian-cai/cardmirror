@@ -1186,6 +1186,12 @@ export interface Settings {
    *  entries never reach results, pins, or the background warm pass.
    *  Electron only. */
   fileSearchExclusions: string[];
+  /** File-search priority sections: folders (or files) whose matches list
+   *  above every other match (`highest`) or win ties with equally good
+   *  matches elsewhere (`preferred`). The deepest entry wins when they nest.
+   *  Absolute paths. Electron only. See `searchFiles`. */
+  fileSearchHighestFolders: string[];
+  fileSearchPreferredFolders: string[];
   /** Which file formats appear in the command-palette file search:
    *  'both' (default), 'cmir' only, or 'docx' only. */
   fileSearchFormats: 'both' | 'cmir' | 'docx';
@@ -1960,6 +1966,8 @@ const DEFAULTS: Settings = {
   showQuickCardButtons: false,
   fileSearchRoots: [],
   fileSearchExclusions: [],
+  fileSearchHighestFolders: [],
+  fileSearchPreferredFolders: [],
   fileSearchFormats: 'both',
   fileSearchObjectTypes: ['block', 'tag'],
   fileSearchOutlineDepth: 3,
@@ -2879,6 +2887,31 @@ export const SETTING_METADATA: SettingMeta[] = [
     category: 'files',
     section: 'File search',
     electronOnly: true,
+  },
+  {
+    key: 'fileSearchHighestFolders',
+    label: 'File search: highest priority',
+    description:
+      'Matches from these folders (or files) always list first, above every other result. '
+      + 'Among themselves they are still ordered by how well they match.',
+    kind: 'pathList',
+    category: 'files',
+    section: 'File search',
+    electronOnly: true,
+    aliases: ['folder priority', 'prioritize folder', 'boost folder', 'search ranking', 'top folders'],
+  },
+  {
+    key: 'fileSearchPreferredFolders',
+    label: 'File search: preferred',
+    description:
+      'Matches from these folders (or files) win ties: they rank above equally good matches '
+      + 'elsewhere, but a better match from another folder still comes first. If a folder is '
+      + 'listed in both sections, the more specific (deeper) entry wins.',
+    kind: 'pathList',
+    category: 'files',
+    section: 'File search',
+    electronOnly: true,
+    aliases: ['folder priority', 'prefer folder', 'boost folder', 'search ranking'],
   },
   {
     key: 'fileSearchFormats',
@@ -5002,6 +5035,12 @@ function sanitize(s: Settings): Settings {
     fileSearchRoots: sanitizeFileSearchRoots(s),
     fileSearchExclusions: sanitizeStringList(
       (s as { fileSearchExclusions?: unknown }).fileSearchExclusions,
+    ),
+    fileSearchHighestFolders: sanitizeStringList(
+      (s as { fileSearchHighestFolders?: unknown }).fileSearchHighestFolders,
+    ),
+    fileSearchPreferredFolders: sanitizeStringList(
+      (s as { fileSearchPreferredFolders?: unknown }).fileSearchPreferredFolders,
     ),
     fileSearchFormats:
       s.fileSearchFormats === 'cmir'

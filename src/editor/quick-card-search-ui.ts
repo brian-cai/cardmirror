@@ -92,6 +92,7 @@ import {
   FILE_OBJECT_KIND_BADGES,
   type FileObject,
   type FileObjectKind,
+  type FolderPriority,
   type OutlineEntry,
 } from './file-search.js';
 import {
@@ -1032,6 +1033,14 @@ function enterVerb(source: PaletteResult['source']): string {
 
 const SEARCH_PLACEHOLDER = 'Search…';
 
+/** The folder-priority sections from settings, for index queries. */
+function fileSearchPriority(): FolderPriority {
+  return {
+    highest: settings.get('fileSearchHighestFolders'),
+    preferred: settings.get('fileSearchPreferredFolders'),
+  };
+}
+
 class QuickCardSearchUI {
   private root: HTMLDivElement | null = null;
   private input!: HTMLInputElement;
@@ -1734,6 +1743,8 @@ class QuickCardSearchUI {
       settings.get('fileSearchExclusions'),
       settings.get('fileSearchFormats'),
       settings.get('fileSearchTiebreak'),
+      settings.get('fileSearchHighestFolders'),
+      settings.get('fileSearchPreferredFolders'),
       [...this.manualPinPaths()].sort(),
     ]);
   }
@@ -1766,6 +1777,7 @@ class QuickCardSearchUI {
           exclusions: settings.get('fileSearchExclusions'),
           formats: settings.get('fileSearchFormats'),
           tiebreak: settings.get('fileSearchTiebreak'),
+          folderPriority: fileSearchPriority(),
           pins: [...this.manualPinPaths()],
           limit,
         });
@@ -1889,6 +1901,8 @@ class QuickCardSearchUI {
       settings.get('fileSearchExclusions'),
       settings.get('fileSearchFormats'),
       settings.get('fileSearchTiebreak'),
+      settings.get('fileSearchHighestFolders'),
+      settings.get('fileSearchPreferredFolders'),
       [...this.manualPinPaths()].sort(),
     ]);
   }
@@ -1917,6 +1931,7 @@ class QuickCardSearchUI {
             exclusions: settings.get('fileSearchExclusions'),
             formats: settings.get('fileSearchFormats'),
             tiebreak: settings.get('fileSearchTiebreak'),
+            folderPriority: fileSearchPriority(),
             pins: [...this.manualPinPaths()],
             partitionPins,
             limit,

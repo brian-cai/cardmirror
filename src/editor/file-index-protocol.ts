@@ -1,4 +1,4 @@
-import type { FileTiebreak } from './file-search.js';
+import type { FileTiebreak, FolderPriority } from './file-search.js';
 
 /** One ranked file hit — the compact row shared by search and browse. */
 export interface FileIndexRow {
@@ -15,6 +15,9 @@ export interface FileIndexQueryParams {
   exclusions: string[];
   formats: 'both' | 'cmir' | 'docx';
   tiebreak: FileTiebreak;
+  /** Highest-priority / preferred folder sections. Optional — absent
+   *  means every folder ranks equally. */
+  folderPriority?: FolderPriority;
   pins: string[];
   /** Float pinned rows above the rest for scoped file search. */
   partitionPins: boolean;
@@ -55,6 +58,9 @@ export interface FileBrowseParams {
   exclusions: string[];
   formats: 'both' | 'cmir' | 'docx';
   tiebreak: FileTiebreak;
+  /** Highest-priority / preferred folder sections. Optional — absent
+   *  means every folder ranks equally. */
+  folderPriority?: FolderPriority;
   pins: string[];
   limit: number;
 }

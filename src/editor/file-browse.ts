@@ -20,6 +20,7 @@ import {
   tokenizeQuery,
   type FileEntry,
   type FileTiebreak,
+  type FolderPriority,
 } from './file-search.js';
 import type { FileBrowseResult, FileBrowseRow } from './file-index-protocol.js';
 
@@ -51,6 +52,7 @@ export interface BrowseInput {
   query: string;
   sep: string;
   tiebreak: FileTiebreak;
+  folderPriority?: FolderPriority;
   pins: readonly string[];
   limit: number;
 }
@@ -88,7 +90,7 @@ export function deriveBrowse(input: BrowseInput): FileBrowseResult {
     .map((f) => ({ kind: 'folder' as const, name: f.name, relativeDirectory: f.relativeDirectory }));
 
   const subPathOf = new Map(candidates.map((c) => [c.entry.path, c.subPath]));
-  const ranked = searchFiles(candidates.map((c) => c.entry), input.query, tiebreak);
+  const ranked = searchFiles(candidates.map((c) => c.entry), input.query, tiebreak, input.folderPriority);
   const ordered = pins.size === 0
     ? ranked
     : [...ranked.filter((f) => pins.has(f.path)), ...ranked.filter((f) => !pins.has(f.path))];

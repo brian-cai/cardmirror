@@ -96,6 +96,30 @@ describe('file-index core', () => {
     expect(docxOnly.rows.map((r) => r.name)).toEqual(['Warming Neg']);
   });
 
+  it('applies folder priority to queries and folder search', async () => {
+    const core = makeCore();
+    await core.configure([rootA]);
+    await core.idle();
+    const folderPriority = { highest: [], preferred: [path.join(rootA, 'Neg')] };
+    const res = await core.query(q({ query: 'warming', folderPriority }));
+    expect(res.rows.map((r) => r.name)).toEqual(['Warming Neg', 'Warming Aff']);
+    const browsed = await core.browse({
+      roots: [rootA],
+      location: { root: rootA, relativeDirectory: '' },
+      query: 'warming',
+      exclusions: [],
+      formats: 'both',
+      tiebreak: 'alphabetical',
+      folderPriority,
+      pins: [],
+      limit: 50,
+    });
+    expect(browsed.rows.filter((r) => r.kind === 'file').map((r) => r.name)).toEqual([
+      'Warming Neg',
+      'Warming Aff',
+    ]);
+  });
+
   it('flags pins always; partitions only when asked', async () => {
     const core = makeCore();
     await core.configure([rootA]);

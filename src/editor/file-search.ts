@@ -121,19 +121,7 @@ export interface OutlineEntry {
  *  string compare — exclusions and listings come from the same native
  *  pickers/scans, so their casing and shape agree. */
 export function isPathExcluded(path: string, exclusions: readonly string[]): boolean {
-  for (const raw of exclusions) {
-    const ex = raw.replace(/[\\/]+$/, ''); // tolerate a trailing separator
-    if (!ex) continue;
-    if (path === ex) return true;
-    if (
-      path.length > ex.length &&
-      path.startsWith(ex) &&
-      (path[ex.length] === '/' || path[ex.length] === '\\')
-    ) {
-      return true;
-    }
-  }
-  return false;
+  return exclusions.some((ex) => isAtOrUnder(path, ex));
 }
 
 /** Drop excluded entries from a listing. The ONE choke point for the
@@ -147,6 +135,51 @@ export function filterExcludedFiles(
 ): FileEntry[] {
   if (exclusions.length === 0) return [...files];
   return files.filter((f) => !isPathExcluded(f.path, exclusions));
+}
+
+/** Folder priority sections for the file search (Settings → File search).
+ *  Entries are folders or single files; each covers everything beneath it.
+ *    highest   — matches here list above every other match
+ *    preferred — matches here win ties: above equally good matches
+ *                elsewhere, below better ones */
+export interface FolderPriority {
+  highest: readonly string[];
+  preferred: readonly string[];
+}
+
+/** 0 normal · 1 preferred · 2 highest. */
+export type PriorityLevel = 0 | 1 | 2;
+
+/** True when `path` is `dir` or lives beneath it (separator-aware, both
+ *  `/` and `\`; a trailing separator on `dir` is tolerated). */
+function isAtOrUnder(path: string, dir: string): boolean {
+  const d = dir.replace(/[\\/]+$/, '');
+  if (!d) return false;
+  if (path === d) return true;
+  return (
+    path.length > d.length &&
+    path.startsWith(d) &&
+    (path[d.length] === '/' || path[d.length] === '\\')
+  );
+}
+
+/** The priority section `path` falls in. The deepest (longest) matching
+ *  entry across both sections wins, so a preferred subfolder inside a
+ *  highest-priority folder is just preferred. */
+export function folderPriorityFor(path: string, priority: FolderPriority): PriorityLevel {
+  let level: PriorityLevel = 0;
+  let bestLen = -1;
+  const scan = (dirs: readonly string[], lvl: PriorityLevel): void => {
+    for (const d of dirs) {
+      if (d.length > bestLen && isAtOrUnder(path, d)) {
+        level = lvl;
+        bestLen = d.length;
+      }
+    }
+  };
+  scan(priority.highest, 2);
+  scan(priority.preferred, 1);
+  return level;
 }
 
 /** Bare filename from a path/relPath (handles `/` and `\`). */
@@ -260,7 +293,11 @@ export function searchFiles(
   files: readonly FileEntry[],
   query: string,
   tiebreak: FileTiebreak = 'recency',
+  priority?: FolderPriority,
 ): FileEntry[] {
+  if (priority && (priority.highest.length > 0 || priority.preferred.length > 0)) {
+    return searchFilesByPriority(files, query, tiebreak, priority);
+  }
   // Match the bare name first; the folder (from relPath) is the secondary
   // field, so "neg warming" finds Neg/Warming DA — ranked below a name hit.
   const cmp: (a: FileEntry, b: FileEntry) => number =
@@ -274,6 +311,39 @@ export function searchFiles(
     (f) => f.dirLower,
     cmp,
   );
+}
+
+/** `searchFiles` with folder priority: highest-priority matches first, then
+ *  the rest; within each, by match tier, preferred before normal inside a
+ *  tier, then the tiebreak. An empty query lists highest, preferred, normal.
+ *  Kept separate so the unprioritized path — the common case, run per
+ *  keystroke over the whole corpus — pays nothing for the feature. */
+function searchFilesByPriority(
+  files: readonly FileEntry[],
+  query: string,
+  tiebreak: FileTiebreak,
+  priority: FolderPriority,
+): FileEntry[] {
+  const cmp: (a: FileEntry, b: FileEntry) => number =
+    tiebreak === 'alphabetical'
+      ? (a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      : (a, b) => b.mtimeMs - a.mtimeMs;
+  const tokens = tokenizeQuery(query);
+  const q = tokens.join(' ');
+  const t0 = tokens[0] ?? '';
+  const matched: Array<{ item: FileEntry; tier: number; level: PriorityLevel }> = [];
+  for (const f of files) {
+    const tier = tokens.length === 0 ? 0 : matchTier(f.nameLower, f.dirLower, tokens, q, t0);
+    if (tier === null) continue;
+    matched.push({ item: f, tier, level: folderPriorityFor(f.path, priority) });
+  }
+  const top = (l: PriorityLevel): number => (l === 2 ? 0 : 1);
+  return matched
+    .sort(
+      (a, b) =>
+        top(a.level) - top(b.level) || a.tier - b.tier || b.level - a.level || cmp(a.item, b.item),
+    )
+    .map((r) => r.item);
 }
 
 export function searchFileObjects(objects: readonly FileObject[], query: string): FileObject[] {

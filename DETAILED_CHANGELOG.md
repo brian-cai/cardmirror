@@ -7,6 +7,33 @@ in each release, see `CHANGELOG.md`.
 
 ## Unreleased
 
+### Added: file-search folder priority (highest / preferred)
+
+There are two new `pathList` settings, `fileSearchHighestFolders` and
+`fileSearchPreferredFolders`, shown in Settings as the same folder-or-file
+list editor that exclusions use. They reach the index as an optional
+`folderPriority: { highest, preferred }` on `FileIndexQueryParams` and
+`FileBrowseParams`, and both lists are part of the palette's query and
+browse params keys, so editing them re-queries. Ranking lives in
+`searchFiles`, which the index service, the `/` folder browse
+(`deriveBrowse`) and the test fake all share. When either list is
+non-empty, `searchFilesByPriority` sorts by:
+
+1. highest-priority matches first;
+2. then match tier;
+3. then preferred before normal within a tier;
+4. then the tiebreak.
+
+So Highest priority beats better matches, while Preferred only wins
+ties. With an empty query, results list highest, then preferred, then
+normal. `folderPriorityFor` takes the deepest matching entry across both
+lists (a single file path works too), using the separator-aware prefix
+test that exclusions use, now shared as `isAtOrUnder`. Pins still
+partition after ranking. With both lists empty, the old `rank` path runs
+unchanged, so there is no per-keystroke cost. Tests:
+file-search-folder-priority.test.ts, plus a file-index-core query and
+browse case.
+
 ### Added: Switch Window (`w ` palette source, Mod-Tab)
 
 Main records window focus order (`browser-window-focus`) and answers
