@@ -95,6 +95,19 @@ jobs:
             echo "Release notes not found in CHANGELOG for $VERSION — using fallback body." >&2
             echo "_(Release notes not yet pasted from CHANGELOG.md — maintainer should edit.)_" > release-notes.md
           fi
+          # Lead with the two installers most people want — GitHub folds
+          # the asset list, so the .dmg and .exe are otherwise easy to miss.
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          {
+            echo "### Download"
+            echo
+            echo "- **Mac:** [CardMirror-${VERSION}-universal.dmg](${BASE}/CardMirror-${VERSION}-universal.dmg) (Apple Silicon and Intel)"
+            echo "- **Windows:** [CardMirror-Setup-${VERSION}.exe](${BASE}/CardMirror-Setup-${VERSION}.exe)"
+            echo
+            echo "Linux builds and CardMirror Lite (no AI, no internet, no auto-update) are under Assets below."
+            echo
+            cat release-notes.md
+          } > release-notes.tmp && mv release-notes.tmp release-notes.md
           echo "Wrote $(wc -l < release-notes.md) lines of notes."
 
       - name: Ensure draft release exists
