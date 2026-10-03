@@ -3195,7 +3195,8 @@ type FormattingPanelId =
   | 'applyCite'
   | 'applyUnderline'
   | 'applyEmphasis'
-  | 'clearToNormal';
+  | 'clearToNormal'
+  | 'shrink';
 const FORMATTING_PANEL_BUTTONS: Record<FormattingPanelId, string> = {
   setPocket: 'style-pocket-btn',
   setHat: 'style-hat-btn',
@@ -3207,6 +3208,8 @@ const FORMATTING_PANEL_BUTTONS: Record<FormattingPanelId, string> = {
   applyUnderline: 'underline-btn',
   applyEmphasis: 'emphasis-btn',
   clearToNormal: 'normal-btn',
+  // Verbatim's Shrink (Mod-8): a third column in the cite panel.
+  shrink: 'shrink-btn',
 };
 const FORMATTING_PANEL_SHORT_LABEL: Record<FormattingPanelId, string> = {
   setPocket: 'Pocket',
@@ -3219,6 +3222,7 @@ const FORMATTING_PANEL_SHORT_LABEL: Record<FormattingPanelId, string> = {
   applyUnderline: 'Underline',
   applyEmphasis: 'Emphasis',
   clearToNormal: 'Clear',
+  shrink: 'Shrink',
 };
 // Right-clicking a style button selects every instance of that style in
 // the document as a shadow selection (same display + bulk-operation
