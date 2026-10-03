@@ -3182,7 +3182,8 @@ type FormattingPanelId =
   | 'applyUnderline'
   | 'applyEmphasis'
   | 'clearToNormal'
-  | 'shrink';
+  | 'shrink'
+  | 'pasteAsText';
 const FORMATTING_PANEL_BUTTONS: Record<FormattingPanelId, string> = {
   setPocket: 'style-pocket-btn',
   setHat: 'style-hat-btn',
@@ -3196,6 +3197,8 @@ const FORMATTING_PANEL_BUTTONS: Record<FormattingPanelId, string> = {
   clearToNormal: 'normal-btn',
   // Verbatim's Shrink (Mod-8): a third column in the cite panel.
   shrink: 'shrink-btn',
+  // Verbatim's Paste (F2): pastes the clipboard as plain text.
+  pasteAsText: 'paste-text-btn',
 };
 const FORMATTING_PANEL_SHORT_LABEL: Record<FormattingPanelId, string> = {
   setPocket: 'Pocket',
@@ -3209,6 +3212,7 @@ const FORMATTING_PANEL_SHORT_LABEL: Record<FormattingPanelId, string> = {
   applyEmphasis: 'Emphasis',
   clearToNormal: 'Clear',
   shrink: 'Shrink',
+  pasteAsText: 'Paste',
 };
 // Right-clicking a style button selects every instance of that style in
 // the document as a shadow selection (same display + bulk-operation
@@ -3268,7 +3272,8 @@ for (const [id, btnId] of Object.entries(FORMATTING_PANEL_BUTTONS) as [Formattin
   btn.addEventListener('click', () => {
     if (!view) return;
     const cmd = getRibbonCommand(id, ribbonContext);
-    cmd(view.state, view.dispatch.bind(view));
+    // Pass the view: Paste reads the clipboard into it.
+    cmd(view.state, view.dispatch.bind(view), view);
     view.focus();
   });
   const selectAll = FORMATTING_PANEL_SELECT_ALL[id];
