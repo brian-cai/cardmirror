@@ -2096,6 +2096,15 @@ html.pmd-numbering-hidden #numbering-panel {
   font-size: 0.78rem;
   font-family: var(--pmd-ui-font);
 }
+/* The cite panel carries Paste / Condense / Shrink too (four columns), so
+   its buttons and the structural ones run a little tighter — enough that
+   the full set fits a 1440px-wide window without the resizer hiding the
+   whole group. */
+#ribbon .ribbon-formatting-panel .formatting-panel-btn,
+#ribbon .ribbon-cite-panel .formatting-panel-btn {
+  min-width: 2.5rem;
+  padding: 0 0.3rem;
+}
 
 /* Cursor-on-style indicator: a style button shows the same toggled-on
    wash as other ribbon toggle buttons when the cursor is on text
