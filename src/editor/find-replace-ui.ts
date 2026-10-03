@@ -19,6 +19,7 @@
  * the editor.
  */
 
+import { isHeadingContentSelection } from './heading-content-selection.js';
 import type { EditorView } from 'prosemirror-view';
 import { suppressAutofill } from './autofill-ignore.js';
 import {
@@ -79,6 +80,9 @@ function buildSnippet(
     afterRaw.replace(/\s+/g, ' ') + (afterEnd < text.length ? '…' : '');
   return { before, hit, after };
 }
+
+/** Longest selection that pre-fills the find input on open. */
+const SELECTION_SEED_MAX = 200;
 
 export class FindReplaceBar {
   private root: HTMLElement;
@@ -472,27 +476,39 @@ export class FindReplaceBar {
     }
     this.capturedScope = scopeCandidate;
 
-    // Seed the input on a fresh open: with the remembered last query
-    // when that setting is on, otherwise empty. Set it unconditionally
-    // (not only when currently empty) — the bar keeps the DOM input's
-    // value across open/close, so when the setting is off we must
-    // actively clear the lingering query, otherwise the bar behaves as
-    // if "remember last query" were always on. Selection-seeding is
-    // intentionally NOT done — a user opening Ctrl-F with text selected
-    // typically wants to scope the search to that selection (see the
-    // scope toggle below), not pre-fill the find input with it.
-    if (wasClosed) {
+    // Two cases for a selection at open:
+    //  - It came from the nav pane's "Select heading and contents": the
+    //    user picked a region to search WITHIN. Auto-enable the scope
+    //    toggle; the scope band doubles as the visual proxy for the
+    //    selection, which the browser stops rendering once focus moves to
+    //    the find input. The input is seeded as if nothing were selected.
+    //  - Any other highlight: it is the thing to FIND. A selection of up
+    //    to one line (no paragraph break, not blank, at most
+    //    SELECTION_SEED_MAX chars) pre-fills the input on every open,
+    //    including a re-open while the bar is up (Word / Google Docs /
+    //    VS Code), and the whole document is searched: scope OFF. Alt-L
+    //    (or the ⌖ button) still scopes to the captured selection.
+    // Otherwise a fresh open seeds the remembered query when that setting
+    // is on, else empty. Set it unconditionally, not only when currently
+    // empty: the bar keeps the DOM input's value across open/close, so
+    // with the setting off we must actively clear the lingering query. A
+    // re-open while already open (Ctrl-F → Ctrl-H) keeps what's typed.
+    const regionSelection = !!view && scopeCandidate !== null && isHeadingContentSelection(view);
+    // Trim paragraph breaks at the edges: a drag to the end of a line (or
+    // a triple-click) often runs into the start of the next paragraph.
+    const selText = scopeCandidate && !regionSelection
+      ? view!.state.doc
+          .textBetween(scopeCandidate.from, scopeCandidate.to, '\n')
+          .replace(/^\n+|\n+$/g, '')
+      : '';
+    if (selText.trim() && !selText.includes('\n') && selText.length <= SELECTION_SEED_MAX) {
+      this.findInput.value = selText;
+    } else if (wasClosed) {
       this.findInput.value = settings.get('findRememberLastQuery')
         ? settings.get('findLastQuery')
         : '';
     }
-
-    // Auto-enable the scope toggle whenever the user opened the
-    // bar over a non-empty selection. The scope band decoration
-    // doubles as the "we still know what you selected" visual,
-    // which matters because focusing the find input clears the
-    // browser's selection highlight on the editor.
-    this.scopeCheckbox.checked = scopeCandidate !== null;
+    this.scopeCheckbox.checked = regionSelection;
 
     this.findInput.focus();
     this.findInput.select();

@@ -37,6 +37,19 @@ see `DETAILED_CHANGELOG.md`.
   update from, that fork automatically. Desktop only. Thanks to Brian
   (@brian-cai)!
 
+### Changed
+
+- **Find starts with your highlighted text.** Highlight a word or phrase
+  and press Ctrl/Cmd+F: the find bar opens with that text already in the
+  search box and finds it across the whole document, as in Word and
+  Google Docs. Before, it switched on "Search within selection only" and
+  left the box empty. Highlighting something else and pressing Ctrl/Cmd+F
+  again, with the bar still open, swaps in the new text. To search only
+  inside your selection, press Alt+L or click the ⌖ button. One exception:
+  right after **Select heading and contents** in the navigation pane,
+  Ctrl/Cmd+F still searches within that heading, as before. Thanks to
+  Brian (@brian-cai)!
+
 ### Fixed
 
 - **Sending a scattered selection works.** Selecting several non-

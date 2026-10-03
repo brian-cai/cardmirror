@@ -57,6 +57,36 @@ of ⌘ (⌘Tab is the OS app switcher and never reaches the app), so the
 keybindings editor and tooltips say ⌃Tab. Tests: switch-window.test.ts.
 Brian's PR #87.
 
+### Changed: find pre-fills the highlight; only a nav heading selection scopes
+
+`FindReplaceBar.open` used to turn the ⌖ "search within selection only"
+toggle on for any non-empty selection and never seeded the input from it
+(eb289b9b, reversing the MVP's Word-style seeding "per user feedback").
+The rule now depends on where the selection came from:
+
+- **A selection made by the nav pane's "Select heading and contents"**
+  opens scoped, as before. `selectHeadingAndContents` calls
+  `markHeadingContentSelection(view)` (new heading-content-selection.ts)
+  for its single-range cases. `isHeadingContentSelection` matches only
+  while the selection's from/to AND the doc object are unchanged, so any
+  edit or selection change expires the mark. The scattered multi-heading
+  case produces a shadow selection with a collapsed caret, so there is
+  nothing to scope.
+- **Any other highlight** is the query. If it is at most one line (no
+  paragraph break, not blank, at most `SELECTION_SEED_MAX` = 200
+  characters, after trimming paragraph breaks at the edges, which a drag
+  to the end of a line or a triple-click picks up), it pre-fills the input
+  on every open, including a re-open
+  while the bar is up, and takes precedence over the "remember last
+  query" seed. The toggle opens off. A bigger manual selection pre-fills
+  nothing and still opens unscoped.
+
+In both cases the selection is captured as `capturedScope`, so Alt-L or
+the ⌖ button toggles the scope. Size-based hybrids were considered and
+rejected, because no length threshold separates "a query" from "a region".
+Tests: find-bar-scope-default.test.ts,
+nav-select-heading-then-find.test.ts.
+
 ### Fixed: sending a discontinuous (shadow) selection
 
 Since 3e160efe a scattered nav-pane multi-select becomes the
