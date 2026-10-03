@@ -5,6 +5,18 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## Unreleased
+
+### Added
+
+- **Move your whole setup to another computer.** Settings → General →
+  Back up settings now also saves the words you added to the
+  dictionary and, if you changed it, your update source. When you have
+  API keys set, Export asks whether to include them (left out by
+  default; the file stores them as plain text). Importing a file that
+  has keys asks whether to use them or keep your own. Thanks to Brian
+  (@brian-cai)!
+
 ## 1.13.1 — 2026-10-02
 
 Brian's (@brian-cai) build of CardMirror: everything in 1.13.0 plus the

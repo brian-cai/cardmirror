@@ -43,6 +43,27 @@ function loadUserDict(): Set<string> {
   }
   return new Set();
 }
+/** The words the user added to the dictionary, for a settings export. */
+export function exportUserDictionary(): string[] {
+  return [...userDict].sort();
+}
+
+/** Merge words from a settings import into the dictionary (adds only —
+ *  nothing the user already taught is dropped). Returns how many were new. */
+export function importUserDictionary(words: unknown): number {
+  if (!Array.isArray(words)) return 0;
+  let added = 0;
+  for (const w of words) {
+    if (typeof w !== 'string' || w.trim() === '' || userDict.has(w)) continue;
+    userDict.add(w);
+    spell?.add(w);
+    verdictCache.delete(w);
+    added++;
+  }
+  if (added > 0) persistUserDict();
+  return added;
+}
+
 function persistUserDict(): void {
   try {
     localStorage.setItem(USER_DICT_KEY, JSON.stringify([...userDict]));
