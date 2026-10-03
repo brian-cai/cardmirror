@@ -335,7 +335,12 @@ function filterPanelForSearch(
         '.pmd-settings-section-title, .pmd-settings-row-title, .pmd-install-info-heading',
       );
       const titleText = Array.from(titles, (t) => t.textContent ?? '').join(' ');
-      haystack = `${titleText || child.textContent || ''} ${tabLabel}`;
+      // Action buttons count too — "export settings" should find the
+      // Back up settings section by its Export settings… button — plus
+      // any extra search words the section declares.
+      const buttonText = Array.from(child.querySelectorAll('button'), (b) => b.textContent ?? '').join(' ');
+      const aliases = child.dataset['searchAliases'] ?? '';
+      haystack = `${titleText || child.textContent || ''} ${buttonText} ${aliases} ${tabLabel}`;
     }
     const hit = haystack !== '' && matches(haystack);
     child.classList.toggle('pmd-settings-search-miss', !hit);
@@ -779,6 +784,7 @@ class SettingsModal {
   private buildSettingsBackupSection(): HTMLElement {
     const section = document.createElement('section');
     section.className = 'pmd-settings-backup';
+    section.dataset['searchAliases'] = 'backup restore transfer move copy share settings file';
 
     const title = document.createElement('div');
     title.className = 'pmd-settings-row-title';
@@ -1924,6 +1930,7 @@ function buildInstallInfoSection(): HTMLElement {
   // Deep-link target: the command palette's "version / about this install"
   // result scrolls here (SettingsTarget.anchor).
   wrap.dataset['anchor'] = 'about-this-install';
+  wrap.dataset['searchAliases'] = 'version updates update';
 
   const hr = document.createElement('hr');
   hr.className = 'pmd-install-info-divider';
