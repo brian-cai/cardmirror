@@ -2103,7 +2103,7 @@ html.pmd-numbering-hidden #numbering-panel {
 #ribbon .ribbon-formatting-panel .formatting-panel-btn,
 #ribbon .ribbon-cite-panel .formatting-panel-btn {
   min-width: 2.5rem;
-  padding: 0 0.3rem;
+  padding: 0 0.25rem;
 }
 
 /* Cursor-on-style indicator: a style button shows the same toggled-on
