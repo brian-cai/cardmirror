@@ -1610,6 +1610,14 @@ the session (rejoin later from the Sessions list) or end/leave it now. The
 ✕ on a home-screen Sessions row: as host, asks whether to end for everyone
 or just forget your copy; as guest, forgets your copy.
 
+**Rejoining:** **Join Collaboration Session** (or **Join session** on the
+Receive pill) first lists the sessions you can get back into: saved copies
+(the same ones as the home screen's Sessions list; rejoining syncs your
+offline edits) and sessions you left in the last week, while they are still
+running. Pick one to rejoin, or **Paste a share code or invite link…** for a
+new one. A session the host ended can't be rejoined and drops off the list;
+the ✕ on a left session forgets it.
+
 **Cutting cards in a shared document.** Cut (Cmd/Ctrl-X, or Cut in the
 nav pane's menu) on a whole card or section does not remove it: the card
 stays, dimmed and labelled *Cut — paste to move*, until you paste. Pasting

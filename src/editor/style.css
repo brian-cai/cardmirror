@@ -12230,6 +12230,49 @@ body.pmd-multi-nav-empty.pmd-multi-doc #status-bar {
 }
 .pmd-route-cancel:hover { color: var(--pmd-c-text); }
 
+/* Join session's picker (collab/rejoin-picker.ts): the route dialog with a
+   vertical list of sessions to rejoin, each with an optional Forget ✕. */
+.pmd-rejoin-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+.pmd-rejoin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: min(50vh, 360px);
+  overflow-y: auto;
+}
+.pmd-rejoin-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+.pmd-rejoin-btn {
+  text-align: left;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pmd-rejoin-forget {
+  flex: 0 0 auto;
+  width: 1.9rem;
+  background: transparent;
+  border: 1px solid var(--pmd-c-border-soft);
+  border-radius: 6px;
+  color: var(--pmd-c-text-muted);
+  cursor: pointer;
+}
+.pmd-rejoin-forget:hover { color: var(--pmd-c-text); }
+.pmd-rejoin-empty {
+  font-size: 0.85rem;
+  color: var(--pmd-c-text-muted);
+}
+.pmd-rejoin-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.pmd-rejoin-footer .pmd-route-cancel { align-self: center; }
+
 /* In the create-flashcard dialog, size the Cancel button to match the manage
    screen's New card / Import / Export buttons (.pmd-learn-manage-new), so it
    reads the same size as the accent Create button it sits beside. */
@@ -14906,8 +14949,11 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   padding-top: 4px;
   border-top: 1px solid var(--pmd-c-border-soft);
 }
-/* display:flex would defeat the hidden attribute (collab gate closed). */
-.pmd-receive-actions[hidden] {
+/* display:flex would defeat the hidden attribute (collab gate closed) —
+   on the row, and on its buttons (Clear with nothing received, Join with
+   collab off). */
+.pmd-receive-actions[hidden],
+.pmd-receive-action[hidden] {
   display: none;
 }
 .pmd-send-action,
@@ -14947,6 +14993,19 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   font-size: 15px;
 }
 .pmd-send-action-collab-hidden {
+  display: none;
+}
+/* Collaboration-settings gear at the end of the Send / Receive action rows:
+   a square icon button beside the two labelled actions. In the Send pill
+   it's a click-open affordance only — during a drag that row is drop
+   zones, and a gear isn't one. */
+.pmd-send-action.pmd-pill-settings,
+.pmd-receive-action.pmd-pill-settings {
+  flex: 0 0 auto;
+  width: 30px;
+  padding: 5px 0;
+}
+.pmd-send-pill:not(.pmd-send-invite-mode) .pmd-pill-settings {
   display: none;
 }
 /* Drag-revealed recent-senders FLYOUT: a separate area to the right of

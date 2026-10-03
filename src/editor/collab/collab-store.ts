@@ -21,12 +21,23 @@
  * Also holds invite seed PREFETCHES (§4.1): on invite receipt the
  * encrypted room backlog is downloaded eagerly, so an invite accepted
  * later — on a bus, offline — still opens the doc and joins locally.
+ *
+ * And RECENT ROOMS: the credentials of every room this user was in lately,
+ * kept past a Leave (which deletes the session record) so Join session can
+ * offer to rejoin a room that is still alive. No CRDT state — a rejoin is a
+ * fresh join. Pruned after 7 days (the relay reaps a room idle that long)
+ * and dropped as soon as the room is known to be over.
  */
 
 const DB_NAME = 'cardmirror-collab';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const SESSIONS = 'sessions';
 const PREFETCH = 'invite-prefetch';
+const RECENT = 'recent-rooms';
+
+/** Recent rooms older than this are pruned: the relay reaps a room idle for
+ *  7 days, so an older one can't be rejoined anyway. */
+export const RECENT_ROOM_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const CHANNEL = 'pmd-collab-sessions';
 
 export interface PersistedSessionRecord {
@@ -57,6 +68,21 @@ export interface PersistedSessionRecord {
    *  joined with their own credentials. */
   guestPass?: string | null;
   updatedAt: number;
+}
+
+export interface RecentRoomRecord {
+  /** Key. */
+  roomId: string;
+  /** Carries the room key — what makes a rejoin possible after Leave. */
+  shareCode: string;
+  guestPass?: string | null;
+  role: 'host' | 'participant';
+  docTitle: string;
+  /** Last time this window was in the room (install, and again on
+   *  teardown). */
+  lastActiveAt: number;
+  /** Set when the user left; absent while in the room (or after a crash). */
+  leftAt?: number;
 }
 
 export interface InvitePrefetchRecord {
@@ -116,8 +142,19 @@ function openDb(): Promise<IDBDatabase | null> {
         if (!db.objectStoreNames.contains(PREFETCH)) {
           db.createObjectStore(PREFETCH, { keyPath: 'roomId' });
         }
+        if (!db.objectStoreNames.contains(RECENT)) {
+          db.createObjectStore(RECENT, { keyPath: 'roomId' });
+        }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        // Another window upgrading the schema (a newer build) must not stay
+        // blocked on this connection: close it; the next open reconnects.
+        req.result.onversionchange = () => {
+          req.result.close();
+          dbPromise = null;
+        };
+        resolve(req.result);
+      };
       req.onerror = () => resolve(null); // storage denied — persistence degrades to none
     } catch {
       resolve(null);
@@ -201,4 +238,42 @@ export async function loadPrefetch(roomId: string): Promise<InvitePrefetchRecord
 
 export async function deletePrefetch(roomId: string): Promise<void> {
   await del(PREFETCH, roomId);
+}
+
+// ── Recent rooms ─────────────────────────────────────────────────────
+
+/** Record (or refresh) a room this user is in. Keeps the first-known title
+ *  when the new one is empty (a join installs before the title arrives). */
+export async function saveRecentRoom(record: RecentRoomRecord): Promise<void> {
+  const prev = await get<RecentRoomRecord>(RECENT, record.roomId);
+  const next: RecentRoomRecord = {
+    ...prev,
+    ...record,
+    docTitle: record.docTitle || prev?.docTitle || '',
+    guestPass: record.guestPass ?? prev?.guestPass ?? null,
+  };
+  if (record.leftAt === undefined) delete next.leftAt;
+  await put(RECENT, next);
+  notify();
+}
+
+/** Recent rooms, newest first. Entries past RECENT_ROOM_MAX_AGE_MS are
+ *  deleted on the way out. */
+export async function listRecentRooms(now = Date.now()): Promise<RecentRoomRecord[]> {
+  const rows = await all<RecentRoomRecord>(RECENT);
+  const fresh: RecentRoomRecord[] = [];
+  for (const r of rows) {
+    if (now - r.lastActiveAt > RECENT_ROOM_MAX_AGE_MS) void del(RECENT, r.roomId);
+    else fresh.push(r);
+  }
+  return fresh.sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+}
+
+export async function loadRecentRoom(roomId: string): Promise<RecentRoomRecord | null> {
+  return get<RecentRoomRecord>(RECENT, roomId);
+}
+
+export async function deleteRecentRoom(roomId: string): Promise<void> {
+  await del(RECENT, roomId);
+  notify();
 }

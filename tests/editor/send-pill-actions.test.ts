@@ -80,7 +80,7 @@ describe('send pill actions row + hidden recipients', () => {
 
   it('the actions row renders; Start session hides while the collab gate is closed', () => {
     const { root } = mountPill();
-    const actions = root.querySelectorAll('.pmd-send-action');
+    const actions = root.querySelectorAll('.pmd-send-action:not(.pmd-pill-settings)');
     expect(actions.length).toBe(2);
     expect(actions[0]!.textContent).toContain('Add contact');
     // No collab starter registered (gate closed) → hidden by class.

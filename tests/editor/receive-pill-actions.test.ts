@@ -51,11 +51,18 @@ describe('receive pill Join session footer', () => {
     expect((root.querySelector('.pmd-receive-pill') as HTMLElement).dataset['open']).toBe('false');
   });
 
-  it('stays hidden while the collab gate is closed or the prompt is unwired', () => {
+  it('Join stays hidden while the collab gate is closed or the prompt is unwired', () => {
     vi.spyOn(collabGate, 'collabEnabled').mockReturnValue(true);
-    // Gate open but no prompt registered → hidden.
+    // Gate open but no prompt registered → no Join.
     const root = mountPill();
     (root.querySelector('.pmd-receive-bar') as HTMLElement).click();
-    expect((root.querySelector('.pmd-receive-actions') as HTMLElement).hidden).toBe(true);
+    const join = [...root.querySelectorAll<HTMLButtonElement>('.pmd-receive-action')].find((b) =>
+      b.textContent?.includes('Join session'),
+    )!;
+    expect(join.hidden).toBe(true);
+    // The row itself stays for the Collaboration-settings gear, where the
+    // host has that tab: it's where collaboration gets turned on.
+    const gear = root.querySelector('.pmd-pill-settings');
+    expect((root.querySelector('.pmd-receive-actions') as HTMLElement).hidden).toBe(!gear);
   });
 });

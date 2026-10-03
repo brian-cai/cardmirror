@@ -43,6 +43,7 @@ import { collabEnabled } from './collab/collab-gate.js';
 import {
   listSessionRecords,
   deleteSessionRecord,
+  deleteRecentRoom,
   subscribeSessionRecords,
   type PersistedSessionRecord,
 } from './collab/collab-store.js';
@@ -597,6 +598,7 @@ class HomeScreen {
             return;
           }
           await deleteSessionRecord(record.roomId);
+          await deleteRecentRoom(record.roomId); // ended: nothing left to rejoin
           showToast('Session ended for everyone');
         } else if (choice === 'forget') {
           await deleteSessionRecord(record.roomId);

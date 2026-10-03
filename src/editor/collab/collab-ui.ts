@@ -61,7 +61,14 @@ import { attachSessionPersistence, type PersistHandle } from './collab-persist.j
 import { attachSessionHistory, type HistoryHandle } from './collab-history.js';
 import { installCursorPresence, type CursorsHandle } from './collab-cursors.js';
 import { collabRepairPlugin, lowestPeerIsLeader } from './collab-repair.js';
-import { loadSessionRecord, loadPrefetch, deletePrefetch } from './collab-store.js';
+import {
+  loadSessionRecord,
+  loadPrefetch,
+  deletePrefetch,
+  saveRecentRoom,
+  deleteRecentRoom,
+} from './collab-store.js';
+import { loadRejoinCandidates, pickSessionToJoin } from './rejoin-picker.js';
 import { importRoomKey, decryptBlob } from './collab-crypto.js';
 import { resetSessionCommentIds } from '../comments-plugin.js';
 import { collabEnabled } from './collab-gate.js';
@@ -481,6 +488,8 @@ function installSeams(
   setCollabTransactionTagger(collabTagger);
   const wakeCleanup = installWakeHooks(session);
   const commentsSync = installCommentsSync(session.loroDoc, ownerView);
+  // Recent rooms: kept past a Leave so Join session can offer a rejoin.
+  rememberRecentRoom(session, shareCode, sessionDocTitle(ownerUid) || sharedDocTitle(session));
   // M3: crash-surviving session record (home-screen Sessions list resumes it).
   const persist = attachSessionPersistence(
     session,
@@ -607,7 +616,13 @@ function installSeams(
  *  cancelled RESUME, or a close-but-keep); terminal paths clear it. Returns the
  *  record-clear promise so terminal callers can await deletion (so a re-read of
  *  the Sessions list doesn't flash a stale row); most callers ignore it. */
-function teardownSession(sess: ActiveSession, keepRecord = false): Promise<void> {
+function teardownSession(
+  sess: ActiveSession,
+  keepRecord = false,
+  /** The room itself is over (ended by the host, remotely, or gone from the
+   *  relay): forget it from recent rooms too — it can't be rejoined. */
+  roomOver = false,
+): Promise<void> {
   // Stop the SESSION itself, not just its UI: the room-full and join/resume
   // failure paths reached here without an explicit stop, and the orphaned
   // CollabSession kept its flush / catch-up / audit timers (and the audit's
@@ -635,6 +650,16 @@ function teardownSession(sess: ActiveSession, keepRecord = false): Promise<void>
   // whole point is surviving Leave/End/tombstone. Pruning is age-based,
   // in the main process.
   sess.history.dispose();
+  if (roomOver) {
+    void deleteRecentRoom(sess.session.roomId).catch((e) => surfaceError('collab recent rooms', e));
+  } else {
+    rememberRecentRoom(
+      sess.session,
+      sess.shareCode,
+      sessionDocTitle(sess.ownerUid) || sharedDocTitle(sess.session),
+      Date.now(),
+    );
+  }
   let cleared: Promise<void> = Promise.resolve();
   if (keepRecord) sess.persist.dispose();
   else cleared = sess.persist.clear();
@@ -648,6 +673,25 @@ function teardownSession(sess: ActiveSession, keepRecord = false): Promise<void>
     }
   }
   return cleared;
+}
+
+/** Record `session`'s room in recent rooms (best-effort). `leftAt` marks a
+ *  teardown; omitted on install, which clears an earlier one. */
+function rememberRecentRoom(
+  session: CollabSession,
+  shareCode: string,
+  docTitle: string,
+  leftAt?: number,
+): void {
+  void saveRecentRoom({
+    roomId: session.roomId,
+    shareCode,
+    guestPass: session.guestPass ?? null,
+    role: session.role,
+    docTitle,
+    lastActiveAt: Date.now(),
+    ...(leftAt !== undefined ? { leftAt } : {}),
+  }).catch((e) => surfaceError('collab recent rooms', e));
 }
 
 /** Whether `ownerUid`'s session is the one the shared chip reflects. MUST
@@ -795,7 +839,7 @@ function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSession | nul
       const sess = getSess();
       if (!sess || !sessions.has(sess.ownerUid)) return;
       const wasHost = sess.session.role === 'host';
-      void teardownSession(sess).catch((e) => surfaceError('collab teardown', e));
+      void teardownSession(sess, false, /* roomOver */ true).catch((e) => surfaceError('collab teardown', e));
       refreshChipForFocus(); // repaint from live truth (a stale snapshot left ghost chips — field find, 2026-08-12)
       // Rebuild the OWNER doc's plugin stack — refreshing the focused view
       // left an unfocused owner pane holding dead session plugins (audit
@@ -987,6 +1031,18 @@ async function startSessionFlowInner(
 
 export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
   if (!collabEnabled()) return;
+  // Sessions this user can get back into (saved copies, rooms they left)
+  // come first; the paste prompt is one click away, and the only screen
+  // when there's nothing to list.
+  const candidates = await loadRejoinCandidates(roomLiveInWindow);
+  if (candidates.length > 0) {
+    const pick = await pickSessionToJoin(candidates);
+    if (!pick) return;
+    if (pick.kind === 'rejoin') {
+      await joinSessionWithCode(deps, pick.shareCode, { guestPass: pick.guestPass });
+      return;
+    }
+  }
   const entered = await promptForText({
     message: 'Paste the share code — or the invite link — from your partner',
     placeholder: 'cmshare… or https://cardmirror.app/#join=…',
@@ -1208,7 +1264,10 @@ async function joinSessionWithCodeInner(
     // consumed so the Receive pill clears the row. Every other failure keeps
     // both, so the user can retry once the network/slot situation changes.
     const ended = err instanceof RoomsError && (err.status === 410 || err.status === 404);
-    if (ended) void deletePrefetch(decoded.roomId).catch((e) => surfaceError('collab seed cleanup', e));
+    if (ended) {
+      void deletePrefetch(decoded.roomId).catch((e) => surfaceError('collab seed cleanup', e));
+      void deleteRecentRoom(decoded.roomId).catch((e) => surfaceError('collab recent rooms', e));
+    }
     showToast(relayFailureMessage(err, { initiating: false, verb: 'join' }));
     return ended;
   }
@@ -1334,7 +1393,14 @@ async function resumeSessionFlowInner(
     // KEEP the record on a failed resume: it existed before this attempt and
     // may hold unsynced edits — the default teardown would delete it (audit
     // find, 2026-07-10). Still resumable from the Sessions list.
-    if (sessRef) void teardownSession(sessRef, /* keepRecord */ true).catch((e) => surfaceError('collab teardown', e));
+    const ended = err instanceof RoomsError && (err.status === 410 || err.status === 404);
+    if (sessRef) {
+      void teardownSession(sessRef, /* keepRecord */ true, /* roomOver */ ended).catch((e) =>
+        surfaceError('collab teardown', e),
+      );
+    } else if (ended) {
+      void deleteRecentRoom(roomId).catch((e) => surfaceError('collab recent rooms', e));
+    }
     showToast(relayFailureMessage(err, { initiating: false, verb: 'resume' }));
     return false;
   }
@@ -1527,7 +1593,9 @@ async function endOrLeaveSession(sess: ActiveSession): Promise<boolean> {
   }
   // Registry drop before the record delete, so a late stream frame's
   // onEnded no-ops.
-  const cleared = teardownSession(sess);
+  // A host End tombstoned the room; a guest Leave leaves it alive and
+  // rejoinable from Join session.
+  const cleared = teardownSession(sess, false, /* roomOver */ isHost);
   refreshChipForFocus(); // repaint from live truth (a stale snapshot left ghost chips — field find, 2026-08-12)
   await cleared; // record actually gone before we return
   return true;

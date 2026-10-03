@@ -26,6 +26,7 @@ import { insertReceivedItem, RECEIVE_NEEDS_DOC_MESSAGE } from './inbox-insert.js
 import { showToast } from '../toast.js';
 import { parseRoomInvite } from './room-invite.js';
 import { collabEnabled } from '../collab/collab-gate.js';
+import { collabSettingsAvailable, collabSettingsButton } from './collab-settings-button.js';
 import { collabInviteJoiner, collabSessionJoinPrompt } from '../collab/collab-hooks.js';
 import { deletePrefetch } from '../collab/collab-store.js';
 import { checkedSliceFromJSON } from '../../schema/slice-check.js';
@@ -126,6 +127,9 @@ export class ReceivePillController {
       void inboxStore.clear();
     });
     this.actionsLi.appendChild(this.clearEl);
+    if (collabSettingsAvailable()) {
+      this.actionsLi.appendChild(collabSettingsButton('pmd-receive-action', () => this.setOpen(false)));
+    }
 
     this.bar = document.createElement('div');
     this.bar.className = 'pmd-pill-bar pmd-receive-bar';
@@ -294,7 +298,7 @@ export class ReceivePillController {
       const canJoin = collabEnabled() && collabSessionJoinPrompt() !== null;
       if (this.joinSessionEl) this.joinSessionEl.hidden = !canJoin;
       if (this.clearEl) this.clearEl.hidden = total === 0;
-      this.actionsLi.hidden = !canJoin && total === 0;
+      this.actionsLi.hidden = !canJoin && total === 0 && !collabSettingsAvailable();
       this.listEl.appendChild(this.actionsLi);
     }
   }

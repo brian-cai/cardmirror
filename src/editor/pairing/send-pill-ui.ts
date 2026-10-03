@@ -26,6 +26,7 @@ import { settings, type PairingGroup } from '../settings.js';
 import { showToast } from '../toast.js';
 import { relayClient, sendOutcomeToast, type SendItem } from './relay-client.js';
 import { collabEnabled } from '../collab/collab-gate.js';
+import { collabSettingsAvailable, collabSettingsButton } from './collab-settings-button.js';
 import {
   collabActiveShareCode,
   collabInviter,
@@ -463,6 +464,10 @@ export class SendPillController {
     this.startSessionEl.classList.toggle('pmd-send-action-collab-hidden', !canInvite);
     this.refreshSessionAction();
     actions.appendChild(this.startSessionEl);
+    // Click-open only (CSS hides it while the row is a drag's drop zones).
+    if (collabSettingsAvailable()) {
+      actions.appendChild(collabSettingsButton('pmd-send-action', () => this.collapse()));
+    }
     this.panel.appendChild(actions);
   }
 
