@@ -1655,9 +1655,9 @@ body:not(.pmd-inplace-save) #autosave-btn { display: none; }
      as an asymmetric pattern. Equal columns keep the rhythm
      uniform regardless of the formattingPanelMode label set or
      whether style-preview is on. */
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(2, auto);
-  grid-auto-flow: column;
+  grid-auto-flow: row;
   gap: 2px 3px;
   align-content: center;
   padding-left: 0.5rem;
@@ -1674,7 +1674,7 @@ body:not(.pmd-inplace-save) #autosave-btn { display: none; }
   display: grid;
   grid-template-columns: auto auto;
   grid-template-rows: 1.45rem 1.45rem;
-  grid-auto-flow: column;
+  grid-auto-flow: row;
   gap: 2px 3px;
   align-content: center;
   padding-left: 0.5rem;
@@ -2181,30 +2181,36 @@ html.pmd-numbering-hidden #numbering-panel {
   text-decoration-thickness: var(--pmd-underline-size, auto);
 }
 
-#ribbon .ribbon-cite-panel.style-preview .formatting-panel-underline {
+#ribbon :is(.ribbon-formatting-panel, .ribbon-cite-panel).style-preview .formatting-panel-underline {
   text-decoration: underline;
   text-decoration-thickness: var(--pmd-underline-size, auto);
+  font-weight: normal;
+}
+/* Clear and the card tools (Paste / Condense / Shrink) aren't styles —
+   plain labels, not the structural panel's bold. */
+#ribbon :is(.ribbon-formatting-panel, .ribbon-cite-panel).style-preview :is(.formatting-panel-normal, .formatting-panel-paste, .formatting-panel-condense, .formatting-panel-shrink) {
+  font-weight: normal;
 }
 
 /* Emphasis preview: always underlined (matches .pmd-emphasis); the
    bold / italic / box decorations are gated on the same display-
    typography flags the editor uses, mirrored onto documentElement. */
-#ribbon .ribbon-cite-panel.style-preview .formatting-panel-emphasis {
+#ribbon :is(.ribbon-formatting-panel, .ribbon-cite-panel).style-preview .formatting-panel-emphasis {
   text-decoration: underline;
   text-decoration-thickness: var(--pmd-underline-size, auto);
   font-weight: normal;
   font-style: normal;
 }
 
-.pmd-emphasis-bold #ribbon .ribbon-cite-panel.style-preview .formatting-panel-emphasis {
+.pmd-emphasis-bold #ribbon :is(.ribbon-formatting-panel, .ribbon-cite-panel).style-preview .formatting-panel-emphasis {
   font-weight: bold;
 }
 
-.pmd-emphasis-italic #ribbon .ribbon-cite-panel.style-preview .formatting-panel-emphasis {
+.pmd-emphasis-italic #ribbon :is(.ribbon-formatting-panel, .ribbon-cite-panel).style-preview .formatting-panel-emphasis {
   font-style: italic;
 }
 
-.pmd-emphasis-box #ribbon .ribbon-cite-panel.style-preview .formatting-panel-emphasis {
+.pmd-emphasis-box #ribbon :is(.ribbon-formatting-panel, .ribbon-cite-panel).style-preview .formatting-panel-emphasis {
   border: var(--pmd-emphasis-box-size) solid var(--pmd-c-emphasis-box);
 }
 
