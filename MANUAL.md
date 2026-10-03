@@ -295,7 +295,9 @@ mirrors Word's Navigation Pane, but does more:
   Level 1** … **Show Levels 1–4** commands in Settings → Keyboard
   shortcuts (unbound by default); they act on the focused document's
   pane, exactly like the buttons.
-- **Search** — click the magnifier at the top of the pane to open the
+- **Search** — click the magnifier at the top of the pane, or press
+  **Mod-Shift-F** (the **Search Navigation Pane** command, rebindable
+  under Settings → Keyboard shortcuts; it shows the pane if hidden), to open the
   search bar under the level buttons. As you type, headings that
   contain the search are highlighted right in the outline — even ones
   hidden by the level filter or a collapsed section. Options, which
@@ -1078,8 +1080,9 @@ as you open more.
   document history. Think of each slot as its own "document pile." 
 - **Mod-1 / Mod-2 / Mod-3** focus a slot; **Mod-Shift-1/2/3** move the
   active document into a slot.
-- **Expand** a slot to full width with **Mod-Shift-F**, and restore it
-  the same way.
+- **Expand** a slot to full width with the **Toggle Slot Expand /
+  Restore** command (unbound by default; bind it under Settings →
+  Keyboard shortcuts), and restore it the same way.
 - **Hide Slot** (a command, unbound by default) takes the focused slot out
   of the layout so the other slots share its width. Its documents stay open.
   **Reveal All Slots** brings every hidden slot back, and so do **Mod-1/2/3**
@@ -3201,6 +3204,7 @@ these to extend the selection.
 | Shortcut | Action |
 |----------|--------|
 | Mod-F / Mod-H | Find / Find and Replace |
+| Mod-Shift-F | Search the navigation pane |
 | Alt-F | Find without grouping |
 | Mod-Shift-Space | Search Everything palette (files `f`, folders `/`, Quick Cards `q`) |
 
@@ -3233,7 +3237,6 @@ these to extend the selection.
 |----------|--------|
 | Mod-1 / Mod-2 / Mod-3 | Focus slot 1 / 2 / 3 |
 | Mod-Shift-1/2/3 | Move active doc to slot |
-| Mod-Shift-F | Expand / restore the focused slot |
 | Mod-W | Close the focused document or window |
 
 ### Voice control (desktop)

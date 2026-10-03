@@ -203,6 +203,8 @@ export type RibbonCommandId =
   | 'openFindReplace'
   | 'openFindByProximity'
   | 'toggleNavPane'
+  // Open the navigation pane's heading search (showing the pane first).
+  | 'searchNavPane'
   // Set the navigation pane's depth, same as its 1 · 2 · 3 · 4 buttons.
   // No default bindings.
   | 'setNavDepth1'
@@ -462,6 +464,7 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'openFindReplace',
   'openFindByProximity',
   'toggleNavPane',
+  'searchNavPane',
   'setNavDepth1',
   'setNavDepth2',
   'setNavDepth3',
@@ -676,6 +679,7 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   openFindReplace: 'Find and Replace',
   openFindByProximity: 'Find Without Category Grouping',
   toggleNavPane: 'Show / Hide Navigation Pane',
+  searchNavPane: 'Search Navigation Pane',
   setNavDepth1: 'Navigation Pane: Show Level 1 (Pockets)',
   setNavDepth2: 'Navigation Pane: Show Levels 1–2 (Hats)',
   setNavDepth3: 'Navigation Pane: Show Levels 1–3 (Blocks)',
@@ -763,6 +767,7 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
   // show/hide ⇄ toggle visibility pairs
   toggleCommentsVisible: ['toggle comments', 'comments'],
   toggleNavPane: ['toggle navigation pane', 'toggle nav pane', 'sidebar', 'outline pane'],
+  searchNavPane: ['search headings', 'find heading', 'nav search', 'outline search'],
   setNavDepth1: ['nav depth', 'navigation depth', 'outline level', 'level 1', 'pockets'],
   setNavDepth2: ['nav depth', 'navigation depth', 'outline level', 'level 2', 'hats'],
   setNavDepth3: ['nav depth', 'navigation depth', 'outline level', 'level 3', 'blocks'],
@@ -1120,6 +1125,9 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   // ribbon + nav-pane × + pull-tab; the keybinding is a power-
   // user convenience layer, not a discoverable default.
   toggleNavPane: '',
+  // Word's Navigation-pane search lives on Mod-F; ours takes Mod-Shift-F
+  // since Mod-F is the find bar.
+  searchNavPane: 'Mod-Shift-f',
   // No defaults — the pane's own 1–4 buttons are the primary UI.
   setNavDepth1: '',
   setNavDepth2: '',
@@ -1161,7 +1169,8 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   sendDocToSlot1: 'Mod-Shift-1',
   sendDocToSlot2: 'Mod-Shift-2',
   sendDocToSlot3: 'Mod-Shift-3',
-  toggleSlotExpand: 'Mod-Shift-f',
+  // Unbound since Mod-Shift-F went to Search Navigation Pane.
+  toggleSlotExpand: '',
   // Unbound by default — rebindable via Settings → Keyboard shortcuts.
   hideSlot: '',
   revealAllSlots: '',

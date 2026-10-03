@@ -4568,6 +4568,9 @@ export interface RibbonContext {
    *  (transient), so toggling in one window leaves siblings
    *  untouched. */
   toggleNavPane: () => void;
+  /** Show the navigation pane if hidden and open its heading search,
+   *  focusing the search field. */
+  searchNavPane: () => void;
   /** Set the focused document's navigation-pane depth, exactly as
    *  clicking its level button would (transient, per-panel — never
    *  written to settings). */
@@ -4720,6 +4723,7 @@ const DEFAULT_RIBBON_CONTEXT: RibbonContext = {
   openFindReplace: () => {},
   openFindByProximity: () => {},
   toggleNavPane: () => {},
+  searchNavPane: () => {},
   setNavDepth: () => {},
   lastFontColor: () => null,
   openSettings: () => {},
@@ -5561,6 +5565,12 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
       return (_state, dispatch) => {
         if (!dispatch) return true;
         ctx.toggleNavPane();
+        return true;
+      };
+    case 'searchNavPane':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.searchNavPane();
         return true;
       };
     case 'setNavDepth1':

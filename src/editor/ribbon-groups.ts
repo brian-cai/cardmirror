@@ -182,6 +182,7 @@ export const RIBBON_GROUPS: RibbonGroup[] = [
       'toggleReadMode',
       'toggleReaderView',
       'toggleNavPane',
+      'searchNavPane',
       'setNavDepth1',
       'setNavDepth2',
       'setNavDepth3',
