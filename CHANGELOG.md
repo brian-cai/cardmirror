@@ -5,6 +5,25 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.13.3 — 2026-10-03
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Changed
+
+- **New ribbon layout.** The style buttons are now a 4×2 block —
+  Pocket, Hat, Block, Tag / Analytic, Underline, Emphasis, Clear — with
+  a 2×2 block beside it: Paste (F2, paste as plain text), Condense (F3),
+  Cite, and Shrink (Ctrl/Cmd+8). Undertag no longer has a button; its
+  shortcut and the command bar still apply it.
+- **Windows open full size.** New windows fill the screen (minus the
+  menu bar / Dock / taskbar) instead of opening at 1400×900.
+- **High School timer by default.** The timer starts on the High School
+  profile (3/5/8 minutes, 8 minutes prep). Installs still on the
+  untouched College default switch over once; customized College
+  timers are left alone.
+
 ## 1.13.2 — 2026-10-03
 
 Brian's (@brian-cai) build of CardMirror, updating from
