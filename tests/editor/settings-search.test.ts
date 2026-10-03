@@ -146,6 +146,19 @@ describe('settings dialog search', () => {
     expect(headings).toEqual(['File search']);
   });
 
+  it('"export settings" and "import" find the Back up settings section by its buttons', () => {
+    for (const q of ['export settings', 'import', 'backup']) {
+      openSettings();
+      search(q);
+      const backup = [...document.querySelectorAll<HTMLElement>('.pmd-settings-backup')].find((el) =>
+        el.textContent?.includes('Back up settings'),
+      )!;
+      expect(backup.classList.contains('pmd-settings-search-miss'), q).toBe(false);
+      expect(backup.closest<HTMLElement>('.pmd-settings-panel')!.hidden, q).toBe(false);
+      closeSettings();
+    }
+  });
+
   it('shows the empty message when nothing matches', () => {
     openSettings();
     search('zzzz-no-such-setting');
