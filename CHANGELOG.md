@@ -5,7 +5,26 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
-## Unreleased
+## 1.13.1 — 2026-10-02
+
+Brian's (@brian-cai) build of CardMirror: everything in 1.13.0 plus the
+changes below, which are still waiting on review upstream. Installs of
+this build update from github.com/brian-cai/cardmirror; to go back to
+the official releases, open Settings → General → About this install and
+press Reset to default under Update source (official releases newer
+than this one will then install).
+
+### Faster
+
+- **Opening and saving large files.** Word files open on a background
+  thread so the window stays responsive while a big file loads, images
+  convert faster on import and export, and autosave skips re-encoding a
+  document that hasn't changed since its last crash-recovery snapshot.
+- **Typing and scrolling in long documents.** The navigation pane,
+  live views and the co-editing undo guard do far less work per edit.
+- **Session history** lists past sessions without reading every file in
+  full.
+
 
 ### Added
 
