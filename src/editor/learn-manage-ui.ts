@@ -22,6 +22,7 @@ import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
 import { icon } from './icons.js';
 import { showToast } from './toast.js';
 import { readDocIdFromBytes, stampDocId } from '../index.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 let openOverlay: HTMLElement | null = null;
 
@@ -229,7 +230,7 @@ export function openLearnManage(): void {
   const overlayToken = pushOverlay();
   document.addEventListener('keydown', onKey, true);
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) cleanup();
+    if (isBackdropClick(e, overlay)) cleanup();
   });
 
   function onKey(e: KeyboardEvent): void {

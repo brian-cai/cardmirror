@@ -12,6 +12,7 @@ import { pushOverlay, popOverlay } from '../overlay-stack.js';
 import { installModalKeys, armDialogFocus, captureFocusForDialog } from '../text-prompt.js';
 import type { VoiceController } from './controller.js';
 import { learnAliases, VOICE_COMMANDS, VOICE_COMMAND_LABELS, type VoiceVerb } from './vocabulary.js';
+import { isBackdropClick } from '../backdrop-click.js';
 
 const TAKES_PER_WORD = 2;
 
@@ -192,7 +193,7 @@ export async function openVoiceCalibration(controller: VoiceController): Promise
     return false;
   });
   overlay.addEventListener('mousedown', (e) => {
-    if (e.target === overlay) close();
+    if (isBackdropClick(e, overlay)) close();
   });
   document.body.appendChild(overlay);
   armDialogFocus(dialog, 'dialog', 'Calibrate voice control');

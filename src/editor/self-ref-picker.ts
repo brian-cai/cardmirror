@@ -39,6 +39,7 @@ import { matchesAllTokens, tokenizeQuery } from './file-search.js';
 import { captureFocusForDialog } from './text-prompt.js';
 import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
 import { sectionFavoritesFor, type SectionFavorites } from './self-ref-favorites.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 interface PickerRow {
   entry: HeadingEntry;
@@ -466,7 +467,7 @@ export function openSelfRefPicker(
   dialog.appendChild(cancel);
 
   overlay.addEventListener('mousedown', (e) => {
-    if (e.target === overlay) close();
+    if (isBackdropClick(e, overlay)) close();
   });
   overlay.appendChild(dialog);
   document.body.appendChild(overlay);

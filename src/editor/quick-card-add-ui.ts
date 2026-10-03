@@ -16,6 +16,7 @@
 import { normalizeTag, type QuickCard } from './quick-cards-store.js';
 import { setIcon } from './icons';
 import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 export interface QuickCardAddResult {
   name: string;
@@ -66,7 +67,7 @@ class QuickCardAddModal {
     this.dialog.className = 'pmd-qc-add-dialog';
     this.overlay.appendChild(this.dialog);
     this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.cancel();
+      if (isBackdropClick(e, this.overlay)) this.cancel();
     });
     this.overlayToken = pushOverlay();
     document.addEventListener('keydown', this.handleKey, true);

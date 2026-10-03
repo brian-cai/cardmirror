@@ -15,6 +15,7 @@ import { Docx } from '../ooxml/docx.js';
 import { getHost, getElectronHost } from './host/index.js';
 import { settings } from './settings.js';
 import { setIcon } from './icons';
+import { isBackdropClick } from './backdrop-click.js';
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -135,7 +136,7 @@ class CleanModal {
     this.dialog.className = 'pmd-bulk-dialog';
     this.overlay.appendChild(this.dialog);
     this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.close();
+      if (isBackdropClick(e, this.overlay)) this.close();
     });
     document.addEventListener('keydown', this.onKey, true);
     this.render();
@@ -280,7 +281,7 @@ class CleanModal {
     dialog.className = 'pmd-bulk-dialog pmd-clean-prot-dialog';
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this.closeSubOverlay(overlay);
+      if (isBackdropClick(e, overlay)) this.closeSubOverlay(overlay);
     });
 
     const header = document.createElement('header');
@@ -470,7 +471,7 @@ class CleanModal {
     dialog.className = 'pmd-bulk-dialog';
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this.closeSubOverlay(overlay);
+      if (isBackdropClick(e, overlay)) this.closeSubOverlay(overlay);
     });
 
     const header = document.createElement('header');
@@ -624,7 +625,7 @@ class CleanModal {
         this.closeSubOverlay(overlay);
       };
       overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) finish(false);
+        if (isBackdropClick(e, overlay)) finish(false);
       });
 
       const header = document.createElement('header');

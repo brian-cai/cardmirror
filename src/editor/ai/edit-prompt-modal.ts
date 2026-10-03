@@ -12,6 +12,7 @@ import { settings } from '../settings.js';
 import { DEFAULT_AI_CITE_PROMPT } from './cite-creator.js';
 import { setIcon } from '../icons';
 import { pushOverlay, popOverlay, isTopOverlay } from '../overlay-stack.js';
+import { isBackdropClick } from '../backdrop-click.js';
 
 export function openCitePromptEditor(): void {
   if (document.querySelector('.pmd-prompt-overlay')) return;
@@ -20,7 +21,7 @@ export function openCitePromptEditor(): void {
   const overlay = document.createElement('div');
   overlay.className = 'pmd-prompt-overlay';
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
+    if (isBackdropClick(e, overlay)) close();
   });
 
   const dialog = document.createElement('div');

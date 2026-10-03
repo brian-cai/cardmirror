@@ -21,6 +21,7 @@ import { writeClipboardHtml, CLIPBOARD_BUSY_MESSAGE } from './clipboard-write.js
 import { showToast } from './toast.js';
 import { settings } from './settings.js';
 import { readModePlugin, PMD_READ_MODE_TOGGLE } from './read-mode-plugin.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 export interface CardPreviewOptions {
   /** Dialog title — the row's label. */
@@ -117,7 +118,7 @@ export function openCardPreview(opts: CardPreviewOptions): boolean {
     restoreFocus();
   };
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
+    if (isBackdropClick(e, overlay)) close();
   });
 
   const header = document.createElement('header');

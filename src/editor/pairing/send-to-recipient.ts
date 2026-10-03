@@ -17,6 +17,7 @@ import { pushOverlay, popOverlay } from '../overlay-stack.js';
 import { setIcon } from '../icons';
 import { showToast } from '../toast.js';
 import { resolveStarredTarget, sendViewTo } from './send-to-starred.js';
+import { isBackdropClick } from '../backdrop-click.js';
 
 export interface RecipientChoice {
   kind: 'partner' | 'group';
@@ -81,7 +82,7 @@ export function pickRecipient(choices: RecipientChoice[]): Promise<RecipientChoi
       resolve(choice);
     };
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) finish(null);
+      if (isBackdropClick(e, overlay)) finish(null);
     });
 
     const header = document.createElement('header');

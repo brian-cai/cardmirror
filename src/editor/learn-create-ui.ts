@@ -9,6 +9,7 @@
  */
 
 import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 export interface NewCardDef {
   type: 'qa' | 'cloze';
@@ -165,7 +166,7 @@ export function openCardEditor(
     document.addEventListener('keydown', onKey, true);
 
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
+      if (isBackdropClick(e, overlay)) {
         cleanup();
         resolve(null);
       }

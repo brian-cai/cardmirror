@@ -47,6 +47,7 @@ import {
   mountVersionPreview,
   type SnapshotStats,
 } from '../version-history.js';
+import { isBackdropClick } from '../backdrop-click.js';
 
 /** How a recovered copy gets opened. index.ts supplies a mode-aware
  *  opener: multi-pane mounts it into a slot of THIS window (via the
@@ -160,7 +161,7 @@ function openVersionDialog(
   };
   document.addEventListener('keydown', onKey, true);
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
+    if (isBackdropClick(e, overlay)) close();
   });
 
   const header = document.createElement('header');

@@ -21,6 +21,7 @@
  */
 
 import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 /**
  * Shared modal key wiring (field bug 2026-07-27: Enter confirming the
@@ -193,7 +194,7 @@ export function promptForText(opts: TextPromptOptions): Promise<string | null> {
 
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
+      if (isBackdropClick(e, overlay)) {
         cleanup();
         resolve(null);
       }
@@ -312,7 +313,7 @@ export function promptForChoice<T extends string>(
 
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
+      if (isBackdropClick(e, overlay)) {
         cleanup();
         resolve(null);
       }
@@ -461,7 +462,7 @@ export function promptForRouteChoice<T extends string>(
 
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
+      if (isBackdropClick(e, overlay)) {
         cleanup();
         resolve(null);
       }
@@ -549,7 +550,7 @@ export function alertDialog(message: string, opts?: { title?: string }): Promise
 
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) done();
+      if (isBackdropClick(e, overlay)) done();
     });
     removeKeys = installModalKeys(dialog, overlayToken, (e) => {
       if (e.key === 'Escape' || e.key === 'Enter') {
@@ -619,7 +620,7 @@ export function confirmDialog(
 
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) finish(false);
+      if (isBackdropClick(e, overlay)) finish(false);
     });
     removeKeys = installModalKeys(dialog, overlayToken, (e) => {
       if (e.key === 'Escape') {

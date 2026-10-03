@@ -14,6 +14,7 @@ import { isPluginEnabled, setPluginEnabled } from './plugins-store.js';
 import { settings } from './settings.js';
 import { captureFocusForDialog, confirmDialog } from './text-prompt.js';
 import { showToast } from './toast.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 interface InstalledPlugin {
   id: string;
@@ -438,7 +439,7 @@ async function openBrowseModal(
   done.addEventListener('click', close);
   overlay.appendChild(dialog);
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
+    if (isBackdropClick(e, overlay)) close();
   });
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && isTopOverlay(overlayToken)) {

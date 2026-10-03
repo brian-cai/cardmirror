@@ -92,6 +92,7 @@ import {
   DEFAULT_SPEECH_FILENAME_TEMPLATE,
   renderSpeechFilename,
 } from './speech-filename.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 interface SeatCandidateUi {
   routingCode: string;
@@ -389,7 +390,7 @@ class SettingsModal {
 
     // Click outside the dialog → close.
     this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.close();
+      if (isBackdropClick(e, this.overlay)) this.close();
     });
 
     document.body.appendChild(this.overlay);

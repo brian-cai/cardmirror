@@ -18,6 +18,7 @@ import { captureFocusForDialog, installModalKeys, armDialogFocus } from './text-
 import { showToast } from './toast.js';
 import { setIcon } from './icons';
 import { pushOverlay, popOverlay } from './overlay-stack.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 let openOverlay: HTMLDivElement | null = null;
 let overlayToken: symbol | null = null;
@@ -121,7 +122,7 @@ export async function openSelectSpeechDocModal(): Promise<void> {
   const overlay = document.createElement('div');
   overlay.className = 'pmd-select-speech-overlay';
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeModal();
+    if (isBackdropClick(e, overlay)) closeModal();
   });
 
   const dialog = document.createElement('div');

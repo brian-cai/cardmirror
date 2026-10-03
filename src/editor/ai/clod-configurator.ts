@@ -18,6 +18,7 @@ import {
   PRONOUN_PRESETS,
   type ClodTimePeriod,
 } from './clod.js';
+import { isBackdropClick } from '../backdrop-click.js';
 
 type PronounChoice = 'he' | 'she' | 'they' | 'it' | 'custom';
 
@@ -30,7 +31,7 @@ export function openClodConfigurator(): void {
   const overlay = document.createElement('div');
   overlay.className = 'pmd-clod-overlay';
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
+    if (isBackdropClick(e, overlay)) close();
   });
   const dialog = document.createElement('div');
   dialog.className = 'pmd-clod-dialog';

@@ -26,6 +26,7 @@ import {
   armDialogFocus,
   captureFocusForDialog,
 } from './text-prompt.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 
 class ReferenceModal {
@@ -51,7 +52,7 @@ class ReferenceModal {
     this.overlay.appendChild(this.dialog);
 
     this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.close();
+      if (isBackdropClick(e, this.overlay)) this.close();
     });
 
     document.body.appendChild(this.overlay);

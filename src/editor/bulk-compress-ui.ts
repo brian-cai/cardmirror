@@ -17,6 +17,7 @@ import { parseNative, serializeNative } from '../index.js';
 import { runWebFileTool } from './web-file-tools.js';
 import type { BulkCompressProgress } from './host/electron-host.js';
 import { setIcon } from './icons';
+import { isBackdropClick } from './backdrop-click.js';
 
 function baseName(p: string): string {
   const parts = p.split(/[\\/]/).filter(Boolean);
@@ -62,7 +63,7 @@ class BulkCompressModal {
     this.dialog.className = 'pmd-bulk-dialog';
     this.overlay.appendChild(this.dialog);
     this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.close();
+      if (isBackdropClick(e, this.overlay)) this.close();
     });
     document.addEventListener('keydown', this.onKey, true);
     this.render();

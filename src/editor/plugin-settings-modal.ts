@@ -15,6 +15,7 @@ import {
 } from './plugin-registry.js';
 import { getPluginSettingValue, setPluginSettingValue } from './plugin-settings.js';
 import { captureFocusForDialog } from './text-prompt.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 /** Live value for a declared def (the registry guarantees the key is
  *  declared here, so the undefined arm never fires in practice). */
@@ -61,7 +62,7 @@ export function openPluginSettingsModal(pluginId: string, pluginName: string): v
   done.addEventListener('click', close);
   overlay.appendChild(dialog);
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
+    if (isBackdropClick(e, overlay)) close();
   });
   const onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && isTopOverlay(overlayToken)) {

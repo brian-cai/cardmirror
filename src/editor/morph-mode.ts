@@ -63,6 +63,7 @@ import {
 } from './ribbon-commands.js';
 import { isRibbonCommandAvailable } from './ribbon-availability.js';
 import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
+import { isBackdropClick } from './backdrop-click.js';
 
 export interface MorphModeDeps {
   /** Builds a real ribbon command with the editor's live context. */
@@ -701,7 +702,7 @@ export function morphModePlugin(deps: MorphModeDeps): Plugin {
       showIndicator(armed); // refresh the pill's summary
     });
     overlay.addEventListener('mousedown', (e) => {
-      if (e.target === overlay) close();
+      if (isBackdropClick(e, overlay)) close();
     });
     document.addEventListener('keydown', onEsc, true);
     buttons.append(resetBtn, cancelBtn, saveBtn);
