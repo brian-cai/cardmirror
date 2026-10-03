@@ -19,6 +19,15 @@ see `DETAILED_CHANGELOG.md`.
   Ctrl+Tab keeps its job of switching documents in the focused slot.
   Desktop only. Thanks to Brian (@brian-cai)!
 
+- **Choose where updates come from.** Settings → General → About this
+  install has a new Update source field: enter a GitHub repository
+  (`owner/repo` or its URL) and auto-update follows that repository's
+  releases instead of the official ones, so a coach or a fork can ship
+  their own builds to their students. Reset to default returns to the
+  official stream. Release builds made from a fork now publish to, and
+  update from, that fork automatically. Desktop only. Thanks to Brian
+  (@brian-cai)!
+
 ### Fixed
 
 - **Sending a scattered selection works.** Selecting several non-
