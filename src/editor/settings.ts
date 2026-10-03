@@ -4594,32 +4594,58 @@ export class SettingsStore {
 
   /** Snapshot for export: every persisted setting EXCEPT transient
    *  (per-window) keys and the secret credentials (API keys / the
-   *  MyMemory email), which are never exported. */
-  exportObject(): Record<string, unknown> {
+   *  MyMemory email). `includeSecrets` keeps the non-empty credentials,
+   *  for moving a whole setup to another computer — the user opts in at
+   *  export time. */
+  exportObject(opts?: { includeSecrets?: boolean }): Record<string, unknown> {
     const out: Record<string, unknown> = { ...this.values };
-    for (const key of SECRET_SETTING_KEYS) delete out[key];
+    for (const key of SECRET_SETTING_KEYS) {
+      if (!opts?.includeSecrets || !out[key]) delete out[key];
+    }
     for (const key of TRANSIENT_SETTING_KEYS) delete out[key];
     return out;
+  }
+
+  /** Whether any secret credential (API key / MyMemory email) is set. */
+  hasSecrets(): boolean {
+    const values = this.values as unknown as Record<string, unknown>;
+    return [...SECRET_SETTING_KEYS].some((key) => !!values[key]);
   }
 
   /** Overwrite ALL settings from an imported (untrusted) object. Runs
    *  through `sanitize({ ...DEFAULTS, ...raw })` — the same boundary as
    *  load — so it tolerates schema drift: fields added since the export
    *  fall back to defaults, fields removed since are dropped, and bad
-   *  values are coerced/clamped. The secret credentials (never exported)
-   *  and transient per-window values are preserved, not wiped. */
-  replaceAll(raw: unknown): void {
+   *  values are coerced/clamped. Transient per-window values are
+   *  preserved, not wiped. So are the secret credentials, unless the
+   *  user chose `importSecrets` — then a non-empty credential in the
+   *  file replaces the current one (absent or blank ones are kept). */
+  replaceAll(raw: unknown, opts?: { importSecrets?: boolean }): void {
     const parsed = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const current = this.values as unknown as Record<string, unknown>;
     const preserved: Record<string, unknown> = {};
     for (const key of SECRET_SETTING_KEYS) {
-      preserved[key] = (this.values as unknown as Record<string, unknown>)[key];
+      const incoming = parsed[key];
+      preserved[key] =
+        opts?.importSecrets && typeof incoming === 'string' && incoming.trim() !== ''
+          ? incoming
+          : current[key];
     }
     for (const key of TRANSIENT_SETTING_KEYS) {
-      preserved[key] = (this.values as unknown as Record<string, unknown>)[key];
+      preserved[key] = current[key];
     }
     this.values = sanitize({ ...DEFAULTS, ...parsed, ...preserved } as Settings);
     this.persist();
     this.notify();
+  }
+
+  /** Whether an imported settings object carries any non-empty secret. */
+  static carriesSecrets(raw: unknown): boolean {
+    if (!raw || typeof raw !== 'object') return false;
+    const parsed = raw as Record<string, unknown>;
+    return [...SECRET_SETTING_KEYS].some(
+      (key) => typeof parsed[key] === 'string' && (parsed[key] as string).trim() !== '',
+    );
   }
 
   /** Subscribe to any settings change. Returns an unsubscribe function. */

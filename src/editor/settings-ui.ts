@@ -8,7 +8,8 @@
  */
 
 import { WORD_COUNT_ORDERS, type WordCountOrder } from './word-count-order.js';
-import { confirmDialog, promptForRouteChoice } from './text-prompt.js';
+import { confirmDialog, promptForChoice, promptForRouteChoice } from './text-prompt.js';
+import { exportUserDictionary, importUserDictionary } from './viewport-spellcheck.js';
 import { requestVoiceCalibration } from './voice/hooks.js';
 import { isLiteBuild } from './lite.js';
 import { entryConflictWarnings } from './custom-autocorrect-plugin.js';
@@ -19,6 +20,7 @@ import {
   SETTING_METADATA,
   SETTINGS_DEFAULTS,
   settings,
+  SettingsStore,
   DISPLAY_SIZE_KEYS,
   DISPLAY_COLOR_KEYS,
   type SettingMeta,
@@ -663,7 +665,7 @@ class SettingsModal {
     const desc = document.createElement('div');
     desc.className = 'pmd-settings-row-desc';
     desc.textContent =
-      'Save all your settings — shortcuts, keyboard macros, appearance, and the rest — to a file, or import a file to replace them. Importing overwrites your current settings. Your API keys (Anthropic, OpenRouter, Google Translate) and MyMemory email are never included.';
+      'Save all your settings — shortcuts, keyboard macros, ribbon buttons, file search folders, relay settings, your dictionary words, appearance, and the rest — to a file, or import a file to replace them, e.g. to move your setup to another computer. Importing overwrites your current settings. Your API keys (Anthropic, OpenRouter, Google Translate) and MyMemory email are included only if you choose to when exporting.';
     section.appendChild(desc);
 
     const actions = document.createElement('div');
@@ -685,8 +687,35 @@ class SettingsModal {
   }
 
   private async doExportSettings(): Promise<void> {
+    // API keys stay out unless the user asks — the file is plain text and
+    // easy to share by accident.
+    let includeSecrets = false;
+    if (settings.hasSecrets()) {
+      const choice = await promptForChoice({
+        message: 'Include your API keys?',
+        detail:
+          'Choose Include API keys to move your keys to another computer. The file stores them as plain text, so keep it private and don\u2019t share it with anyone else.',
+        choices: [
+          { value: 'without', label: 'Leave keys out', primary: true },
+          { value: 'with', label: 'Include API keys' },
+        ],
+      });
+      if (!choice) return;
+      includeSecrets = choice === 'with';
+    }
+    const electronHost = getElectronHost();
+    const updateSource = electronHost
+      ? await electronHost.getUpdateSource().catch(() => null)
+      : null;
     const payload = JSON.stringify(
-      { version: 1, settings: settings.exportObject() },
+      {
+        version: 2,
+        settings: settings.exportObject({ includeSecrets }),
+        userDictionary: exportUserDictionary(),
+        // Only an explicit override — a file from an official install
+        // shouldn't pin another install to the official stream.
+        ...(updateSource?.overridden ? { updateSource: updateSource.active } : {}),
+      },
       null,
       2,
     );
@@ -708,24 +737,50 @@ class SettingsModal {
       showToast(`Couldn't read “${opened.name}” as JSON.`);
       return;
     }
-    // Accept the wrapped `{ version, settings }` shape or a bare object.
-    const obj =
-      parsed && typeof parsed === 'object'
-        ? ((parsed as { settings?: unknown }).settings ?? parsed)
+    // Accept the wrapped `{ version, settings, … }` shape or a bare object.
+    const wrapper =
+      parsed && typeof parsed === 'object' && 'settings' in parsed
+        ? (parsed as { settings?: unknown; userDictionary?: unknown; updateSource?: unknown })
         : null;
+    const obj = parsed && typeof parsed === 'object' ? (wrapper ? wrapper.settings : parsed) : null;
     if (!obj || typeof obj !== 'object') {
       showToast(`“${opened.name}” doesn't look like a settings export.`);
       return;
     }
-    if (
+    const updateSource =
+      typeof wrapper?.updateSource === 'string' ? wrapper.updateSource.trim() : '';
+    const extras = updateSource
+      ? `\n\nUpdates will come from github.com/${updateSource}.`
+      : '';
+    let importSecrets = false;
+    if (SettingsStore.carriesSecrets(obj)) {
+      const choice = await promptForChoice({
+        message: 'Import settings?',
+        detail:
+          'This replaces all your current settings. The file also contains API keys — use them in place of yours, or keep your own.' +
+          extras,
+        choices: [
+          { value: 'with', label: 'Import with API keys', primary: true },
+          { value: 'without', label: 'Import, keep my keys' },
+        ],
+      });
+      if (!choice) return;
+      importSecrets = choice === 'with';
+    } else if (
       !(await confirmDialog(
-        'Import settings? This replaces all your current settings (your API key is kept).',
+        'Import settings? This replaces all your current settings (your API keys are kept).' + extras,
         { okLabel: 'Import' },
       ))
     ) {
       return;
     }
-    settings.replaceAll(obj);
+    settings.replaceAll(obj, { importSecrets });
+    importUserDictionary(wrapper?.userDictionary);
+    const electronHost = getElectronHost();
+    if (updateSource && electronHost) {
+      const result = await electronHost.setUpdateSource(updateSource).catch(() => null);
+      if (result && !result.ok) showToast(result.error);
+    }
     this.render(); // rebuild the dialog so every control reflects the import
     showToast('Settings imported.');
   }
