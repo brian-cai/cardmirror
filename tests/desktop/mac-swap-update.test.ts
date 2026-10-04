@@ -94,6 +94,16 @@ describePosix('buildSwapScript', () => {
     expect(script).toContain('open -n "$APP"');
   });
 
+  it('verifies the new bundle\'s code signature, and its signer, before the swap', () => {
+    const verifyIdx = script.indexOf('codesign --verify --deep --strict "$NEWAPP"');
+    const signerIdx = script.indexOf('-R="$REQ" "$NEWAPP"');
+    const swapIdx = script.indexOf('mv "$APP" "$STAGE/previous.app"');
+    expect(verifyIdx).toBeGreaterThan(0);
+    expect(signerIdx).toBeGreaterThan(verifyIdx);
+    expect(swapIdx).toBeGreaterThan(signerIdx);
+    expect(script).toContain('Signature=adhoc');
+  });
+
   it('extraction failure aborts before the old bundle is touched', () => {
     const extractIdx = script.indexOf('ditto -x -k');
     const backupIdx = script.indexOf('mv "$APP" "$STAGE/previous.app"');

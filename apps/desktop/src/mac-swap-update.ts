@@ -108,6 +108,21 @@ if [ -z "$NEWAPP" ] || [ ! -d "$NEWAPP" ]; then
   fail_restore "no .app in update zip"
 fi
 
+# Code signature: the new bundle must be intact (sealed resources match),
+# and when the running app is signed with a real certificate, the new one
+# must satisfy the running app's designated requirement — same signer — so
+# a bundle signed by anyone else is never swapped in. Ad-hoc builds have no
+# signer identity to pin; there the Ed25519 update signature (checked
+# before staging) is what vouches for the zip.
+codesign --verify --deep --strict "$NEWAPP" || fail_restore "new bundle fails codesign --verify"
+if ! codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc"; then
+  REQ=$(codesign -d -r- "$APP" 2>/dev/null | sed -n 's/^designated => //p')
+  if [ -z "$REQ" ]; then
+    fail_restore "could not read the installed app's designated requirement"
+  fi
+  codesign --verify --deep --strict -R="$REQ" "$NEWAPP" || fail_restore "new bundle is signed by a different identity"
+fi
+
 # Defensive: our own download never carries quarantine, but strip it in
 # case anything upstream stamped it — a quarantined swap would send the
 # user through Gatekeeper again.
