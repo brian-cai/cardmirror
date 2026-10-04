@@ -1,12 +1,14 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { generateKeyPairSync } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   artifactNameFor,
+  keyFingerprint,
+  parsePublicKey,
   sha512File,
   verifyArtifactSignature,
   type TrustedUpdateKey,
@@ -81,14 +83,24 @@ describe('update signatures', () => {
     expect(v({ trustedKeys: [{ id: 'junk', spki: 'AAAA' }, trusted] })).toBe('test');
   });
 
-  it('the release script refuses to run without the key', () => {
+  it('without the key: skips on an unsigned stream, fails on one that requires signing', () => {
     writeFileSync(path.join(dir, 'CardMirror-Setup-1.14.2.exe'), 'x');
-    expect(() =>
+    const run = (require: string) =>
       execFileSync(process.execPath, [path.join(__dirname, '../../apps/desktop/scripts/sign-release.cjs'), '1.14.2'], {
-        env: { ...process.env, UPDATE_SIGNING_KEY: '', RELEASE_DIR: dir },
-        stdio: 'ignore',
-      }),
-    ).toThrow();
+        env: { ...process.env, UPDATE_SIGNING_KEY: '', RELEASE_DIR: dir, REQUIRE_UPDATE_SIGNING: require },
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).toString();
+    expect(run('')).toBe('');
+    expect(() => run('true')).toThrow();
+  });
+
+  it('publishes the public key beside the signatures, matching the fingerprint', () => {
+    const { pem, trusted } = keypair();
+    writeFileSync(path.join(dir, 'CardMirror-1.14.2-universal-mac.zip'), 'zip');
+    signWithScript(pem, '1.14.2');
+    const published = readFileSync(path.join(dir, 'update-signing-key.pub'), 'utf8');
+    expect(parsePublicKey(published)).toBe(trusted.spki);
+    expect(keyFingerprint(parsePublicKey(published)!)).toBe(keyFingerprint(trusted.spki));
   });
 
   it('maps downloaded bytes to their published artifact name by hash', () => {
@@ -98,5 +110,37 @@ describe('update signatures', () => {
     ];
     expect(artifactNameFor(files, 'bbb')).toBe('CardMirror-1.14.2-universal.dmg');
     expect(artifactNameFor(files, 'ccc')).toBeNull();
+  });
+});
+
+describe('published keys and fingerprints', () => {
+  it('accepts an Ed25519 SPKI and rejects anything else', () => {
+    const { trusted } = keypair();
+    expect(parsePublicKey(`  ${trusted.spki}\n`)).toBe(trusted.spki);
+    const rsa = generateKeyPairSync('rsa', { modulusLength: 1024 }).publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+    expect(parsePublicKey(rsa)).toBeNull();
+    expect(parsePublicKey('<html>Not Found</html>')).toBeNull();
+    expect(parsePublicKey('')).toBeNull();
+  });
+
+  it('fingerprints are stable, readable, and differ between keys', () => {
+    const a = keypair().trusted.spki;
+    const b = keypair().trusted.spki;
+    expect(keyFingerprint(a)).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(keyFingerprint(a)).toBe(keyFingerprint(a));
+    expect(keyFingerprint(a)).not.toBe(keyFingerprint(b));
+    expect(keyFingerprint(a)).not.toMatch(/[01OI]/);
+  });
+});
+
+describe('gen-update-key.cjs', () => {
+  it('prints the same fingerprint the app shows', () => {
+    const src = readFileSync(path.join(__dirname, '../../apps/desktop/scripts/gen-update-key.cjs'), 'utf8');
+    const body = /function fingerprint\(spki\) \{[\s\S]*?\n\}/.exec(src)![0];
+    const scriptFingerprint = new Function('createHash', `${body}; return fingerprint;`)(createHash) as (s: string) => string;
+    for (let i = 0; i < 5; i++) {
+      const spki = keypair().trusted.spki;
+      expect(scriptFingerprint(spki)).toBe(keyFingerprint(spki));
+    }
   });
 });

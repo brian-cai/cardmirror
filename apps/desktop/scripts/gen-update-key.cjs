@@ -20,7 +20,7 @@
  * Ed25519 keys, so use the script):
  *   node apps/desktop/scripts/restore-update-key.cjs <backup.enc.pem>
  */
-const { generateKeyPairSync } = require('node:crypto');
+const { createHash, generateKeyPairSync } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -33,7 +33,12 @@ const one = (name, fallback) => {
 };
 const all = (name) => args.flatMap((a, i) => (a === `--${name}` && args[i + 1] ? [args[i + 1]] : []));
 
-const repo = one('repo', 'brian-cai/cardmirror');
+const publish = require(path.join(__dirname, '..', 'package.json')).build?.publish ?? {};
+const repo = one('repo', 'brian-cai/cardmirror' /* this fork's stream; package.json still names upstream */);
+if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+  console.error('Pass --repo owner/repo (the repository whose releases this key will sign).');
+  process.exit(2);
+}
 const id = one('id', `${repo.split('/')[0]} ${new Date().toISOString().slice(0, 10)}`);
 const FILE = 'cardmirror-update-signing-key.enc.pem';
 const dirs = [os.homedir(), ...all('backup')].map((d) => path.resolve(d.replace(/^~(?=$|\/)/, os.homedir())));
@@ -44,6 +49,23 @@ for (const t of targets) {
     console.error(`Refusing to overwrite ${t} — it may hold the key your installs already trust.`);
     process.exit(1);
   }
+}
+
+/** Same fingerprint the app shows (update-signature.ts keyFingerprint). */
+function fingerprint(spki) {
+  const B32 = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const digest = createHash('sha256').update(Buffer.from(spki, 'base64')).digest();
+  let bits = 0, value = 0, out = '';
+  for (const byte of digest) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5 && out.length < 12) {
+      out += B32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+    if (out.length >= 12) break;
+  }
+  return `${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8, 12)}`;
 }
 
 /** Read a line from the terminal without echoing it. */
@@ -125,6 +147,7 @@ function askHidden(prompt) {
     fs.writeFileSync(keysFile, next);
     console.log(`Public key added to update-keys.ts: ${entry.trim()}`);
   }
+  console.log(`\nKey fingerprint (share this with people you invite to this stream): ${fingerprint(spki)}`);
   console.log('\nSave the passphrase in your password manager now. To restore the secret later:');
   console.log(`  node apps/desktop/scripts/restore-update-key.cjs ${targets[0]}`);
 })().catch((err) => {

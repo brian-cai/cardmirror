@@ -86,3 +86,40 @@ export function artifactNameFor(
   const last = hit.url.split(/[\\/]/).pop() ?? '';
   return last ? decodeURIComponent(last) : null;
 }
+
+/** Release asset where a stream publishes its public key (SPKI DER,
+ *  base64), so a user switching to it can fetch and pin it. */
+export const PUBLIC_KEY_ASSET = 'update-signing-key.pub';
+
+/** Parse a published public key: base64 SPKI of an Ed25519 key, or null. */
+export function parsePublicKey(text: string): string | null {
+  const spki = text.trim();
+  if (!/^[A-Za-z0-9+/=]{40,200}$/.test(spki)) return null;
+  try {
+    const key = createPublicKey({ key: Buffer.from(spki, 'base64'), format: 'der', type: 'spki' });
+    return key.asymmetricKeyType === 'ed25519' ? spki : null;
+  } catch {
+    return null;
+  }
+}
+
+const B32 = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I
+
+/** Short, readable fingerprint of a public key — the code a stream's owner
+ *  shares out of band ("XXXX-XXXX-XXXX"), 60 bits of its SHA-256. */
+export function keyFingerprint(spki: string): string {
+  const digest = createHash('sha256').update(Buffer.from(spki, 'base64')).digest();
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (const byte of digest) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5 && out.length < 12) {
+      out += B32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+    if (out.length >= 12) break;
+  }
+  return `${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8, 12)}`;
+}

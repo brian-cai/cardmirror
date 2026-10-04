@@ -51,8 +51,17 @@ import {
   sameUpdateSource,
   writeUpdateSourceOverride,
   type UpdateSource,
+  type PinnedUpdateSource,
 } from './update-source.js';
-import { artifactNameFor, sha512File, verifyArtifactSignature } from './update-signature.js';
+import {
+  PUBLIC_KEY_ASSET,
+  artifactNameFor,
+  keyFingerprint,
+  parsePublicKey,
+  sha512File,
+  verifyArtifactSignature,
+  type TrustedUpdateKey,
+} from './update-signature.js';
 import { TRUSTED_UPDATE_KEYS } from './update-keys.js';
 import { installMacAccessibilitySuppression } from './ax-suppress-mac.js';
 import { resolveCmirCandidates, isWithin } from './transclusion-path.js';
@@ -3184,10 +3193,20 @@ function releasesUrl(): string {
   return `https://github.com/${formatUpdateSource(activeUpdateSource())}/releases`;
 }
 
+/** Keys an update from the active stream must be signed with: the pinned
+ *  key of a user-chosen stream, or this build's own keys for its default
+ *  stream. Empty only for an unsigned default stream, whose updates install
+ *  as they always have. */
+function trustedKeysForActiveSource(): readonly TrustedUpdateKey[] {
+  const override = readUpdateSourceOverride(app.getPath('userData'));
+  if (override) return [{ id: `pinned ${keyFingerprint(override.spki)}`, spki: override.spki }];
+  return TRUSTED_UPDATE_KEYS;
+}
+
 /** Settings → General "Update source". `get` reports the active stream,
- *  whether it's an override, and the build's own default; `set` takes
- *  `owner/repo` or a GitHub URL (blank, or the build default, clears the
- *  override) and re-points the updater immediately. */
+ *  whether it's an override (and its pinned key's fingerprint), the build's
+ *  own default, and this build's own release-key fingerprint (what a
+ *  stream's owner reads out to the people they invite). */
 ipcMain.handle('host:get-update-source', () => {
   const baked = readBakedUpdateSource(process.resourcesPath);
   const override = readUpdateSourceOverride(app.getPath('userData'));
@@ -3195,20 +3214,86 @@ ipcMain.handle('host:get-update-source', () => {
     active: formatUpdateSource(override ?? baked),
     defaultSource: formatUpdateSource(baked),
     overridden: override !== null,
+    fingerprint: override ? keyFingerprint(override.spki) : null,
+    ownFingerprint: TRUSTED_UPDATE_KEYS[0] ? keyFingerprint(TRUSTED_UPDATE_KEYS[0].spki) : null,
   };
 });
-ipcMain.handle('host:set-update-source', (_event, input: unknown) => {
+
+/** Fetch the public key a stream publishes with its latest release. */
+async function fetchStreamKey(src: UpdateSource): Promise<string | null> {
+  const url = `https://github.com/${src.owner}/${src.repo}/releases/latest/download/${PUBLIC_KEY_ASSET}`;
+  try {
+    const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return null;
+    return parsePublicKey(await res.text());
+  } catch {
+    return null;
+  }
+}
+
+/** `set` takes `owner/repo` or a GitHub URL; blank (or the build default)
+ *  goes back to the default stream with no questions. Anything else must be
+ *  a SIGNED stream: its published key is fetched, and the switch happens
+ *  only after the user confirms the key's fingerprint in a native dialog —
+ *  shown by the main process, so no page, document or plugin can fake or
+ *  skip it. The key is pinned; a later key change needs the same
+ *  confirmation again. */
+ipcMain.handle('host:set-update-source', async (event, input: unknown) => {
   const text = typeof input === 'string' ? input.trim() : '';
   const baked = readBakedUpdateSource(process.resourcesPath);
-  let next: UpdateSource | null = null;
-  if (text) {
-    next = parseUpdateSource(text);
-    if (!next) return { ok: false as const, error: 'Enter a GitHub repository as owner/repo or its URL.' };
-    if (sameUpdateSource(next, baked)) next = null;
+  const userData = app.getPath('userData');
+  const apply = (): void => {
+    if (app.isPackaged && !LITE_BUILD) applyUpdateSource();
+  };
+  const next = text ? parseUpdateSource(text) : baked;
+  if (!next) return { ok: false as const, error: 'Enter a GitHub repository as owner/repo or its URL.' };
+  if (sameUpdateSource(next, baked)) {
+    writeUpdateSourceOverride(userData, null);
+    apply();
+    return { ok: true as const, active: formatUpdateSource(baked) };
   }
-  writeUpdateSourceOverride(app.getPath('userData'), next);
-  if (app.isPackaged && !LITE_BUILD) applyUpdateSource();
-  return { ok: true as const, active: formatUpdateSource(next ?? baked) };
+  const spki = await fetchStreamKey(next);
+  if (!spki) {
+    return {
+      ok: false as const,
+      error:
+        `github.com/${formatUpdateSource(next)} doesn't publish a release signing key, so CardMirror ` +
+        "can't check that its updates are genuine. Ask whoever runs it to set up signed releases.",
+    };
+  }
+  const current = readUpdateSourceOverride(userData);
+  const fingerprint = keyFingerprint(spki);
+  if (current && sameUpdateSource(current, next) && current.spki === spki) {
+    return { ok: true as const, active: formatUpdateSource(next) };
+  }
+  const keyChanged = !!current && sameUpdateSource(current, next);
+  const parent = BrowserWindow.fromWebContents(event.sender) ?? dialogParentWindow();
+  const opts: Electron.MessageBoxOptions = {
+    type: 'warning',
+    buttons: ['Cancel', 'Trust and switch'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Change update source',
+    message: keyChanged
+      ? `The signing key for ${formatUpdateSource(next)} has changed.`
+      : `Get CardMirror updates from ${formatUpdateSource(next)}?`,
+    detail:
+      (keyChanged
+        ? 'Its releases are now signed with a different key than the one you trusted. That happens ' +
+          'when an owner replaces their key — or when someone else has taken over the repository. '
+        : 'Whoever runs that repository decides what CardMirror installs on this computer next, ' +
+          'and an update can do anything an app can. ') +
+      `\n\nIts key fingerprint is:\n\n    ${fingerprint}\n\n` +
+      'Only continue if the person who runs it gave you this exact code — in person, by text, ' +
+      'anywhere but that repository. You can go back with Reset to default at any time.',
+    noLink: true,
+  };
+  const { response } = parent ? await dialog.showMessageBox(parent, opts) : await dialog.showMessageBox(opts);
+  if (response !== 1) return { ok: false as const, cancelled: true as const, error: '' };
+  const pinned: PinnedUpdateSource = { ...next, spki };
+  writeUpdateSourceOverride(userData, pinned);
+  apply();
+  return { ok: true as const, active: formatUpdateSource(next) };
 });
 
 /** The user manual (MANUAL.md), rendered on GitHub. Linked from the Help
@@ -3679,17 +3764,19 @@ ipcMain.handle('host:update-chip-action', () => {
  *  daily re-check doesn't re-download and re-warn about the same release. */
 const refusedUpdateVersions = new Set<string>();
 
-/** Gate between "downloaded" and "may install": the downloaded bytes must
- *  be a file of this release (matched by sha512) carrying a detached
- *  `<name>.sig` that one of TRUSTED_UPDATE_KEYS verifies (update-signature.ts).
- *  The signature is fetched from the active source, but only the key decides
- *  — a hijacked repository or a redirected source can't forge it. */
+/** Gate between "downloaded" and "may install". When the active stream is
+ *  signed (a pinned user-chosen stream, or a default stream with keys in
+ *  update-keys.ts), the downloaded bytes must be a file of this release
+ *  (matched by sha512) with a detached `<name>.sig` that the stream's key
+ *  verifies (update-signature.ts). A hijacked repository or a swapped
+ *  download can't forge it. An unsigned default stream passes as before. */
 async function verifyDownloadedUpdate(info: {
   version: string;
   files: readonly { url: string; sha512?: string }[];
   downloadedFile?: string;
-}): Promise<{ ok: true; keyId: string } | { ok: false; reason: string }> {
-  if (TRUSTED_UPDATE_KEYS.length === 0) return { ok: false, reason: 'this build trusts no update-signing key' };
+}): Promise<{ ok: true; keyId: string | null } | { ok: false; reason: string }> {
+  const trusted = trustedKeysForActiveSource();
+  if (trusted.length === 0) return { ok: true, keyId: null };
   const file = info.downloadedFile;
   if (!file) return { ok: false, reason: 'the downloaded file is missing' };
   const sha = await sha512File(file);
@@ -3710,9 +3797,9 @@ async function verifyDownloadedUpdate(info: {
     version: info.version,
     sha512b64: sha,
     signatureB64: signature,
-    trustedKeys: TRUSTED_UPDATE_KEYS,
+    trustedKeys: trusted,
   });
-  return keyId ? { ok: true, keyId } : { ok: false, reason: 'its signature is not from a trusted key' };
+  return keyId ? { ok: true, keyId } : { ok: false, reason: "its signature doesn't match the stream's key" };
 }
 
 /** A downloaded update failed verification: drop it and say so once. */
@@ -3727,9 +3814,9 @@ function refuseUpdate(version: string, file: string | undefined, reason: string)
     title: 'Update not installed',
     message: `CardMirror ${version} was not installed.`,
     detail:
-      `It couldn't be verified: ${reason}. Updates install only when they're signed with a key ` +
-      'this build trusts, so an unverified download is discarded. If you changed the update ' +
-      'source in Settings → General, check that you trust it, or reset it to the default.',
+      `It couldn't be verified: ${reason}. An update from a signed stream installs only with a ` +
+      'valid signature, so this download was discarded. If you changed the update source in ' +
+      'Settings → General, check with whoever runs it, or reset it to the default.',
   });
 }
 

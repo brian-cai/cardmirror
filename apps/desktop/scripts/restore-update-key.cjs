@@ -16,7 +16,11 @@ const fs = require('node:fs');
 
 const file = process.argv[2];
 const ri = process.argv.indexOf('--repo');
-const repo = ri > 0 && process.argv[ri + 1] ? process.argv[ri + 1] : 'brian-cai/cardmirror';
+const publish = require(require('node:path').join(__dirname, '..', 'package.json')).build?.publish ?? {};
+const repo =
+  ri > 0 && process.argv[ri + 1]
+    ? process.argv[ri + 1]
+    : 'brian-cai/cardmirror'; // this fork's stream; package.json still names upstream
 if (!file || !fs.existsSync(file)) {
   console.error('usage: restore-update-key.cjs <backup.enc.pem> [--repo owner/repo]');
   process.exit(2);

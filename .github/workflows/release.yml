@@ -341,7 +341,8 @@ jobs:
 
       - name: Sign release artifacts
         # Ed25519 detached signature for every installer / update file this
-        # runner produced (main + Lite), uploaded as `<file>.sig`. Installed
+        # runner produced (main + Lite), uploaded as `<file>.sig`, plus
+        # update-signing-key.pub for people switching to this stream. Installed
         # apps refuse an update without a valid signature from a key in
         # apps/desktop/src/update-keys.ts, so this step must not be skipped:
         # the script fails the job when UPDATE_SIGNING_KEY is missing.
@@ -349,6 +350,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          # This stream's installs trust only signed updates: never publish
+          # an unsigned release.
+          REQUIRE_UPDATE_SIGNING: 'true'
         run: |
           sigs=()
           while IFS= read -r line; do sigs+=("$line"); done < <(node apps/desktop/scripts/sign-release.cjs "${GITHUB_REF_NAME#v}")
