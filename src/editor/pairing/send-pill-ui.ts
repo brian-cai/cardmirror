@@ -38,9 +38,13 @@ import { normalizePairingCode, looksLikePairingCode } from './pairing-ids.js';
 import { recentSenders } from './inbox-store.js';
 import { setIcon } from '../icons';
 import { byFrequency, groupKey, sendScores } from './send-frequency.js';
+import { sendViewTo } from './send-to-starred.js';
 
 interface SendPillMountOptions {
   parent: HTMLElement;
+  /** The focused document: a click-opened pill sends its card / selection
+   *  to the person or group clicked (or picked from the search). */
+  getFocusedView?: () => EditorView | null;
 }
 
 interface SendTarget {
@@ -134,8 +138,12 @@ export class SendPillController {
   /** Drag-only recent-senders sub-list + its rows (subset of targets). */
   private recentSection: HTMLDivElement | null = null;
   private recentRows = new Set<HTMLElement>();
+  /** Click-open search box (filters the rows; Enter sends to the top one). */
+  private searchEl: HTMLInputElement | null = null;
+  private getFocusedView: () => EditorView | null = () => null;
 
   mount(opts: SendPillMountOptions): void {
+    if (opts.getFocusedView) this.getFocusedView = opts.getFocusedView;
     this.root = document.createElement('div');
     this.root.className = 'pmd-pill pmd-send-pill';
     this.root.dataset['open'] = 'false';
@@ -302,14 +310,45 @@ export class SendPillController {
     const canInvite = collabEnabled() && collabInviter() !== null;
     this.bar.title = clickable
       ? canInvite
-        ? 'Drag a card here to send it · Click for contacts and collaboration'
-        : 'Drag a card here to send it · Click to add a contact'
+        ? 'Drag a card here to send it · Click to search and send, or invite to collaborate'
+        : 'Drag a card here to send it · Click to search and send'
       : 'Drag a card here to send it';
+  }
+
+  /** Show only the rows whose name contains every word typed. */
+  private applySearch(): void {
+    const words = (this.searchEl?.value ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+    for (const [row, target] of this.targets) {
+      if (this.recentRows.has(row)) continue;
+      const hay = target.label.toLowerCase();
+      row.hidden = words.length > 0 && !words.every((w) => hay.includes(w));
+    }
+    // Section labels ("Groups", "To") only make sense on the full list.
+    for (const el of this.panel.querySelectorAll<HTMLElement>('.pmd-send-section')) {
+      el.hidden = words.length > 0;
+    }
+  }
+
+  /** Click-open send: the focused doc's card / selection to this row's
+   *  person or group (the same path as Send to Recipient). */
+  private sendFromRow(row: HTMLElement): void {
+    const target = this.targets.get(row);
+    if (!target) return;
+    const view = this.getFocusedView();
+    this.collapse();
+    if (!view) {
+      showToast('Open a document and put the cursor in a card to send it');
+      return;
+    }
+    void sendViewTo(view, { codes: target.codes, label: target.label, via: target.via });
   }
 
   private openInviteMode(): void {
     this.inviteMode = true;
+    if (this.searchEl) this.searchEl.value = '';
+    this.applySearch();
     this.expand();
+    queueMicrotask(() => this.searchEl?.focus());
     this.applyDragZoneLabels(false);
     // Reveals the per-row collaboration-invite buttons (CSS-gated on this
     // class), so they appear only on a click-open, never mid-drag.
@@ -338,6 +377,28 @@ export class SendPillController {
     this.panel.innerHTML = '';
     this.targets.clear();
     this.recentRows.clear();
+
+    // Click-open search (CSS hides it during a drag, when typing can't
+    // happen anyway): filters the rows below; Enter sends to the top one.
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.className = 'pmd-send-search';
+    search.placeholder = 'Search people and groups…';
+    search.setAttribute('aria-label', 'Search people and groups');
+    search.spellcheck = false;
+    search.addEventListener('input', () => this.applySearch());
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const first = [...this.targets.keys()].find((r) => !this.recentRows.has(r) && !r.hidden);
+        if (first) this.sendFromRow(first);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.collapse();
+      }
+    });
+    this.searchEl = search;
+    this.panel.appendChild(search);
 
     // Hidden recipients stay OUT of the pill (that is what hiding is)
     // but remain reachable elsewhere: group sends still fan out to
@@ -610,6 +671,11 @@ export class SendPillController {
     name.title = label;
     row.appendChild(name);
     this.targets.set(row, { codes, label: toastLabel, via });
+    // Click-open mode: clicking the row sends (its invite button, which
+    // stops propagation, still invites).
+    row.addEventListener('click', () => {
+      if (this.inviteMode && !this.recentRows.has(row)) this.sendFromRow(row);
+    });
     return row;
   }
 

@@ -31,7 +31,7 @@ export function mountPairingPills(
   tray: HTMLElement,
   getFocusedView: () => EditorView | null,
 ): { receivePillEl: HTMLElement | null } {
-  new SendPillController().mount({ parent: tray });
+  new SendPillController().mount({ parent: tray, getFocusedView });
   const receive = new ReceivePillController();
   receive.mount({ parent: tray, getFocusedView });
   // Returned so the shell can re-parent the receive pill into the home

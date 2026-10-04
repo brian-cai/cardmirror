@@ -15323,9 +15323,34 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   background: var(--pmd-c-hover);
   border-color: var(--pmd-c-accent);
 }
-/* In invite mode the row itself isn't the affordance — only its button is. */
+/* Click-open: clicking a row sends the cursor's card to it (its invite
+   button still invites). */
 .pmd-send-invite-mode .pmd-send-target {
-  cursor: default;
+  cursor: pointer;
+}
+.pmd-send-invite-mode .pmd-send-target:hover {
+  background: var(--pmd-c-hover);
+}
+.pmd-send-invite-mode .pmd-send-target[hidden],
+.pmd-send-section[hidden] {
+  display: none;
+}
+/* Search box at the top of a click-opened Send pill; gone during a drag. */
+.pmd-send-search {
+  display: none;
+}
+.pmd-send-invite-mode .pmd-send-search {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.35rem;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--pmd-c-text);
+  background: var(--pmd-c-bg);
+  border: 1px solid var(--pmd-c-border-soft);
+  border-radius: 6px;
 }
 
 /* Session-invite rows act, they don't insert: a compact Join button in
