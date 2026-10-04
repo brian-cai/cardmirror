@@ -707,6 +707,11 @@ class SettingsModal {
       // it lives outside SETTING_METADATA (like General's info sections
       // above), and loads lazily so the panel code stays off the settings
       // open path — same style as the other heavy, on-demand panels.
+      // Team file: share everyone's send codes, groups, the private relay
+      // and live sessions in one file instead of pasting them one by one.
+      if (id === 'pairing' && getElectronHost()) {
+        panel.appendChild(buildTeamFileSection(() => this.render()));
+      }
       if (id === 'plugins') {
         const section = document.createElement('section');
         section.className = 'pmd-plugins-panel';
@@ -2166,6 +2171,198 @@ function buildUpdateSourceRow(electronHost: NonNullable<ReturnType<typeof getEle
   row.appendChild(controls);
   refresh();
   return row;
+}
+
+/** Settings → Collaboration → Team file: export everyone's send codes,
+ *  groups and (optionally) the private relay and live sessions as one
+ *  `.cmteam` file; import merges one in (team-file.ts). */
+function buildTeamFileSection(rerender: () => void): HTMLElement {
+  const section = document.createElement('section');
+  section.className = 'pmd-settings-backup';
+  section.dataset['searchAliases'] = 'team roster share codes import export groups partners students relay token';
+  const title = document.createElement('div');
+  title.className = 'pmd-settings-row-title';
+  title.textContent = 'Team file';
+  section.appendChild(title);
+  const desc = document.createElement('div');
+  desc.className = 'pmd-settings-row-desc';
+  desc.textContent =
+    'Share your team in one file instead of pasting codes: everyone\u2019s send codes (yours included), ' +
+    'your groups, and — if you choose — your private relay and live collaboration sessions. ' +
+    'Importing adds to what you already have; nothing is removed.';
+  section.appendChild(desc);
+  const actions = document.createElement('div');
+  actions.className = 'pmd-settings-backup-actions';
+  const exportBtn = document.createElement('button');
+  exportBtn.type = 'button';
+  exportBtn.className = 'pmd-settings-backup-btn';
+  exportBtn.textContent = 'Export team…';
+  exportBtn.addEventListener('click', () => void exportTeamFile());
+  const importBtn = document.createElement('button');
+  importBtn.type = 'button';
+  importBtn.className = 'pmd-settings-backup-btn';
+  importBtn.textContent = 'Import team…';
+  importBtn.addEventListener('click', () => void importTeamFile().then((changed) => changed && rerender()));
+  actions.append(exportBtn, importBtn);
+  section.appendChild(actions);
+  return section;
+}
+
+async function exportTeamFile(): Promise<void> {
+  const { buildTeamFile, TEAM_FILE_EXTENSION } = await import('./pairing/team-file.js');
+  const name = await promptForText({
+    message: 'Team name',
+    placeholder: 'e.g. Westside Debate',
+    okLabel: 'Next',
+    detail: 'Shown to people when they import the file.',
+  });
+  if (name === null) return;
+  const relayUrl = settings.get('pairingRelayUrl').trim();
+  let includeRelay = false;
+  if (relayUrl) {
+    const choice = await promptForChoice({
+      message: 'Include your private relay?',
+      detail:
+        'People who import the file get your relay address and token, so they don\u2019t have to paste them. ' +
+        'Anyone with the file can use your relay.',
+      choices: [
+        { value: 'with', label: 'Include relay', primary: true },
+        { value: 'without', label: 'Leave it out' },
+      ],
+    });
+    if (!choice) return;
+    includeRelay = choice === 'with';
+  }
+  let sessions: { roomId: string; shareCode: string; guestPass?: string | null; docTitle: string }[] = [];
+  try {
+    const store = await import('./collab/collab-store.js');
+    const live = await store.listSessionRecords();
+    if (live.length > 0) {
+      const titles = live.map((r) => `\u2022 ${r.docTitle || 'Untitled'}`).join('\n');
+      const choice = await promptForChoice({
+        message: `Include ${live.length === 1 ? 'your live session' : `your ${live.length} live sessions`}?`,
+        detail:
+          `${titles}\n\nPeople who import the file can join ${live.length === 1 ? 'it' : 'them'} from Join session — ` +
+          'and edit those documents — without an invite code. Only include sessions meant for everyone on the team.',
+        choices: [
+          { value: 'without', label: 'Leave them out', primary: true },
+          { value: 'with', label: 'Include sessions' },
+        ],
+      });
+      if (!choice) return;
+      if (choice === 'with') {
+        sessions = live.map((r) => ({ roomId: r.roomId, shareCode: r.shareCode, guestPass: r.guestPass ?? null, docTitle: r.docTitle }));
+      }
+    }
+  } catch {
+    // No session store (IndexedDB unavailable) — export without sessions.
+  }
+  const file = buildTeamFile({
+    name,
+    ownCode: settings.get('pairingOwnCode'),
+    ownName: settings.get('pairingDisplayName'),
+    partners: settings.get('pairingPartners'),
+    groups: settings.get('pairingGroups'),
+    relay: includeRelay ? { url: relayUrl, token: settings.get('pairingRelayToken') } : null,
+    sessions,
+  });
+  const safe = file.name.replace(/[\\/:*?"<>|]+/g, '-');
+  await getHost().saveAs(`${safe}.${TEAM_FILE_EXTENSION}`, new TextEncoder().encode(JSON.stringify(file, null, 2)), {
+    filters: [{ name: 'CardMirror team', extensions: [TEAM_FILE_EXTENSION, 'json'] }],
+  });
+}
+
+/** Import a team file; resolves true when anything changed. */
+async function importTeamFile(): Promise<boolean> {
+  const { mergeTeamFile, parseTeamFile, TEAM_FILE_EXTENSION } = await import('./pairing/team-file.js');
+  const opened = await getHost().openFile({
+    filters: [{ name: 'CardMirror team', extensions: [TEAM_FILE_EXTENSION, 'json'] }],
+  });
+  if (!opened) return false;
+  let file: ReturnType<typeof parseTeamFile> = null;
+  try {
+    file = parseTeamFile(JSON.parse(new TextDecoder().decode(opened.bytes)));
+  } catch {
+    /* not JSON */
+  }
+  if (!file) {
+    showToast(`\u201c${opened.name}\u201d isn\u2019t a CardMirror team file.`);
+    return false;
+  }
+  const merged = mergeTeamFile({
+    file,
+    ownCode: settings.get('pairingOwnCode'),
+    partners: settings.get('pairingPartners'),
+    groups: settings.get('pairingGroups'),
+  });
+  const lines = [
+    merged.addedPeople ? `\u2022 ${merged.addedPeople} ${merged.addedPeople === 1 ? 'person' : 'people'} to send to` : '',
+    merged.addedGroups ? `\u2022 ${merged.addedGroups} new group${merged.addedGroups === 1 ? '' : 's'}` : '',
+    merged.updatedGroups ? `\u2022 new members in ${merged.updatedGroups} existing group${merged.updatedGroups === 1 ? '' : 's'}` : '',
+    file.sessions ? `\u2022 ${file.sessions.length} collaboration session${file.sessions.length === 1 ? '' : 's'} to join` : '',
+    !settings.get('pairingEnabled') ? '\u2022 turns on collaboration (card sharing and co-editing)' : '',
+  ].filter(Boolean);
+  const relayDiffers =
+    !!file.relay &&
+    (file.relay.url !== settings.get('pairingRelayUrl').trim() || file.relay.token !== settings.get('pairingRelayToken'));
+  if (lines.length === 0 && !relayDiffers) {
+    showToast(`Already up to date with \u201c${file.name}\u201d.`);
+    return false;
+  }
+  if (lines.length > 0) {
+    const ok = await confirmDialog(`This adds:\n${lines.join('\n')}\n\nNothing you already have is removed.`, {
+      title: `Import team \u201c${file.name}\u201d?`,
+      okLabel: 'Import',
+    });
+    if (!ok) return false;
+  }
+  let useRelay = false;
+  if (relayDiffers && file.relay) {
+    const current = settings.get('pairingRelayUrl').trim();
+    const choice = await promptForChoice({
+      message: 'Use the team\u2019s relay?',
+      detail:
+        `The file sets your relay to ${file.relay.url}` +
+        (current ? ` (instead of ${current})` : ' (instead of the default relay)') +
+        '. Cards you send and sessions you join will go through it.',
+      choices: [
+        { value: 'use', label: 'Use team relay', primary: true },
+        { value: 'keep', label: 'Keep mine' },
+      ],
+    });
+    if (!choice) return lines.length > 0 ? applyMerged() : false;
+    useRelay = choice === 'use';
+  }
+  return applyMerged();
+
+  async function applyMerged(): Promise<boolean> {
+    settings.set('pairingPartners', merged.partners);
+    settings.set('pairingGroups', merged.groups);
+    if (useRelay && file!.relay) {
+      settings.set('pairingRelayUrl', file!.relay.url);
+      settings.set('pairingRelayToken', file!.relay.token);
+    }
+    if (!settings.get('pairingEnabled')) settings.set('pairingEnabled', true);
+    if (file!.sessions) {
+      try {
+        const store = await import('./collab/collab-store.js');
+        for (const s of file!.sessions) {
+          await store.saveRecentRoom({
+            roomId: s.roomId,
+            shareCode: s.shareCode,
+            guestPass: s.guestPass ?? null,
+            role: 'participant',
+            docTitle: s.docTitle,
+            lastActiveAt: Date.now(),
+          });
+        }
+      } catch {
+        showToast('Couldn\u2019t save the team\u2019s sessions; join them with their invite codes instead.');
+      }
+    }
+    showToast(`Imported team \u201c${file!.name}\u201d.`);
+    return true;
+  }
 }
 
 /** Crash-dumps section — its own header between About this install and
