@@ -52,6 +52,8 @@ import {
   writeUpdateSourceOverride,
   type UpdateSource,
 } from './update-source.js';
+import { artifactNameFor, sha512File, verifyArtifactSignature } from './update-signature.js';
+import { TRUSTED_UPDATE_KEYS } from './update-keys.js';
 import { installMacAccessibilitySuppression } from './ax-suppress-mac.js';
 import { resolveCmirCandidates, isWithin } from './transclusion-path.js';
 import {
@@ -3662,6 +3664,64 @@ ipcMain.handle('host:update-chip-action', () => {
   }
 });
 
+/** Versions whose download failed the signature check this session, so a
+ *  daily re-check doesn't re-download and re-warn about the same release. */
+const refusedUpdateVersions = new Set<string>();
+
+/** Gate between "downloaded" and "may install": the downloaded bytes must
+ *  be a file of this release (matched by sha512) carrying a detached
+ *  `<name>.sig` that one of TRUSTED_UPDATE_KEYS verifies (update-signature.ts).
+ *  The signature is fetched from the active source, but only the key decides
+ *  — a hijacked repository or a redirected source can't forge it. */
+async function verifyDownloadedUpdate(info: {
+  version: string;
+  files: readonly { url: string; sha512?: string }[];
+  downloadedFile?: string;
+}): Promise<{ ok: true; keyId: string } | { ok: false; reason: string }> {
+  if (TRUSTED_UPDATE_KEYS.length === 0) return { ok: false, reason: 'this build trusts no update-signing key' };
+  const file = info.downloadedFile;
+  if (!file) return { ok: false, reason: 'the downloaded file is missing' };
+  const sha = await sha512File(file);
+  const name = artifactNameFor(info.files, sha);
+  if (!name) return { ok: false, reason: "the download doesn't match any file of the release" };
+  const src = activeUpdateSource();
+  const url = `https://github.com/${src.owner}/${src.repo}/releases/download/v${info.version}/${encodeURIComponent(name)}.sig`;
+  let signature: string;
+  try {
+    const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) return { ok: false, reason: `the release has no signature (${res.status})` };
+    signature = await res.text();
+  } catch (err) {
+    return { ok: false, reason: `couldn't fetch the signature (${err instanceof Error ? err.message : String(err)})` };
+  }
+  const keyId = verifyArtifactSignature({
+    fileName: name,
+    version: info.version,
+    sha512b64: sha,
+    signatureB64: signature,
+    trustedKeys: TRUSTED_UPDATE_KEYS,
+  });
+  return keyId ? { ok: true, keyId } : { ok: false, reason: 'its signature is not from a trusted key' };
+}
+
+/** A downloaded update failed verification: drop it and say so once. */
+function refuseUpdate(version: string, file: string | undefined, reason: string): void {
+  console.warn(`Auto-update: refused ${version} — ${reason}.`);
+  refusedUpdateVersions.add(version);
+  if (file) void fs.rm(file, { force: true }).catch(() => {});
+  const win = dialogParentWindow();
+  if (!win) return;
+  void dialog.showMessageBox(win, {
+    type: 'warning',
+    title: 'Update not installed',
+    message: `CardMirror ${version} was not installed.`,
+    detail:
+      `It couldn't be verified: ${reason}. Updates install only when they're signed with a key ` +
+      'this build trusts, so an unverified download is discarded. If you changed the update ' +
+      'source in Settings → General, check that you trust it, or reset it to the default.',
+  });
+}
+
 function startAutoUpdate(): void {
   if (!app.isPackaged) return;
   // macOS: Squirrel.Mac can't INSTALL into unsigned/self-signed builds,
@@ -3674,7 +3734,10 @@ function startAutoUpdate(): void {
   applyUpdateSource();
   const isMac = process.platform === 'darwin';
   autoUpdater.autoDownload = !isMac;
-  autoUpdater.autoInstallOnAppQuit = !isMac;
+  // Never install on quit until the download has passed the signature
+  // check (verifyDownloadedUpdate); the update-downloaded handler turns it
+  // on for a verified Windows / Linux update.
+  autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.on('error', (err) => {
     console.warn('Auto-update error:', err);
   });
@@ -3694,8 +3757,22 @@ function startAutoUpdate(): void {
     }
   });
   autoUpdater.on('update-downloaded', (info) => {
-    if (isMac) {
+    void (async () => {
       const file = (info as { downloadedFile?: string }).downloadedFile;
+      if (refusedUpdateVersions.has(info.version)) return;
+      const verdict = await verifyDownloadedUpdate({ version: info.version, files: info.files, downloadedFile: file });
+      if (!verdict.ok) {
+        autoUpdater.autoInstallOnAppQuit = false;
+        refuseUpdate(info.version, file, verdict.reason);
+        return;
+      }
+      console.log(`Auto-update: ${info.version} signature verified (${verdict.keyId}).`);
+      onVerifiedUpdateDownloaded(info.version, file);
+    })();
+  });
+  const onVerifiedUpdateDownloaded = (version: string, file: string | undefined): void => {
+    const info = { version, downloadedFile: file };
+    if (isMac) {
       if (file && file.endsWith('.zip')) {
         macStagedUpdateZip = file;
         console.log(`Auto-update: ${info.version} staged (mac swap); chip shown.`);
@@ -3707,10 +3784,12 @@ function startAutoUpdate(): void {
     }
     console.log(`Auto-update: ${info.version} downloaded; chip shown, installs on quit.`);
     // No dialog (install-on-confirm): the status-bar chip is the only
-    // surface. autoInstallOnAppQuit stays on, so quitting normally
-    // still applies the update for users who never click the chip.
+    // surface. Install-on-quit turns on now that the download is
+    // verified, so quitting normally still applies the update for users
+    // who never click the chip.
+    autoUpdater.autoInstallOnAppQuit = true;
     setUpdateChip({ state: 'ready', version: info.version });
-  });
+  };
   // The at-launch check fires from the renderer's boot path (gated
   // on the `checkForUpdatesOnLaunch` setting + `host.isFirstWindow()`)
   // via the `host:trigger-auto-update-check` IPC handler; subsequent
