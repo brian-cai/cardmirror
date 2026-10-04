@@ -846,11 +846,18 @@ class SettingsModal {
       if (!choice) return;
       includeSecrets = choice === 'with';
     }
+    const electronHost = getElectronHost();
+    const updateSource = electronHost
+      ? await electronHost.getUpdateSource().catch(() => null)
+      : null;
     const payload = JSON.stringify(
       {
         version: 2,
         settings: settings.exportObject({ includeSecrets }),
         userDictionary: exportUserDictionary(),
+        // Only an explicit override — a file from an official install
+        // shouldn't pin another install to the official stream.
+        ...(updateSource?.overridden ? { updateSource: updateSource.active } : {}),
       },
       null,
       2,
@@ -876,19 +883,25 @@ class SettingsModal {
     // Accept the wrapped `{ version, settings, … }` shape or a bare object.
     const wrapper =
       parsed && typeof parsed === 'object' && 'settings' in parsed
-        ? (parsed as { settings?: unknown; userDictionary?: unknown })
+        ? (parsed as { settings?: unknown; userDictionary?: unknown; updateSource?: unknown })
         : null;
     const obj = parsed && typeof parsed === 'object' ? (wrapper ? wrapper.settings : parsed) : null;
     if (!obj || typeof obj !== 'object') {
       showToast(`“${opened.name}” doesn't look like a settings export.`);
       return;
     }
+    const updateSource =
+      typeof wrapper?.updateSource === 'string' ? wrapper.updateSource.trim() : '';
+    const extras = updateSource
+      ? `\n\nUpdates will come from github.com/${updateSource}.`
+      : '';
     let importSecrets = false;
     if (SettingsStore.carriesSecrets(obj)) {
       const choice = await promptForChoice({
         message: 'Import settings?',
         detail:
-          'This replaces all your current settings. The file also contains API keys — use them in place of yours, or keep your own.',
+          'This replaces all your current settings. The file also contains API keys — use them in place of yours, or keep your own.' +
+          extras,
         choices: [
           { value: 'with', label: 'Import with API keys', primary: true },
           { value: 'without', label: 'Import, keep my keys' },
@@ -898,7 +911,7 @@ class SettingsModal {
       importSecrets = choice === 'with';
     } else if (
       !(await confirmDialog(
-        'Import settings? This replaces all your current settings (your API keys are kept).',
+        'Import settings? This replaces all your current settings (your API keys are kept).' + extras,
         { okLabel: 'Import' },
       ))
     ) {
@@ -906,6 +919,11 @@ class SettingsModal {
     }
     settings.replaceAll(obj, { importSecrets });
     importUserDictionary(wrapper?.userDictionary);
+    const electronHost = getElectronHost();
+    if (updateSource && electronHost) {
+      const result = await electronHost.setUpdateSource(updateSource).catch(() => null);
+      if (result && !result.ok) showToast(result.error);
+    }
     this.render(); // rebuild the dialog so every control reflects the import
     showToast('Settings imported.');
   }
