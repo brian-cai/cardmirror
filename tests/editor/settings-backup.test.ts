@@ -35,6 +35,42 @@ describe('settings export', () => {
   });
 });
 
+describe('settings export with secrets (opt-in)', () => {
+  it('includes set credentials only when asked, and never blank ones', () => {
+    const s = new SettingsStore();
+    expect(s.hasSecrets()).toBe(false);
+    s.set('anthropicApiKey', 'sk-secret');
+    s.set('pairingRelayToken', 'relay-tok');
+    expect(s.hasSecrets()).toBe(true);
+    expect('anthropicApiKey' in s.exportObject()).toBe(false);
+    const out = s.exportObject({ includeSecrets: true });
+    expect(out['anthropicApiKey']).toBe('sk-secret');
+    expect('googleTranslateApiKey' in out).toBe(false);
+    // The relay token is an ordinary setting: always exported.
+    expect(s.exportObject()['pairingRelayToken']).toBe('relay-tok');
+    expect(SettingsStore.carriesSecrets(out)).toBe(true);
+    expect(SettingsStore.carriesSecrets(s.exportObject())).toBe(false);
+  });
+
+  it('imports credentials only with importSecrets, keeping ones the file lacks', () => {
+    const a = new SettingsStore();
+    a.set('anthropicApiKey', 'from-file');
+    a.set('commentAuthor', 'Coach');
+    const file = a.exportObject({ includeSecrets: true });
+
+    const b = new SettingsStore();
+    b.set('anthropicApiKey', 'mine');
+    b.set('openrouterApiKey', 'my-router');
+    b.replaceAll(file);
+    expect(b.get('anthropicApiKey')).toBe('mine');
+    expect(b.get('commentAuthor')).toBe('Coach');
+
+    b.replaceAll(file, { importSecrets: true });
+    expect(b.get('anthropicApiKey')).toBe('from-file');
+    expect(b.get('openrouterApiKey')).toBe('my-router');
+  });
+});
+
 describe('settings import (replaceAll)', () => {
   it('overwrites listed fields and preserves the current API key', () => {
     const s = new SettingsStore();
