@@ -190,6 +190,7 @@ export const RIBBON_GROUPS: RibbonGroup[] = [
       'toggleMorphMode',
       'wordCountSelection',
       'openSettings',
+      'checkForUpdates',
       'cycleTheme',
       'minimizeWindow',
       'switchWindow',

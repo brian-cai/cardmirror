@@ -4535,6 +4535,9 @@ export type RibbonCommandId =
   | 'adjustFontSizeDown'
   | 'applyFontColor'
   | 'openSettings'
+  // Check for a CardMirror update now (desktop) — the Help-menu item as a
+  // command, for Windows / Linux, which have no menu bar.
+  | 'checkForUpdates'
   // Minimize the OS window. Desktop-only; the macOS Window menu's
   // Minimize item routes through this same command so its accelerator
   // follows user rebinds (Mod-m default restores the stock Cmd+M).
@@ -4791,6 +4794,7 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'adjustFontSizeDown',
   'applyFontColor',
   'openSettings',
+  'checkForUpdates',
   'minimizeWindow',
   'switchWindow',
   'openJournalsFolder',
@@ -5005,6 +5009,7 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   adjustFontSizeDown: 'Decrease Font Size by 1pt',
   applyFontColor: 'Apply Font Color',
   openSettings: 'Open Settings',
+  checkForUpdates: 'Check for Updates',
   minimizeWindow: 'Minimize Window',
   switchWindow: 'Switch Window',
   openJournalsFolder: 'Open Crash-Recovery Journals Folder',
@@ -5225,6 +5230,7 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
   sendDocToSlot1: ['one'],
   sendDocToSlot2: ['two'],
   sendDocToSlot3: ['three'],
+  checkForUpdates: ['update', 'updates', 'upgrade', 'new version', 'latest version'],
 };
 
 /**
@@ -5457,6 +5463,7 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   adjustFontSizeDown: '',
   applyFontColor: '',
   openSettings: '',
+  checkForUpdates: '',
   // Stock macOS chord; also works on Win/Linux. Rebindable like all.
   minimizeWindow: 'Mod-m',
   // Ctrl+Tab (Cmd+Tab is the OS app switcher on macOS, but Ctrl+Tab still
@@ -5742,6 +5749,8 @@ export interface RibbonContext {
    *  ribbon-button counterparts. All optional (default no-op) so
    *  tests and headless callers don't have to wire them up. */
   openSettings: () => void;
+  /** Run a manual update check (desktop; toasts the result). */
+  checkForUpdates: () => void;
   /** Minimize this OS window (desktop only; no-op elsewhere). */
   minimizeWindow: () => void;
   /** Open the Switch Window palette, or step it on when already open
@@ -5884,6 +5893,7 @@ const DEFAULT_RIBBON_CONTEXT: RibbonContext = {
   setNavDepth: () => {},
   lastFontColor: () => null,
   openSettings: () => {},
+  checkForUpdates: () => {},
   minimizeWindow: () => {},
   switchWindow: () => {},
   openJournalsFolder: () => {},
@@ -6756,6 +6766,12 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
       return (_state, dispatch) => {
         if (!dispatch) return true;
         ctx.openSettings();
+        return true;
+      };
+    case 'checkForUpdates':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.checkForUpdates();
         return true;
       };
     case 'minimizeWindow':

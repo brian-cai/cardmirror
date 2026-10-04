@@ -54,6 +54,7 @@ import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
 import { openDocMenu } from './doc-menu-ui.js';
 import { createReference } from './create-reference.js';
 import { showToast } from './toast.js';
+import { canCheckForUpdates, checkForUpdatesNow } from './update-check.js';
 import { installFileDragMark } from './file-drag-mark.js';
 import { maybeDecryptForOpen, OpenCancelledError, UnsupportedEncryptionError } from './open-encrypted.js';
 import { CLIPBOARD_BUSY_MESSAGE, writeClipboardHtml } from './clipboard-write.js';
@@ -2298,6 +2299,7 @@ const ribbonContext: RibbonContext = {
   // duplicate the host-side menu construction in two places.
   lastFontColor: () => settings.get('lastFontColor'),
   openSettings: () => settingsBtn.click(),
+  checkForUpdates: () => void checkForUpdatesNow(),
   minimizeWindow: () => {
     void getElectronHost()?.minimizeWindow();
   },
@@ -4577,6 +4579,8 @@ const VIEWLESS_RIBBON_COMMANDS = new Set<AnyCommandId>([
   // Opening the nav search is pane UI too — works from the nav pane
   // itself or with no doc focused.
   'searchNavPane',
+  // Update check: main-process work, no document needed.
+  'checkForUpdates',
   // Home screen overlay — pure UI, no doc needed. Must be view-
   // less so it works in multi-pane with zero panes open.
   'goHome',
@@ -4636,6 +4640,7 @@ function runViewlessRibbon(id: AnyCommandId): void {
     case 'resetDefaultColors': ribbonContext.resetDefaultColors(); return;
     case 'toggleNavPane': ribbonContext.toggleNavPane(); return;
     case 'searchNavPane': ribbonContext.searchNavPane(); return;
+    case 'checkForUpdates': ribbonContext.checkForUpdates(); return;
     case 'goHome': ribbonContext.goHome(); return;
     case 'openQuickCardSearch': ribbonContext.openQuickCardSearch(); return;
     case 'insertLiveZone': ribbonContext.insertLiveZone(); return;
@@ -7371,6 +7376,7 @@ const homeCallbacks: HomeScreenCallbacks = {
     const chipHost = getElectronHost();
     if (chipHost) initUpdateChip(el, chipHost);
   },
+  checkForUpdates: canCheckForUpdates() ? () => void checkForUpdatesNow() : undefined,
   // Clean: Electron gets the folder-recursive modal; web cleans one file at a time.
   clean:
     getHost().kind === 'electron'
@@ -10629,24 +10635,31 @@ async function initSingleDocBoot(): Promise<void> {
         console.warn('Auto-launch update check failed:', err);
       }
     }
-    // Plus a DAILY background check (also silent unless an update is
-    // found), so an app left running for days still notices updates.
-    // Re-reads the setting each tick, so turning "Check for updates
-    // automatically" off stops it; first window only, like above.
+    // Plus background checks while the app stays open (silent unless an
+    // update is found): every 4 hours, and when the window regains focus
+    // if the last check was over an hour ago — so a CardMirror left open
+    // for days, or reopened from the dock, notices a release the same
+    // day instead of up to 24 hours later. Re-reads the settings each
+    // time, so turning "Check for updates automatically" off (or the
+    // tournament pause) stops it; first window only, like above.
     if (electron) {
-      window.setInterval(
-        () => {
-          if (
-            settings.get('checkForUpdatesOnLaunch') &&
-            settings.get('updateChecksPausedUntil') <= Date.now() // tournament pause
-          ) {
-            void electron.triggerAutoUpdateCheck().catch((err) => {
-              console.warn('Daily update check failed:', err);
-            });
-          }
-        },
-        24 * 60 * 60 * 1000,
-      );
+      let lastCheck = Date.now();
+      const backgroundCheck = (): void => {
+        if (
+          !settings.get('checkForUpdatesOnLaunch') ||
+          settings.get('updateChecksPausedUntil') > Date.now() // tournament pause
+        ) {
+          return;
+        }
+        lastCheck = Date.now();
+        void electron.triggerAutoUpdateCheck().catch((err) => {
+          console.warn('Background update check failed:', err);
+        });
+      };
+      window.setInterval(backgroundCheck, 4 * 60 * 60 * 1000);
+      window.addEventListener('focus', () => {
+        if (Date.now() - lastCheck > 60 * 60 * 1000) backgroundCheck();
+      });
     }
   }
 }

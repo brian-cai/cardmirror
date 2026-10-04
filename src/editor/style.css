@@ -2286,6 +2286,21 @@ body:not(.pmd-multi-doc) #app {
 .pmd-home-update[hidden] {
   display: none;
 }
+/* Home screen "Check for updates": a quiet text button under the title
+   (the accent-outlined update button replaces it when one is waiting). */
+.pmd-home-check-updates {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--pmd-c-text-muted);
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pmd-home-check-updates:hover { color: var(--pmd-c-accent); }
+.pmd-home-check-updates[hidden] { display: none; }
 
 .status-segment {
   display: flex;

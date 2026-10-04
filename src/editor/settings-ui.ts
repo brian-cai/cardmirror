@@ -81,6 +81,7 @@ import { launchBenchmarkOverlay } from './benchmark-ui.js';
 import { resetTimer } from './timer-state.js';
 import { applyTimerProfile } from './timer-profile.js';
 import { showToast } from './toast.js';
+import { checkForUpdatesNow } from './update-check.js';
 import { setIcon, CUSTOM_BUTTON_ICONS, type IconName } from './icons';
 import { availableRibbonCommandIds } from './ribbon-availability.js';
 import { commandLabelFor, RIBBON_COMMAND_LABELS, type RibbonCommandId, ribbonKeyStringFor, formatKeyForDisplay } from './ribbon-commands.js';
@@ -1977,7 +1978,8 @@ function buildInstallInfoSection(): HTMLElement {
   if (electronHost && !isLiteBuild()) {
     // "Check for updates automatically" toggle — kept next to the
     // manual Check-for-updates button since both govern updates.
-    // When enabled, the app checks at launch AND once a day, staying
+    // When enabled, the app checks at launch, every 4 hours, and on
+    // returning to the window after an hour, staying
     // silent unless an update is found. Only the first window of a
     // session runs the checks; spawned windows skip them. The
     // triggers live in `index.ts`'s boot path.
@@ -2054,31 +2056,9 @@ function buildInstallInfoSection(): HTMLElement {
     updatesBtn.addEventListener('click', () => {
       updatesBtn.disabled = true;
       updatesBtn.textContent = 'Checking…';
-      const restore = (): void => {
+      void checkForUpdatesNow().finally(() => {
         updatesBtn.disabled = false;
         updatesBtn.textContent = 'Check for updates';
-      };
-      // .catch handles the case where the main process is older
-      // than the renderer (dev hot-reload of the renderer without
-      // restarting Electron leaves no IPC handler registered, so
-      // `invoke` rejects). Without it the button would stay in
-      // the disabled "Checking…" state forever.
-      electronHost.checkForUpdates().then((result) => {
-        restore();
-        if (result.status === 'latest') {
-          showToast("You're on the latest version.");
-        } else if (result.status === 'updating') {
-          // All platforms stage in the background now (mac via the
-          // swap updater); the chip appears when it's ready.
-          showToast('Update available — downloading in the background; watch for the status-bar chip.');
-        } else if (result.status === 'dev') {
-          showToast('Update checks are only active in packaged builds.');
-        } else {
-          showToast(`Update check failed: ${result.message ?? 'unknown error'}`);
-        }
-      }).catch((err: unknown) => {
-        restore();
-        showToast(`Update check failed: ${err instanceof Error ? err.message : String(err)}`);
       });
     });
     actions.appendChild(updatesBtn);

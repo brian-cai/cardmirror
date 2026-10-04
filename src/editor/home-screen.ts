@@ -75,6 +75,10 @@ export interface HomeScreenCallbacks {
    *  action as the status-bar update chip, which home covers). Called
    *  once at mount with the hidden button; omitted → it stays hidden. */
   mountUpdateChip?: (el: HTMLButtonElement) => void;
+  /** Run a manual update check (desktop, not Lite); omitted → no
+   *  "Check for updates" button. Windows / Linux have no menu bar, so
+   *  this is their one-click way to look for an update. */
+  checkForUpdates?: () => void;
   /** Open the .docx style cleaner. Electron-only (recursive folder I/O +
    *  write-to-path), like bulkConvert; omitted on the web edition. */
   clean?: () => void;
@@ -177,6 +181,22 @@ class HomeScreen {
     updateBtn.hidden = true;
     header.appendChild(updateBtn);
     callbacks.mountUpdateChip?.(updateBtn);
+    // "Check for updates" — shown whenever there's no update waiting (the
+    // update button above takes its place when there is).
+    if (callbacks.checkForUpdates) {
+      const run = callbacks.checkForUpdates;
+      const checkBtn = document.createElement('button');
+      checkBtn.type = 'button';
+      checkBtn.className = 'pmd-home-check-updates';
+      checkBtn.textContent = 'Check for updates';
+      checkBtn.addEventListener('click', () => run());
+      const sync = (): void => {
+        checkBtn.hidden = !updateBtn.hidden;
+      };
+      new MutationObserver(sync).observe(updateBtn, { attributes: true, attributeFilter: ['hidden'] });
+      sync();
+      header.appendChild(checkBtn);
+    }
     inner.appendChild(header);
 
     // Number-key actions: the 1..N shortcuts (see onKeyDown), in reading
