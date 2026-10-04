@@ -5442,8 +5442,9 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   // ribbon + nav-pane × + pull-tab; the keybinding is a power-
   // user convenience layer, not a discoverable default.
   toggleNavPane: '',
-  // No default — the pane's magnifier is the primary UI.
-  searchNavPane: '',
+  // Word's Navigation-pane search lives on Mod-F; ours takes Mod-Shift-F
+  // since Mod-F is the find bar.
+  searchNavPane: 'Mod-Shift-f',
   // No defaults — the pane's own 1–4 buttons are the primary UI.
   setNavDepth1: '',
   setNavDepth2: '',
@@ -5485,7 +5486,8 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   sendDocToSlot1: 'Mod-Shift-1',
   sendDocToSlot2: 'Mod-Shift-2',
   sendDocToSlot3: 'Mod-Shift-3',
-  toggleSlotExpand: 'Mod-Shift-f',
+  // Unbound since Mod-Shift-F went to Search Navigation Pane.
+  toggleSlotExpand: '',
   // Unbound by default — rebindable via Settings → Keyboard shortcuts.
   hideSlot: '',
   revealAllSlots: '',
