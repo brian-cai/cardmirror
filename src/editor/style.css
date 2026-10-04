@@ -15343,7 +15343,7 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   display: block;
   width: 100%;
   box-sizing: border-box;
-  margin: 0 0 0.35rem;
+  margin: 0.35rem 0;
   padding: 0.3rem 0.5rem;
   font: inherit;
   font-size: 0.85rem;

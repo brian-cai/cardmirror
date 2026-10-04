@@ -379,7 +379,9 @@ export class SendPillController {
     this.recentRows.clear();
 
     // Click-open search (CSS hides it during a drag, when typing can't
-    // happen anyway): filters the rows below; Enter sends to the top one.
+    // happen anyway): filters the rows; Enter sends to the top one. It sits
+    // at the BOTTOM, just above the actions row, so it stays put while
+    // the list above it shrinks and grows.
     const search = document.createElement('input');
     search.type = 'search';
     search.className = 'pmd-send-search';
@@ -398,7 +400,6 @@ export class SendPillController {
       }
     });
     this.searchEl = search;
-    this.panel.appendChild(search);
 
     // Hidden recipients stay OUT of the pill (that is what hiding is)
     // but remain reachable elsewhere: group sends still fan out to
@@ -510,6 +511,7 @@ export class SendPillController {
     if (collabSettingsAvailable()) {
       actions.appendChild(collabSettingsButton('pmd-send-action', () => this.collapse()));
     }
+    this.panel.appendChild(search);
     this.panel.appendChild(actions);
   }
 
