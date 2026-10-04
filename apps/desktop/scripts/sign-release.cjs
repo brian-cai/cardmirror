@@ -38,9 +38,13 @@ if (files.length === 0) {
   process.exit(1);
 }
 for (const name of files) {
+  // Sign under the PUBLISHED name: electron-builder uploads "CardMirror
+  // Setup 1.2.3.exe" as "CardMirror-Setup-1.2.3.exe" (spaces → dashes), and
+  // that is the name latest.yml lists and the app verifies against.
+  const published = name.replace(/ /g, '-');
   const sha512 = createHash('sha512').update(fs.readFileSync(path.join(dir, name))).digest('base64');
-  const msg = Buffer.from(`cardmirror-update-v1\n${name}\n${version}\n${sha512}`, 'utf8');
-  const sigPath = path.join(dir, `${name}.sig`);
+  const msg = Buffer.from(`cardmirror-update-v1\n${published}\n${version}\n${sha512}`, 'utf8');
+  const sigPath = path.join(dir, `${published}.sig`);
   fs.writeFileSync(sigPath, sign(null, msg, key).toString('base64') + '\n');
   console.log(sigPath);
 }

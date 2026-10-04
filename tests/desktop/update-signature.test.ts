@@ -48,6 +48,18 @@ describe('update signatures', () => {
     ).toBe('test');
   });
 
+  it('signs a Windows installer under its published (dashed) name', async () => {
+    const { pem, trusted } = keypair();
+    writeFileSync(path.join(dir, 'CardMirror Setup 1.14.3.exe'), 'nsis bytes');
+    signWithScript(pem, '1.14.3');
+    const published = 'CardMirror-Setup-1.14.3.exe';
+    const sha = await sha512File(path.join(dir, 'CardMirror Setup 1.14.3.exe'));
+    const sig = readFileSync(path.join(dir, `${published}.sig`), 'utf8');
+    expect(
+      verifyArtifactSignature({ fileName: published, version: '1.14.3', sha512b64: sha, signatureB64: sig, trustedKeys: [trusted] }),
+    ).toBe('test');
+  });
+
   it('refuses tampered bytes, another key, another file name, or another version', async () => {
     const { pem, trusted } = keypair();
     const other = keypair().trusted;
