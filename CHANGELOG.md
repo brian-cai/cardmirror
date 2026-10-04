@@ -5,6 +5,39 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.1 — 2026-10-03
+
+Brian's (@brian-cai) build of CardMirror: everything in the official
+1.14.0, plus the changes below. Installs of this build update from
+github.com/brian-cai/cardmirror; to go back to the official releases,
+open Settings → General → About this install and press Reset to default
+under Update source.
+
+### Added
+
+- **Update source.** Settings → General → About this install: enter a
+  GitHub repository and auto-update follows its releases.
+- **Move your whole setup to another computer.** Back up settings also
+  saves your dictionary words and update source, and can include your
+  API keys if you choose.
+- **Search tab in Settings**, with Find and every file-search setting.
+- **File search: deprioritized folders.** Their matches still show, but
+  always last.
+- **Ctrl/Cmd+Shift+F searches the navigation pane** (Search Navigation
+  Pane, rebindable). Toggle Slot Expand / Restore is now unbound.
+- **Ribbon: Paste, Condense, Shrink.** The style buttons are a 4×2 block
+  (Pocket, Hat, Block, Tag / Analytic, Underline, Emphasis, Clear) with
+  Paste, Condense, Cite and Shrink beside it. Undertag has no button.
+- **Save As PDF**, and opening debate PDFs (Verbatim / CardMirror
+  exports) as documents.
+
+### Changed
+
+- **Windows open full size**, filling the screen.
+- **High School timer by default** (3/5/8, 8 minutes prep); installs on
+  the untouched College default switch once.
+- **Settings search** also matches buttons ("export", "import", "backup").
+
 ## 1.14.0 — 2026-10-03
 
 ### Added

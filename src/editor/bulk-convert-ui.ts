@@ -20,7 +20,6 @@ import { settings } from './settings.js';
 import { runWebFileTool } from './web-file-tools.js';
 import { setIcon } from './icons';
 import { isBackdropClick } from './backdrop-click.js';
-
 import { convertPdf } from './pdf-open.js';
 
 type Direction = 'docx2cmir' | 'cmir2docx' | 'pdf2docx';
