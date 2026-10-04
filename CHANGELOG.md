@@ -12,10 +12,12 @@ github.com/brian-cai/cardmirror.
 
 ### Added
 
-- **Check for updates from anywhere.** A "Check for updates" link on the
-  home screen, and a Check for Updates command in the command bar (you
-  can give it a shortcut) — Windows has no menu bar, so this used to be
-  buried in Settings.
+- **Check for updates from any document.** The status bar now always
+  shows "Check for updates" next to the read-time and sync readouts;
+  click it to check right away, and it turns into the install button
+  when an update is ready. There's also a Check for Updates command in
+  the command bar (you can give it a shortcut). Windows has no menu bar,
+  so this used to be buried in Settings.
 
 ### Changed
 
