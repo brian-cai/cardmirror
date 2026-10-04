@@ -24,6 +24,9 @@ export const CATEGORY_TABS: {
 }[] = [
   { id: 'general', label: 'General' },
   { id: 'files', label: 'Files' },
+  // Find, file search, and its folder priority lists — one place for
+  // everything that decides what a search shows and in what order.
+  { id: 'search', label: 'Search' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'editing', label: 'Editing' },
   { id: 'shortcuts', label: 'Keyboard' },

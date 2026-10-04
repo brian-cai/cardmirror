@@ -2130,6 +2130,7 @@ export function hasCustomizedSettings(
 export type SettingsCategory =
   | 'general'
   | 'files'
+  | 'search'
   | 'appearance'
   | 'accessibility'
   | 'editing'
@@ -2616,7 +2617,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     description:
       "When on, reopening the find bar (Ctrl-F / Ctrl-H / Alt-F) pre-fills the input with whatever you last searched for. Off by default — the bar opens empty so each search is a clean slate.",
     kind: 'toggle',
-    category: 'general',
+    category: 'search',
     section: 'Find',
   },
   {
@@ -2625,7 +2626,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     description:
       'Ctrl-F groups search results by which kind of paragraph they appear in, and Next steps through groups in this order. Within each group, the first match is whichever is closest to your cursor (the cursor counts as the top — matches AFTER it come first, then matches before, like wrap-around). Reorder via the up / down buttons. Alt-F ignores this and goes purely by proximity.',
     kind: 'findCategoryOrder',
-    category: 'general',
+    category: 'search',
     section: 'Find',
   },
   {
@@ -2876,7 +2877,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     description:
       'Folders for the command-palette file search (type "f " in the search bar). Each is scanned recursively for .cmir and .docx files. Add as many as you like — overlapping folders are fine; a file found under more than one is searched only once. Leave the list empty to disable file search.',
     kind: 'folderList',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
   },
@@ -2888,7 +2889,7 @@ export const SETTING_METADATA: SettingMeta[] = [
       + 'An excluded folder hides everything under it. Add entries here, or use the '
       + 'exclude button (⊘) on a file result in the search bar.',
     kind: 'pathList',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
   },
@@ -2899,7 +2900,7 @@ export const SETTING_METADATA: SettingMeta[] = [
       'Matches from these folders (or files) always list first, above every other result. '
       + 'Among themselves they are still ordered by how well they match.',
     kind: 'pathList',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
     aliases: ['folder priority', 'prioritize folder', 'boost folder', 'search ranking', 'top folders'],
@@ -2912,7 +2913,7 @@ export const SETTING_METADATA: SettingMeta[] = [
       + 'elsewhere, but a better match from another folder still comes first. If a folder is '
       + 'listed in both sections, the more specific (deeper) entry wins.',
     kind: 'pathList',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
     aliases: ['folder priority', 'prefer folder', 'boost folder', 'search ranking'],
@@ -2925,7 +2926,7 @@ export const SETTING_METADATA: SettingMeta[] = [
       + 'every other result — unlike exclusions, which hide them. Good for archives and old '
       + 'files. If a folder is listed in more than one section, the deeper entry wins.',
     kind: 'pathList',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
     aliases: ['folder priority', 'deprioritize folder', 'demote folder', 'bury folder', 'search ranking', 'archive'],
@@ -2936,7 +2937,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     description:
       'Which document formats appear in the file search results — both .cmir and .docx, or just one. Each result shows its format on its badge.',
     kind: 'fileSearchFormats',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
   },
@@ -2946,7 +2947,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     description:
       'After picking a file in the search palette (Tab), which structural objects show up as you search inside it. Inserting one drops the matching card (tag/cite), block section (block/hat/pocket), or analytic unit into your document. Tags are always findable by their citation, so Cite (standalone cite rows) is off by default — turn it on to also list cites on their own.',
     kind: 'fileSearchObjectTypes',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
   },
@@ -2956,7 +2957,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     description:
       "How far the outline is expanded when you first dive into a file (before typing). Pocket shows only top-level headings; Tag expands everything. Default Block. Right-click any pocket / hat / block in the outline to expand or collapse it.",
     kind: 'fileSearchOutlineDepth',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
   },
@@ -2966,7 +2967,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     description:
       'How equally-relevant file results are ordered. Results are ranked by match quality first (exact name, then prefix, then word-start, then anywhere in the name or folder); this decides ties within a tier — and the order of the browse list before you type. Recency (default) puts the most recently edited file first; Alphabetical sorts by name.',
     kind: 'fileSearchTiebreak',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
     aliases: ['file search sort', 'file sort order', 'recency', 'alphabetical', 'sort files'],
@@ -2977,7 +2978,7 @@ export const SETTING_METADATA: SettingMeta[] = [
     description:
       "On by default. Keeps your recent and frequently-used .cmir files 'warm' (parsed and held in memory) so diving into them from the search palette is instant. Turn off if you're sensitive to memory use — then only files you pin by hand (★ / Alt+P) are kept warm.",
     kind: 'toggle',
-    category: 'files',
+    category: 'search',
     section: 'File search',
     electronOnly: true,
   },
