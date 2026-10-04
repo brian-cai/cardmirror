@@ -126,6 +126,7 @@ import {
   flowPost,
 } from './bridge-handshake.js';
 import { hardenStdio } from './stdio-harden.js';
+import { installPermissionPolicy, installWebHardening } from './web-hardening.js';
 
 // FIRST executable statement: once stdio's far end can be a closed
 // pipe (Linux launches), any console call — ours or Electron's own
@@ -134,6 +135,14 @@ import { hardenStdio } from './stdio-harden.js';
 hardenStdio();
 
 const DEV_SERVER_URL = 'http://localhost:5173';
+
+// Every webContents: no new windows (links go to the browser), no
+// navigation off the app's own pages, no <webview> (web-hardening.ts).
+const APP_ORIGINS = {
+  devServerUrl: app.isPackaged ? null : DEV_SERVER_URL,
+  rendererDir: app.isPackaged ? path.join(process.resourcesPath, 'renderer') : path.join(__dirname, '..', '..', '..'),
+};
+installWebHardening(app, shell, APP_ORIGINS);
 
 // macOS scroll-perf tuning. Belt-and-suspenders: none of these
 // switches was the root fix for the historical scroll stalls (the
@@ -1978,6 +1987,8 @@ async function pruneHistoryFiles(): Promise<void> {
 }
 
 void app.whenReady().then(() => {
+  // Permissions: only what the app uses, only for its own pages.
+  installPermissionPolicy(session.defaultSession, APP_ORIGINS);
   // Lite enforcement, desktop edition: the CSP equivalent. Every
   // http(s)/ws request from ANY renderer session is cancelled at the
   // network layer — "does not talk to the internet" as a property of

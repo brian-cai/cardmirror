@@ -150,7 +150,16 @@
       "owner": "ant981228",
       "repo": "cardmirror"
     },
-    "afterSign": "scripts/sign-mac.js"
+    "afterSign": "scripts/sign-mac.js",
+    "electronFuses": {
+      "runAsNode": true,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": true
+    }
   },
   "dependencies": {
     "electron-updater": "^6.8.3",
