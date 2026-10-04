@@ -16689,3 +16689,52 @@ body.pmd-multi-doc #collab-chip {
   font-size: 0.75rem;
   color: var(--pmd-c-text-muted);
 }
+
+/* ── Document frames: shared session = blue, speech doc = red ─────────
+   A colored frame around the document says "this is shared" or "this is
+   the speech doc" at a glance. Drawn as an overlay (pointer-events: none,
+   above the editor's own backgrounds, which would hide an inset shadow on
+   the pane itself). Both at once: red outside, blue inside.
+     - three-pane: around each pane (.pmd-pane-shared / .pmd-pane-speech)
+     - one doc per window: around the whole window (body classes) */
+:root {
+  --pmd-c-frame-shared: #2563eb;
+  --pmd-c-frame-speech: #dc2626;
+  --pmd-frame-width: 3px;
+}
+:root[data-theme="dark"] {
+  --pmd-c-frame-shared: #5a8fff;
+  --pmd-c-frame-speech: #f87171;
+}
+.pmd-pane-shared::after,
+.pmd-pane-speech::after,
+body:not(.pmd-multi-doc).pmd-collab-active::after,
+body:not(.pmd-multi-doc).pmd-speech-banner-visible::after {
+  content: '';
+  pointer-events: none;
+  z-index: 300;
+}
+.pmd-pane-shared::after,
+.pmd-pane-speech::after {
+  position: absolute;
+  inset: 0;
+}
+body:not(.pmd-multi-doc).pmd-collab-active::after,
+body:not(.pmd-multi-doc).pmd-speech-banner-visible::after {
+  position: fixed;
+  inset: 0;
+}
+.pmd-pane-shared::after,
+body:not(.pmd-multi-doc).pmd-collab-active::after {
+  box-shadow: inset 0 0 0 var(--pmd-frame-width) var(--pmd-c-frame-shared);
+}
+.pmd-pane-speech::after,
+body:not(.pmd-multi-doc).pmd-speech-banner-visible::after {
+  box-shadow: inset 0 0 0 var(--pmd-frame-width) var(--pmd-c-frame-speech);
+}
+.pmd-pane-speech.pmd-pane-shared::after,
+body:not(.pmd-multi-doc).pmd-speech-banner-visible.pmd-collab-active::after {
+  box-shadow:
+    inset 0 0 0 var(--pmd-frame-width) var(--pmd-c-frame-speech),
+    inset 0 0 0 calc(var(--pmd-frame-width) * 2) var(--pmd-c-frame-shared);
+}

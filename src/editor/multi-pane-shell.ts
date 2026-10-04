@@ -1238,6 +1238,8 @@ class Slot {
   refreshCopresence(): void {
     const uid = this.visible?.uid ?? null;
     const cp = uid ? collabCopresenceFor(uid) : null;
+    // Blue frame around a pane whose doc is in a collaboration session.
+    this.paneEl.classList.toggle('pmd-pane-shared', !!cp);
     if (!cp) {
       this.copresenceEl.hidden = true;
       this.copresenceEl.replaceChildren();

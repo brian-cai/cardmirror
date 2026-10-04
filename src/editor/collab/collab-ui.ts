@@ -328,6 +328,8 @@ function chipEl(): HTMLElement | null {
 function updateChip(status: { connected: boolean; queuedUpdates: number } | null): void {
   const chip = chipEl();
   if (!chip) return;
+  // Blue window frame while this window's doc is in a session.
+  document.body.classList.toggle('pmd-collab-active', !!status);
   if (!status) {
     chip.hidden = true;
     chip.replaceChildren();
