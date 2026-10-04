@@ -74,6 +74,7 @@ import { resetSessionCommentIds } from '../comments-plugin.js';
 import { collabEnabled } from './collab-gate.js';
 import { decodeShareCode } from './collab-crypto.js';
 import { CollabSession } from './collab-session.js';
+import { toggleSessionPeople } from './session-people.js';
 import { compareAppVersions } from '../relay-protocol.js';
 import { appVersion } from '../install-info.js';
 
@@ -333,6 +334,23 @@ function updateChip(status: { connected: boolean; queuedUpdates: number } | null
     return;
   }
   chip.hidden = false;
+  if (!chip.dataset['peopleWired']) {
+    // Click (or Enter / Space) → who's in this session.
+    chip.dataset['peopleWired'] = '1';
+    chip.setAttribute('role', 'button');
+    chip.tabIndex = 0;
+    chip.title = 'Show who\u2019s in this session';
+    chip.classList.add('pmd-status-button');
+    const openPeople = (): void =>
+      toggleSessionPeople(chip, () => chipSession()?.cursors.presence() ?? []);
+    chip.addEventListener('click', openPeople);
+    chip.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openPeople();
+      }
+    });
+  }
   const text = status.connected
     ? status.queuedUpdates > 0
       ? `Session: sending ${status.queuedUpdates}…`

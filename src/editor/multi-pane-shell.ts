@@ -27,6 +27,7 @@
  */
 
 import { EditorState, Selection, TextSelection } from 'prosemirror-state';
+import { toggleSessionPeople } from './collab/session-people.js';
 import { isFileChangedOnDiskError } from './error-surface.js';
 import {
   noteSavedInPlace,
@@ -767,14 +768,45 @@ class Slot {
     });
     footer.appendChild(wcBtn);
     this.wcEl = document.createElement('span');
-    this.wcEl.className = 'pmd-pane-wc';
+    this.wcEl.className = 'pmd-pane-wc pmd-status-link';
     this.wcEl.textContent = '—';
+    // Links to the readers' words-per-minute settings, like the status bar.
+    this.wcEl.setAttribute('role', 'link');
+    this.wcEl.tabIndex = 0;
+    this.wcEl.title = 'Read time — click to set reading speeds (WPM)';
+    const openReaders = (): void =>
+      void import('./settings-ui.js').then((m) => m.openSettings({ settingKey: 'readers' }));
+    this.wcEl.addEventListener('click', openReaders);
+    this.wcEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        openReaders();
+      }
+    });
     footer.appendChild(this.wcEl);
     // Per-slot co-editing indicator (this doc's session status + who's here).
     // Empty/hidden until the slot's visible doc joins a session.
     this.copresenceEl = document.createElement('span');
-    this.copresenceEl.className = 'pmd-pane-copresence';
+    this.copresenceEl.className = 'pmd-pane-copresence pmd-status-button';
     this.copresenceEl.hidden = true;
+    // Click (or Enter / Space) → who's in this doc's session.
+    this.copresenceEl.setAttribute('role', 'button');
+    this.copresenceEl.tabIndex = 0;
+    this.copresenceEl.title = 'Show who\u2019s in this session';
+    const openPeople = (): void => {
+      const anchor = this.copresenceEl;
+      toggleSessionPeople(anchor, () => {
+        const uid = this.visible?.uid ?? null;
+        return (uid ? collabCopresenceFor(uid)?.peers : null) ?? [];
+      });
+    };
+    this.copresenceEl.addEventListener('click', openPeople);
+    this.copresenceEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openPeople();
+      }
+    });
     footer.appendChild(this.copresenceEl);
     const openBtn = document.createElement('button');
     openBtn.type = 'button';

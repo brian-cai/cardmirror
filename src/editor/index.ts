@@ -933,6 +933,24 @@ const manageFlashcardsBtn = document.getElementById('manage-flashcards-btn') as 
 const askAiBtn = document.getElementById('ask-ai-btn') as HTMLButtonElement | null;
 const commentsColumnEl = document.getElementById('comments-column') as HTMLElement | null;
 const wordCountText = document.getElementById('word-count-text')!;
+// The read-time readout links to the readers' words-per-minute settings.
+{
+  const display = document.getElementById('word-count-display');
+  if (display) {
+    display.classList.add('pmd-status-link');
+    display.setAttribute('role', 'link');
+    display.tabIndex = 0;
+    display.title = 'Read-aloud word count and read time — click to set reading speeds (WPM)';
+    const open = (): void => void loadSettingsUi().then((m) => m.openSettings({ settingKey: 'readers' }));
+    display.addEventListener('click', open);
+    display.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        open();
+      }
+    });
+  }
+}
 const cursorColorDisplay = document.getElementById('cursor-color-display') as HTMLElement;
 const cursorColorText = document.getElementById('cursor-color-text')!;
 const plainPasteToggleBtn = document.getElementById('plain-paste-toggle-btn') as HTMLButtonElement | null;
