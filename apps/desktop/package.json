@@ -162,15 +162,15 @@
     }
   },
   "dependencies": {
-    "electron-updater": "^6.8.3",
-    "koffi": "^3.0.2"
+    "electron-updater": "6.8.3",
+    "koffi": "3.0.2"
   },
   "devDependencies": {
     "sherpa-onnx-node": "1.13.7",
-    "concurrently": "^9.1.0",
-    "electron": "^42.2.0",
-    "electron-builder": "^26.8.1",
-    "typescript": "^5.7.2",
-    "wait-on": "^8.0.1"
+    "concurrently": "9.2.1",
+    "electron": "42.2.0",
+    "electron-builder": "26.8.1",
+    "typescript": "5.9.3",
+    "wait-on": "8.0.5"
   }
 }
