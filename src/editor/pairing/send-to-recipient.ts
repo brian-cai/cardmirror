@@ -18,6 +18,7 @@ import { setIcon } from '../icons';
 import { showToast } from '../toast.js';
 import { resolveStarredTarget, sendViewTo } from './send-to-starred.js';
 import { isBackdropClick } from '../backdrop-click.js';
+import { byFrequency, groupKey, sendScores } from './send-frequency.js';
 
 export interface RecipientChoice {
   kind: 'partner' | 'group';
@@ -28,12 +29,14 @@ export interface RecipientChoice {
   hidden: boolean;
 }
 
-/** The picker's rows, in display order: visible contacts (list order),
- *  then groups, then hidden contacts. Contacts without a code are
- *  skipped (they can't be sent to). Pure, for tests. */
+/** The picker's rows, in display order: visible contacts and groups
+ *  together, most-sent-to first (`score`, from send-frequency.ts; ties keep
+ *  contacts-then-groups list order), then hidden contacts. Contacts without
+ *  a code are skipped (they can't be sent to). Pure, for tests. */
 export function listRecipientChoices(
   partners: readonly PairingPartner[],
   groups: readonly PairingGroup[],
+  score: (key: string) => number = () => 0,
 ): RecipientChoice[] {
   const known = partners.filter((p) => p.code);
   const partnerRow = (p: PairingPartner): RecipientChoice => ({
@@ -55,7 +58,19 @@ export function listRecipientChoices(
       hidden: false,
     };
   });
-  return [...visible, ...groupRows, ...hidden];
+  const keyOf = (c: RecipientChoice): string => {
+    if (c.kind === 'partner') return c.ref;
+    return groupKey(groups.find((g) => g.id === c.ref)?.label ?? c.label);
+  };
+  return [...byFrequency([...visible, ...groupRows], keyOf, score), ...hidden];
+}
+
+/** Whether a row matches the search: every word typed appears somewhere in
+ *  its name or second line ("kab ar" finds "Kabeer Arora"). */
+export function recipientMatches(choice: RecipientChoice, query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = `${choice.label} ${choice.sub}`.toLowerCase();
+  return words.every((w) => hay.includes(w));
 }
 
 /** Modal list of contacts and groups (the Select Speech Doc dialog's
@@ -104,13 +119,13 @@ export function pickRecipient(choices: RecipientChoice[]): Promise<RecipientChoi
     intro.textContent = 'Send the current card (or selection) to:';
     dialog.appendChild(intro);
 
-    // Type-to-filter when the list is long enough to need it.
+    // Search: always there (type a name, Enter sends to the top match).
     const filter = document.createElement('input');
     filter.type = 'search';
     filter.className = 'pmd-list-pick-filter';
-    filter.placeholder = 'Filter…';
-    filter.setAttribute('aria-label', 'Filter recipients');
-    if (choices.length > 6) dialog.appendChild(filter);
+    filter.placeholder = 'Search people and groups…';
+    filter.setAttribute('aria-label', 'Search recipients');
+    if (choices.length > 0) dialog.appendChild(filter);
 
     const list = document.createElement('div');
     list.className = 'pmd-list-pick-list';
@@ -145,9 +160,9 @@ export function pickRecipient(choices: RecipientChoice[]): Promise<RecipientChoi
       rows.push({ el: row, choice });
     }
     const applyFilter = (): void => {
-      const q = filter.value.trim().toLowerCase();
+      const q = filter.value.trim();
       for (const r of rows) {
-        r.el.hidden = q.length > 0 && !r.choice.label.toLowerCase().includes(q) && !r.choice.sub.toLowerCase().includes(q);
+        r.el.hidden = q.length > 0 && !recipientMatches(r.choice, q);
       }
     };
     filter.addEventListener('input', applyFilter);
@@ -186,7 +201,7 @@ export async function sendViewToRecipient(view: EditorView): Promise<void> {
     showToast('Card sharing is off');
     return;
   }
-  const choices = listRecipientChoices(settings.get('pairingPartners'), settings.get('pairingGroups'));
+  const choices = listRecipientChoices(settings.get('pairingPartners'), settings.get('pairingGroups'), sendScores());
   const choice = await pickRecipient(choices);
   if (!choice) return;
   const target = resolveStarredTarget(

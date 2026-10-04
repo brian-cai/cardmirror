@@ -14,7 +14,8 @@
 import { getElectronHost } from '../host/index.js';
 import { collabEnabled } from '../collab/collab-gate.js';
 import { webEntitlementToken } from '../collab/web-account.js';
-import { RELAY_FIX_PATH } from '../relay-decline.js';
+import { RELAY_FIX_PATH } from '../relay-decline.js';import { recordSend } from './send-frequency.js';
+
 
 /** The minimal card shape sent over the wire — the dropzone's existing
  *  serialized slice plus a label and node kind. */
@@ -80,12 +81,14 @@ class RelayClient {
         // Web sender: same wire, sealed in the renderer.
         try {
           const m = await import('./web-mailbox.js');
-          return await m.webPairingSend({
+          const res = await m.webPairingSend({
             recipientCodes: targets,
             item,
             via: opts?.via,
             minReceiverVersion: opts?.minReceiverVersion,
           });
+          if (res.ok > 0) recordSend(targets, opts?.via);
+          return res;
         } catch {
           return { ok: 0, fail: targets.length, authFail: 0 };
         }
@@ -99,6 +102,8 @@ class RelayClient {
         via: opts?.via,
         minReceiverVersion: opts?.minReceiverVersion,
       });
+      // Delivered somewhere: count it toward who you send to most.
+      if ((res?.ok ?? 0) > 0) recordSend(targets, opts?.via);
       // authFail ?? 0 keeps an older main (no decline counting) working.
       return { ok: res?.ok ?? 0, fail: res?.fail ?? 0, authFail: res?.authFail ?? 0 };
     } catch {

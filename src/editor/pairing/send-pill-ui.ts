@@ -37,6 +37,7 @@ import { promptForText } from '../text-prompt.js';
 import { normalizePairingCode, looksLikePairingCode } from './pairing-ids.js';
 import { recentSenders } from './inbox-store.js';
 import { setIcon } from '../icons';
+import { byFrequency, groupKey, sendScores } from './send-frequency.js';
 
 interface SendPillMountOptions {
   parent: HTMLElement;
@@ -343,10 +344,16 @@ export class SendPillController {
     // them, and a hidden starred partner keeps its quick-send
     // shortcut — hiding is about pill clutter, not reachability.
     const allPartners = settings.get('pairingPartners').filter((p) => p.code);
-    const partners = allPartners.filter((p) => !p.hidden);
-    const groups = settings
-      .get('pairingGroups')
-      .filter((g) => g.memberCodes.some((c) => allPartners.some((p) => p.code === c)));
+    // Most-sent-to first (send-frequency.ts); ties keep the saved order.
+    const score = sendScores();
+    const partners = byFrequency(allPartners.filter((p) => !p.hidden), (p) => normalizePairingCode(p.code), score);
+    const groups = byFrequency(
+      settings
+        .get('pairingGroups')
+        .filter((g) => g.memberCodes.some((c) => allPartners.some((p) => p.code === c))),
+      (g) => groupKey(g.label),
+      score,
+    );
 
     if (partners.length === 0 && groups.length === 0) {
       const hint = document.createElement('div');
