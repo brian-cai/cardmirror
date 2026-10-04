@@ -8,6 +8,11 @@
  * matched by name and gain any missing members, and the relay / sessions
  * apply only when the importer agrees. Nothing the importer had is lost.
  *
+ * The file is plain JSON meant to be editable by hand: people are
+ * `{ "name", "code" }`, and groups list their members BY NAME
+ * (`"members": ["Ana Lopez", "Ben Wu"]`), so moving someone between groups
+ * is a one-line edit. (Older files listing `memberCodes` still import.)
+ *
  * Pure module (no settings / DOM): build + merge + parse, unit-tested.
  */
 import type { PairingGroup, PairingPartner } from '../settings.js';
@@ -23,6 +28,7 @@ export interface TeamFileSession {
   docTitle: string;
 }
 
+/** Parsed / in-memory form: group members resolved to send codes. */
 export interface TeamFile {
   kind: typeof TEAM_FILE_KIND;
   version: 1;
@@ -79,6 +85,25 @@ export function buildTeamFile(opts: {
   return file;
 }
 
+/** The JSON written to disk: like TeamFile, but groups name their members
+ *  (`members`) instead of repeating codes — easy to edit by hand. */
+export function serializeTeamFile(file: TeamFile): string {
+  const nameOf = new Map(file.people.map((p) => [p.code, p.name]));
+  const out = {
+    kind: file.kind,
+    version: file.version,
+    name: file.name,
+    people: file.people.map((p) => ({ name: p.name, code: p.code })),
+    groups: file.groups.map((g) => ({
+      label: g.label,
+      members: g.memberCodes.map((c) => nameOf.get(c) ?? c),
+    })),
+    ...(file.relay ? { relay: file.relay } : {}),
+    ...(file.sessions ? { sessions: file.sessions } : {}),
+  };
+  return JSON.stringify(out, null, 2) + '\n';
+}
+
 /** Validate an untrusted parsed object as a team file (dropping malformed
  *  entries), or null when it isn't one. */
 export function parseTeamFile(raw: unknown): TeamFile | null {
@@ -90,13 +115,28 @@ export function parseTeamFile(raw: unknown): TeamFile | null {
     .map((p) => ({ code: normalizePairingCode(str((p as { code?: unknown })?.code, 2000)), name: str((p as { name?: unknown })?.name, 80) }))
     .filter((p) => p.code);
   const codes = new Set(people.map((p) => p.code));
+  const byName = new Map(people.map((p) => [p.name.toLowerCase(), p.code]));
+  // A member may be written as a person's name (the hand-editable form) or
+  // as their send code; anyone not in `people` is dropped.
+  const resolve = (v: unknown): string | null => {
+    const t = str(v, 2000);
+    if (!t) return null;
+    const code = normalizePairingCode(t);
+    if (codes.has(code)) return code;
+    return byName.get(t.toLowerCase()) ?? null;
+  };
   const groups = (Array.isArray(r.groups) ? r.groups : [])
-    .map((g) => ({
-      label: str((g as { label?: unknown })?.label, 80),
-      memberCodes: (Array.isArray((g as { memberCodes?: unknown })?.memberCodes) ? (g as { memberCodes: unknown[] }).memberCodes : [])
-        .map((c) => normalizePairingCode(str(c, 2000)))
-        .filter((c) => codes.has(c)),
-    }))
+    .map((g) => {
+      const gg = g as { label?: unknown; members?: unknown; memberCodes?: unknown };
+      const list = [
+        ...(Array.isArray(gg.members) ? gg.members : []),
+        ...(Array.isArray(gg.memberCodes) ? gg.memberCodes : []),
+      ];
+      return {
+        label: str(gg.label, 80),
+        memberCodes: [...new Set(list.map(resolve).filter((c): c is string => !!c))],
+      };
+    })
     .filter((g) => g.label);
   const file: TeamFile = { kind: TEAM_FILE_KIND, version: 1, name: str(r.name, 80) || 'Team', people, groups };
   const relayUrl = str(r.relay?.url, 500);

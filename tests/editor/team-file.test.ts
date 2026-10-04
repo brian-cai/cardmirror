@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTeamFile, mergeTeamFile, parseTeamFile } from '../../src/editor/pairing/team-file.js';
+import { buildTeamFile, mergeTeamFile, parseTeamFile, serializeTeamFile } from '../../src/editor/pairing/team-file.js';
 
 const COACH = 'cmk1.coachcode';
 const ANA = 'cmk1.anacode';
@@ -43,6 +43,7 @@ describe('team file', () => {
   it('round-trips through JSON and rejects other files', () => {
     const f = coachFile({ relay: true, sessions: true });
     expect(parseTeamFile(JSON.parse(JSON.stringify(f)))).toEqual(f);
+    expect(parseTeamFile(JSON.parse(serializeTeamFile(f)))).toEqual(f);
     expect(parseTeamFile({ kind: 'something-else' })).toBeNull();
     expect(parseTeamFile({ version: 1, settings: {} })).toBeNull();
     // A relay that isn't https is dropped rather than trusted.
@@ -79,5 +80,16 @@ describe('team file', () => {
     expect(partial.partners.find((p) => p.code === ANA)?.name).toBe('Ana (renamed)');
     expect(partial.groups[0]!.memberCodes).toEqual([ANA, BEN]);
     expect(partial.updatedGroups).toBe(1);
+  });
+
+  it('writes groups by member name, and a hand-edited file imports', () => {
+    const text = serializeTeamFile(coachFile());
+    const json = JSON.parse(text);
+    expect(json.groups).toEqual([{ label: 'Ana/Ben', members: ['Ana', 'Ben'] }]);
+    // Hand edit: add the coach to the group by name (any case), plus a
+    // name that isn't a person (dropped).
+    json.groups[0].members.push('coach b', 'Nobody');
+    const parsed = parseTeamFile(json)!;
+    expect(parsed.groups[0]!.memberCodes).toEqual([ANA, BEN, COACH]);
   });
 });

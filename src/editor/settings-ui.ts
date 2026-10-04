@@ -2209,7 +2209,7 @@ function buildTeamFileSection(rerender: () => void): HTMLElement {
 }
 
 async function exportTeamFile(): Promise<void> {
-  const { buildTeamFile, TEAM_FILE_EXTENSION } = await import('./pairing/team-file.js');
+  const { buildTeamFile, serializeTeamFile, TEAM_FILE_EXTENSION } = await import('./pairing/team-file.js');
   const name = await promptForText({
     message: 'Team name',
     placeholder: 'e.g. Westside Debate',
@@ -2267,7 +2267,7 @@ async function exportTeamFile(): Promise<void> {
     sessions,
   });
   const safe = file.name.replace(/[\\/:*?"<>|]+/g, '-');
-  await getHost().saveAs(`${safe}.${TEAM_FILE_EXTENSION}`, new TextEncoder().encode(JSON.stringify(file, null, 2)), {
+  await getHost().saveAs(`${safe}.${TEAM_FILE_EXTENSION}`, new TextEncoder().encode(serializeTeamFile(file)), {
     filters: [{ name: 'CardMirror team', extensions: [TEAM_FILE_EXTENSION, 'json'] }],
   });
 }
