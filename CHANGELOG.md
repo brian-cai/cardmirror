@@ -5,6 +5,22 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.3 — 2026-10-04
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Security
+
+- **Switching update source checks a key code.** Pointing Update source
+  at another repository now fetches that stream's signing key and shows
+  its short code (this stream's is THSU-D7QH-EMVL) in a system dialog;
+  only continue if the person who runs the stream gave you that code.
+  Updates from it then install only when signed with that exact key.
+  Repositories that don't sign their releases can't be chosen.
+- **Windows updates verify correctly** (the installer's signature now
+  uses its published file name).
+
 ## 1.14.2 — 2026-10-04
 
 Brian's (@brian-cai) build of CardMirror, updating from
