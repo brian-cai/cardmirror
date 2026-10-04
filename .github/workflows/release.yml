@@ -26,14 +26,26 @@ on:
     tags:
       - 'v*.*.*'
 
+# Jobs get only the permissions they ask for below.
+permissions:
+  contents: read
+
 jobs:
+  ci:
+    # Gate: the full CI (typecheck, registry signatures, audit, tests on
+    # three OSes) must pass on the tagged commit before anything is built
+    # or published.
+    name: CI gate
+    uses: ./.github/workflows/ci.yml
+
   prepare-release:
     name: Create draft release for tag
+    needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Extract release notes from CHANGELOG.md
         # Two-step extraction:
@@ -153,12 +165,15 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
+      # Build-provenance attestations (Sigstore, via GitHub OIDC).
+      id-token: write
+      attestations: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'npm'
@@ -323,3 +338,33 @@ jobs:
           fi
           echo "uploading: ${files[@]}"
           gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --clobber
+
+      - name: Sign release artifacts
+        # Ed25519 detached signature for every installer / update file this
+        # runner produced (main + Lite), uploaded as `<file>.sig`. Installed
+        # apps refuse an update without a valid signature from a key in
+        # apps/desktop/src/update-keys.ts, so this step must not be skipped:
+        # the script fails the job when UPDATE_SIGNING_KEY is missing.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          sigs=()
+          while IFS= read -r line; do sigs+=("$line"); done < <(node apps/desktop/scripts/sign-release.cjs "${GITHUB_REF_NAME#v}")
+          [ ${#sigs[@]} -gt 0 ] || { echo "nothing signed" >&2; exit 1; }
+          echo "signed: ${sigs[@]}"
+          gh release upload "${GITHUB_REF_NAME}" "${sigs[@]}" --clobber
+
+      - name: Attest build provenance
+        # A signed SLSA provenance statement for every installer, tying the
+        # file to this repository, workflow and commit. Anyone can check a
+        # download with: gh attestation verify <file> --repo <owner/repo>
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.pacman

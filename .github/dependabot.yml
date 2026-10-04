@@ -1,0 +1,34 @@
+# Dependency updates arrive only as reviewable PRs: package.json pins exact
+# versions (.npmrc save-exact) and every Action is pinned to a commit SHA,
+# so nothing changes underneath a build without one of these.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: xtgg
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      prosemirror:
+        patterns: ['prosemirror-*']
+      dev-tooling:
+        dependency-type: development
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /apps/desktop
+    target-branch: xtgg
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      electron-build:
+        patterns: ['electron', 'electron-builder', 'electron-updater']
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: xtgg
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

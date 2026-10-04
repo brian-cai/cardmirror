@@ -2,9 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, xtgg]
   pull_request:
-    branches: [main]
+    branches: [main, xtgg]
+  # The release workflow calls this as its gate: nothing publishes unless
+  # the full CI passes on the tagged commit.
+  workflow_call:
+
+# Least privilege: CI only reads the repo.
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -27,10 +34,10 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'npm'
@@ -46,6 +53,22 @@ jobs:
         # apps/desktop/src via the tests/desktop test files'
         # imports, so electron's types must be present here too.
         run: npm --prefix apps/desktop ci
+
+      - name: Verify npm registry signatures
+        # Every installed package must carry a valid npm registry signature
+        # (and provenance attestations where published), so a tampered
+        # tarball or a mirror swap fails the build.
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          npm audit signatures
+          npm --prefix apps/desktop audit signatures
+
+      - name: Audit for known vulnerabilities
+        # Production dependencies only; high/critical advisories fail CI.
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm --prefix apps/desktop audit --omit=dev --audit-level=high
 
       - name: Typecheck
         run: npm run typecheck
