@@ -892,16 +892,12 @@ class SettingsModal {
     }
     const updateSource =
       typeof wrapper?.updateSource === 'string' ? wrapper.updateSource.trim() : '';
-    const extras = updateSource
-      ? `\n\nUpdates will come from github.com/${updateSource}.`
-      : '';
     let importSecrets = false;
     if (SettingsStore.carriesSecrets(obj)) {
       const choice = await promptForChoice({
         message: 'Import settings?',
         detail:
-          'This replaces all your current settings. The file also contains API keys — use them in place of yours, or keep your own.' +
-          extras,
+          'This replaces all your current settings. The file also contains API keys — use them in place of yours, or keep your own.',
         choices: [
           { value: 'with', label: 'Import with API keys', primary: true },
           { value: 'without', label: 'Import, keep my keys' },
@@ -911,7 +907,7 @@ class SettingsModal {
       importSecrets = choice === 'with';
     } else if (
       !(await confirmDialog(
-        'Import settings? This replaces all your current settings (your API keys are kept).' + extras,
+        'Import settings? This replaces all your current settings (your API keys are kept).',
         { okLabel: 'Import' },
       ))
     ) {
@@ -920,9 +916,16 @@ class SettingsModal {
     settings.replaceAll(obj, { importSecrets });
     importUserDictionary(wrapper?.userDictionary);
     const electronHost = getElectronHost();
+    // A settings file must never redirect updates on its own — it could come
+    // from anyone. Ask separately, defaulting to keeping the current source.
     if (updateSource && electronHost) {
-      const result = await electronHost.setUpdateSource(updateSource).catch(() => null);
-      if (result && !result.ok) showToast(result.error);
+      const current = await electronHost.getUpdateSource().catch(() => null);
+      if (current && normalizeRepoRef(current.active) !== normalizeRepoRef(updateSource)) {
+        if (await confirmUpdateSourceChange(updateSource)) {
+          const result = await electronHost.setUpdateSource(updateSource).catch(() => null);
+          if (result && !result.ok) showToast(result.error);
+        }
+      }
     }
     this.render(); // rebuild the dialog so every control reflects the import
     showToast('Settings imported.');
@@ -2102,6 +2105,41 @@ function buildInstallInfoSection(): HTMLElement {
   return wrap;
 }
 
+/** `owner/repo` (lowercase) from what a user typed — `owner/repo`, a GitHub
+ *  URL, or a clone URL — for comparing against the active source. The main
+ *  process does the authoritative parse; this only decides whether to warn. */
+function normalizeRepoRef(input: string): string {
+  const parts = input
+    .trim()
+    .toLowerCase()
+    .replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//, '')
+    .replace(/^git@github\.com:/, '')
+    .split(/[/?#]/)
+    .filter(Boolean);
+  return parts.length >= 2 ? `${parts[0]}/${parts[1]!.replace(/\.git$/, '')}` : input.trim().toLowerCase();
+}
+
+/** Warn before pointing auto-update at another repository: whoever controls
+ *  that repository's releases decides what code this computer runs next.
+ *  Resolves true only on an explicit "Use …" — the safe choice is primary. */
+async function confirmUpdateSourceChange(target: string): Promise<boolean> {
+  const choice = await promptForChoice({
+    message: `Get updates from github.com/${target}?`,
+    detail:
+      'Whoever controls that repository decides what CardMirror installs on this computer ' +
+      'next — an update runs with full access to your files. Only switch to a source you ' +
+      'trust, such as your coach\u2019s official builds.\n\n' +
+      'Updates still install only when they are signed with a key this build trusts; a ' +
+      'source whose releases aren\u2019t signed will not update this install.',
+    choices: [
+      { value: 'cancel', label: 'Keep the current source', primary: true },
+      { value: 'use', label: `Use ${target}` },
+    ],
+    cancelLabel: 'Cancel',
+  });
+  return choice === 'use';
+}
+
 /** "Update source": which GitHub release stream auto-update follows. Blank
  *  means the build's own stream; anything else (a coach's or a fork's
  *  `owner/repo`) is a machine-local override held by the main process.
@@ -2135,8 +2173,9 @@ function buildUpdateSourceRow(electronHost: NonNullable<ReturnType<typeof getEle
     input.placeholder = state.defaultSource;
     input.value = state.overridden ? state.active : '';
     resetBtn.hidden = !state.overridden;
+    row.classList.toggle('pmd-update-source-overridden', state.overridden);
     desc.textContent = state.overridden
-      ? `Getting updates from github.com/${state.active} instead of this build's default (${state.defaultSource}).`
+      ? `\u26a0 Getting updates from github.com/${state.active} instead of this build's default (${state.defaultSource}). Only keep this if you trust that repository.`
       : `Getting updates from github.com/${state.defaultSource}. To follow another CardMirror release stream (for example your coach's builds), enter its GitHub repository as owner/repo.`;
   };
   const refresh = (): void => {
@@ -2145,7 +2184,21 @@ function buildUpdateSourceRow(electronHost: NonNullable<ReturnType<typeof getEle
       row.hidden = true;
     });
   };
-  const apply = (value: string): void => {
+  const apply = async (value: string): Promise<void> => {
+    const target = value.trim();
+    // Switching to another stream is the dangerous direction; going back to
+    // the build's default (blank / Reset) needs no confirmation.
+    if (target) {
+      const current = await electronHost.getUpdateSource().catch(() => null);
+      const wanted = normalizeRepoRef(target);
+      const harmless =
+        !!current &&
+        (wanted === normalizeRepoRef(current.active) || wanted === normalizeRepoRef(current.defaultSource));
+      if (!harmless && !(await confirmUpdateSourceChange(target))) {
+        refresh();
+        return;
+      }
+    }
     electronHost.setUpdateSource(value).then((result) => {
       if (!result.ok) {
         showToast(result.error);
@@ -2157,14 +2210,14 @@ function buildUpdateSourceRow(electronHost: NonNullable<ReturnType<typeof getEle
       showToast(`Couldn't change the update source: ${err instanceof Error ? err.message : String(err)}`);
     });
   };
-  saveBtn.addEventListener('click', () => apply(input.value));
+  saveBtn.addEventListener('click', () => void apply(input.value));
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      apply(input.value);
+      void apply(input.value);
     }
   });
-  resetBtn.addEventListener('click', () => apply(''));
+  resetBtn.addEventListener('click', () => void apply(''));
 
   controls.appendChild(input);
   controls.appendChild(saveBtn);
