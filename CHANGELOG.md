@@ -5,6 +5,24 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.4 — 2026-10-04
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Check for updates from anywhere.** A "Check for updates" link on the
+  home screen, and a Check for Updates command in the command bar (you
+  can give it a shortcut) — Windows has no menu bar, so this used to be
+  buried in Settings.
+
+### Changed
+
+- **Updates show up sooner.** CardMirror now checks every 4 hours while
+  it's open, and again when you come back to it after an hour away,
+  instead of once a day.
+
 ## 1.14.3 — 2026-10-04
 
 Brian's (@brian-cai) build of CardMirror, updating from
