@@ -105,3 +105,37 @@ describe('priority settings', () => {
     settings.replaceAll({});
   });
 });
+
+describe('deprioritized folders', () => {
+  const dep = (deprioritized: string[], highest: string[] = [], preferred: string[] = []): FolderPriority => ({
+    highest,
+    preferred,
+    deprioritized,
+  });
+
+  it('sinks matches below every other match, even better ones', () => {
+    // "da" is a prefix (tier 1) of "DA Answers" — a better match than
+    // "Warming DA" (tier 2) — but its folder is deprioritized.
+    const files = [f('Archive/DA Answers.cmir', 9), f('Current/Warming DA.cmir', 1)];
+    expect(names(searchFiles(files, 'da', 'recency', dep(['/root/Archive'])))).toEqual([
+      'Current/Warming DA.cmir',
+      'Archive/DA Answers.cmir',
+    ]);
+  });
+
+  it('still lists them (unlike exclusions), last on an empty query', () => {
+    const files = [f('Archive/A.cmir', 9), f('Camp/B.cmir', 5), f('Top/C.cmir', 1)];
+    expect(names(searchFiles(files, '', 'recency', dep(['/root/Archive'], ['/root/Top'])))).toEqual([
+      'Top/C.cmir',
+      'Camp/B.cmir',
+      'Archive/A.cmir',
+    ]);
+  });
+
+  it('the deepest entry wins against other sections', () => {
+    const p = dep(['/root/Current/Old'], ['/root/Current']);
+    expect(folderPriorityFor('/root/Current/Old/A.cmir', p)).toBe(-1);
+    expect(folderPriorityFor('/root/Current/New/A.cmir', p)).toBe(2);
+    expect(folderPriorityFor('/root/Archive/Keep.cmir', dep(['/root/Archive'], [], ['/root/Archive/Keep.cmir']))).toBe(1);
+  });
+});

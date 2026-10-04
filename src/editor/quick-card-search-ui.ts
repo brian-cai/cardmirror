@@ -1038,6 +1038,7 @@ function fileSearchPriority(): FolderPriority {
   return {
     highest: settings.get('fileSearchHighestFolders'),
     preferred: settings.get('fileSearchPreferredFolders'),
+    deprioritized: settings.get('fileSearchDeprioritizedFolders'),
   };
 }
 
@@ -1745,6 +1746,7 @@ class QuickCardSearchUI {
       settings.get('fileSearchTiebreak'),
       settings.get('fileSearchHighestFolders'),
       settings.get('fileSearchPreferredFolders'),
+      settings.get('fileSearchDeprioritizedFolders'),
       [...this.manualPinPaths()].sort(),
     ]);
   }
@@ -1903,6 +1905,7 @@ class QuickCardSearchUI {
       settings.get('fileSearchTiebreak'),
       settings.get('fileSearchHighestFolders'),
       settings.get('fileSearchPreferredFolders'),
+      settings.get('fileSearchDeprioritizedFolders'),
       [...this.manualPinPaths()].sort(),
     ]);
   }

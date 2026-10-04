@@ -139,16 +139,18 @@ export function filterExcludedFiles(
 
 /** Folder priority sections for the file search (Settings → File search).
  *  Entries are folders or single files; each covers everything beneath it.
- *    highest   — matches here list above every other match
- *    preferred — matches here win ties: above equally good matches
- *                elsewhere, below better ones */
+ *    highest       — matches here list above every other match
+ *    preferred     — matches here win ties: above equally good matches
+ *                    elsewhere, below better ones
+ *    deprioritized — matches here still show, but below every other match */
 export interface FolderPriority {
   highest: readonly string[];
   preferred: readonly string[];
+  deprioritized?: readonly string[];
 }
 
-/** 0 normal · 1 preferred · 2 highest. */
-export type PriorityLevel = 0 | 1 | 2;
+/** -1 deprioritized · 0 normal · 1 preferred · 2 highest. */
+export type PriorityLevel = -1 | 0 | 1 | 2;
 
 /** True when `path` is `dir` or lives beneath it (separator-aware, both
  *  `/` and `\`; a trailing separator on `dir` is tolerated). */
@@ -164,8 +166,9 @@ function isAtOrUnder(path: string, dir: string): boolean {
 }
 
 /** The priority section `path` falls in. The deepest (longest) matching
- *  entry across both sections wins, so a preferred subfolder inside a
- *  highest-priority folder is just preferred. */
+ *  entry across all sections wins, so a preferred subfolder inside a
+ *  highest-priority folder is just preferred, and a deprioritized one
+ *  inside a preferred folder sinks. */
 export function folderPriorityFor(path: string, priority: FolderPriority): PriorityLevel {
   let level: PriorityLevel = 0;
   let bestLen = -1;
@@ -183,6 +186,7 @@ export function folderPriorityFor(path: string, priority: FolderPriority): Prior
   };
   scan(priority.highest, 2);
   scan(priority.preferred, 1);
+  scan(priority.deprioritized ?? [], -1);
   return level;
 }
 
@@ -299,7 +303,12 @@ export function searchFiles(
   tiebreak: FileTiebreak = 'recency',
   priority?: FolderPriority,
 ): FileEntry[] {
-  if (priority && (priority.highest.length > 0 || priority.preferred.length > 0)) {
+  if (
+    priority &&
+    (priority.highest.length > 0 ||
+      priority.preferred.length > 0 ||
+      (priority.deprioritized?.length ?? 0) > 0)
+  ) {
     return searchFilesByPriority(files, query, tiebreak, priority);
   }
   // Match the bare name first; the folder (from relPath) is the secondary
@@ -318,8 +327,9 @@ export function searchFiles(
 }
 
 /** `searchFiles` with folder priority: highest-priority matches first, then
- *  the rest; within each, by match tier, preferred before normal inside a
- *  tier, then the tiebreak. An empty query lists highest, preferred, normal.
+ *  the rest, then deprioritized matches last; within each, by match tier,
+ *  preferred before normal inside a tier, then the tiebreak. An empty query
+ *  lists highest, preferred, normal, deprioritized.
  *  Kept separate so the unprioritized path — the common case, run per
  *  keystroke over the whole corpus — pays nothing for the feature. */
 function searchFilesByPriority(
@@ -341,7 +351,7 @@ function searchFilesByPriority(
     if (tier === null) continue;
     matched.push({ item: f, tier, level: folderPriorityFor(f.path, priority) });
   }
-  const top = (l: PriorityLevel): number => (l === 2 ? 0 : 1);
+  const top = (l: PriorityLevel): number => (l === 2 ? 0 : l === -1 ? 2 : 1);
   return matched
     .sort(
       (a, b) =>

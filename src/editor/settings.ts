@@ -1192,6 +1192,9 @@ export interface Settings {
    *  Absolute paths. Electron only. See `searchFiles`. */
   fileSearchHighestFolders: string[];
   fileSearchPreferredFolders: string[];
+  /** File search: folders/files whose matches still show but rank below
+   *  every other match. */
+  fileSearchDeprioritizedFolders: string[];
   /** Which file formats appear in the command-palette file search:
    *  'both' (default), 'cmir' only, or 'docx' only. */
   fileSearchFormats: 'both' | 'cmir' | 'docx';
@@ -1968,6 +1971,7 @@ const DEFAULTS: Settings = {
   fileSearchExclusions: [],
   fileSearchHighestFolders: [],
   fileSearchPreferredFolders: [],
+  fileSearchDeprioritizedFolders: [],
   fileSearchFormats: 'both',
   fileSearchObjectTypes: ['block', 'tag'],
   fileSearchOutlineDepth: 3,
@@ -2912,6 +2916,19 @@ export const SETTING_METADATA: SettingMeta[] = [
     section: 'File search',
     electronOnly: true,
     aliases: ['folder priority', 'prefer folder', 'boost folder', 'search ranking'],
+  },
+  {
+    key: 'fileSearchDeprioritizedFolders',
+    label: 'File search: deprioritized',
+    description:
+      'Matches from these folders (or files) still show up, but always list last, below '
+      + 'every other result — unlike exclusions, which hide them. Good for archives and old '
+      + 'files. If a folder is listed in more than one section, the deeper entry wins.',
+    kind: 'pathList',
+    category: 'files',
+    section: 'File search',
+    electronOnly: true,
+    aliases: ['folder priority', 'deprioritize folder', 'demote folder', 'bury folder', 'search ranking', 'archive'],
   },
   {
     key: 'fileSearchFormats',
@@ -5041,6 +5058,9 @@ function sanitize(s: Settings): Settings {
     ),
     fileSearchPreferredFolders: sanitizeStringList(
       (s as { fileSearchPreferredFolders?: unknown }).fileSearchPreferredFolders,
+    ),
+    fileSearchDeprioritizedFolders: sanitizeStringList(
+      (s as { fileSearchDeprioritizedFolders?: unknown }).fileSearchDeprioritizedFolders,
     ),
     fileSearchFormats:
       s.fileSearchFormats === 'cmir'
