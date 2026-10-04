@@ -5,6 +5,28 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.2 — 2026-10-04
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Security
+
+- **Updates are signed.** Every release is signed with this build's own
+  key, and the app installs an update only when that signature checks
+  out, so a hijacked repository, a tampered download or a redirected
+  update source can't push code to your computer.
+- **Changing the update source warns you first**, and a settings file
+  can no longer change it without asking.
+- **Links open in your browser**, never inside a CardMirror window, and
+  the app can't be navigated away to a web page.
+- **Hardened app runtime** (Electron fuses, ASAR integrity), stricter
+  permissions, and a code-signature check before a Mac update replaces
+  the app.
+- **Voice downloads are checked** against pinned checksums.
+- **Pinned dependencies**, signed and attested release builds, and
+  releases that publish only after the full test suite passes.
+
 ## 1.14.1 — 2026-10-03
 
 Brian's (@brian-cai) build of CardMirror: everything in the official
