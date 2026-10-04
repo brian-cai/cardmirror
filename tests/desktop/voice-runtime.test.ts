@@ -71,3 +71,33 @@ describe('voice engine runtime helpers', () => {
     await expect(verifyIntegrity(file, good)).rejects.toThrow(/integrity/);
   });
 });
+
+describe('pinned voice download checksums', () => {
+  it('every engine package for every platform has a pinned integrity', async () => {
+    const { PINNED_ENGINE_INTEGRITY, enginePackages } = await import('../../apps/desktop/src/voice/runtime.js');
+    for (const [platform, arch] of [['darwin', 'arm64'], ['darwin', 'x64'], ['win32', 'x64'], ['linux', 'x64']] as const) {
+      for (const name of enginePackages(platform, arch)) {
+        expect(PINNED_ENGINE_INTEGRITY[name], name).toMatch(/^sha512-/);
+      }
+    }
+  });
+
+  it('refuses a registry integrity that differs from the pin', async () => {
+    const { expectedEngineIntegrity, PINNED_ENGINE_INTEGRITY } = await import('../../apps/desktop/src/voice/runtime.js');
+    const pin = PINNED_ENGINE_INTEGRITY['sherpa-onnx-node']!;
+    expect(expectedEngineIntegrity('sherpa-onnx-node', pin)).toBe(pin);
+    expect(() => expectedEngineIntegrity('sherpa-onnx-node', 'sha512-AAAA')).toThrow();
+    expect(() => expectedEngineIntegrity('evil-package', pin)).toThrow();
+  });
+
+  it('deletes a model download whose checksum is wrong', async () => {
+    const { verifyPinnedSha256 } = await import('../../apps/desktop/src/voice/runtime.js');
+    const fsm = await import('node:fs');
+    const osm = await import('node:os');
+    const pathm = await import('node:path');
+    const f = pathm.join(fsm.mkdtempSync(pathm.join(osm.tmpdir(), 'cm-vad-')), 'silero_vad.onnx');
+    fsm.writeFileSync(f, 'not the model');
+    await expect(verifyPinnedSha256(f, 'silero_vad.onnx')).rejects.toThrow(/checksum/);
+    expect(fsm.existsSync(f)).toBe(false);
+  });
+});

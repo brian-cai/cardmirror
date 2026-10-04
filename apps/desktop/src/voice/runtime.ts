@@ -67,6 +67,53 @@ export function enginePresentAt(nodeModules: string, platform?: string, arch?: s
   );
 }
 
+/** Pinned sha512 (SRI) of each engine package at SHERPA_VERSION. The
+ *  download must match THIS, not just the registry's own document, so a
+ *  compromised registry response or a republished package can't slip a
+ *  different native addon in. Bump together with SHERPA_VERSION
+ *  (`npm view <pkg>@<version> dist.integrity`). */
+export const PINNED_ENGINE_INTEGRITY: Readonly<Record<string, string>> = {
+  'sherpa-onnx-node': 'sha512-0XGV7arGngBCnol0m8OLyqlnaUm19Q1KmetVj1DDBdymXa1upmAHZDwNdN47gjsEhqE5hXUEyc1vRQoXrNhNVg==',
+  'sherpa-onnx-darwin-arm64': 'sha512-5NCE50hAvr3n2pdett0SgfPBJXaFZE0bqHwbHyiq+IKZ8Ids0l4M0VrG+ImGYIafCwie+oC3uAJ+pKj9xg/k+w==',
+  'sherpa-onnx-darwin-x64': 'sha512-N3o+T+wn9WaQmsKV5DD8bTHdo+WN2+sXwmZcGJZiDjtOMR2zFz7uVCZnYCmEAMgvChC+oHcF5RvEEKcRCAu6Pw==',
+  'sherpa-onnx-win-x64': 'sha512-wBV1o+/zgsMrOjfCFIgGrH6S28xq6CqRCLSavCOjTZ6cqr80yGc07DUHxqsHFPZvfoJU+2JF5L2l3gyWFWoWdQ==',
+  'sherpa-onnx-win-ia32': 'sha512-sTwtpxPQ76XLn0giAbvknIDEDKD3XXi2mo2AVROEucf1pIK1DjQl+LjLkalTeFoQqbC4J3xGx/g+xgcHQD1dsw==',
+  'sherpa-onnx-linux-x64': 'sha512-npmxn5WwmAmlthgBhmbZ33t3i2j4mJwQt46dMEb3j7d41y1/uJrjrVAfa/DkvV+vn49ZWfcQ2UEWDipaZBVhuw==',
+  'sherpa-onnx-linux-arm64': 'sha512-TFCVpXyTh69buhOtTS8KIfkRXOVKY4Y1qjAktSItrKS4A0chnnrlXO5bKWoNAPeI6fMxTF/uvMYbYgcvjEMfNg==',
+};
+
+/** The integrity an engine package must have: the pinned value; the
+ *  registry's document must agree with it. Throws when the package has no
+ *  pin or the registry disagrees. */
+export function expectedEngineIntegrity(name: string, registryIntegrity: string): string {
+  const pinned = PINNED_ENGINE_INTEGRITY[name];
+  if (!pinned) throw new Error(`engine package ${name} has no pinned integrity`);
+  if (registryIntegrity !== pinned) throw new Error(`engine package ${name}: registry integrity does not match the pinned value`);
+  return pinned;
+}
+
+/** Pinned sha256 (hex) of the voice model downloads, from GitHub's asset
+ *  digests for the sherpa-onnx `asr-models` release. */
+export const PINNED_MODEL_SHA256: Readonly<Record<string, string>> = {
+  'sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2': '157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad',
+  'silero_vad.onnx': '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+};
+
+/** Streams `file` through sha256 and requires the pinned digest for its
+ *  name; deletes the file on a mismatch so it's never used. */
+export async function verifyPinnedSha256(file: string, name: string): Promise<void> {
+  const expected = PINNED_MODEL_SHA256[name];
+  if (!expected) throw new Error(`no pinned checksum for ${name}`);
+  const hash = crypto.createHash('sha256');
+  await new Promise<void>((resolve, reject) => {
+    fs.createReadStream(file).on('data', (chunk) => hash.update(chunk)).on('end', resolve).on('error', reject);
+  });
+  if (hash.digest('hex') !== expected) {
+    fs.rmSync(file, { force: true });
+    throw new Error(`voice download failed its checksum (${name})`);
+  }
+}
+
 /** Streams `file` through sha512 and compares with the SRI value. */
 export async function verifyIntegrity(file: string, integrity: string): Promise<void> {
   const expected = integrity.replace(/^sha512-/, '');

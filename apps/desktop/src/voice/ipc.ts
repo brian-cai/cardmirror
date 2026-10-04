@@ -24,6 +24,8 @@ import {
   packumentUrl,
   parsePackument,
   verifyIntegrity,
+  expectedEngineIntegrity,
+  verifyPinnedSha256,
 } from './runtime.js';
 
 let worker: ChildProcess | null = null;
@@ -171,7 +173,7 @@ async function downloadEngine(sender: Electron.WebContents): Promise<void> {
     const stage = path.join(nm, `${name}.extract`);
     try {
       await downloadFile(dist.tarball, tgz, sender, 'engine');
-      await verifyIntegrity(tgz, dist.integrity);
+      await verifyIntegrity(tgz, expectedEngineIntegrity(name, dist.integrity));
       fs.rmSync(stage, { recursive: true, force: true });
       fs.mkdirSync(stage, { recursive: true });
       await extractArchive(tgz, stage); // npm tarballs unpack to package/
@@ -194,7 +196,9 @@ async function downloadModelFiles(sender: Electron.WebContents): Promise<void> {
   try {
     fs.mkdirSync(root, { recursive: true });
     await downloadFile(VAD_URL, vadPath(), sender, 'vad');
+    await verifyPinnedSha256(vadPath(), VAD_FILE);
     await downloadFile(MODEL_URL, archive, sender, 'model');
+    await verifyPinnedSha256(archive, MODEL_ARCHIVE);
     if (!sender.isDestroyed()) sender.send('voice:download-progress', { model: 'model', pct: 100, extracting: true });
     await extractArchive(archive, root);
   } finally {
