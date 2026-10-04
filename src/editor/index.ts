@@ -970,7 +970,16 @@ function updatePlainPasteIndicator(armed: boolean): void {
 {
   const updateChipEl = document.getElementById('update-chip') as HTMLButtonElement | null;
   const chipHost = getElectronHost();
-  if (updateChipEl && chipHost) initUpdateChip(updateChipEl, chipHost);
+  if (updateChipEl && chipHost) {
+    // Always visible on the desktop app: "Check for updates" when nothing
+    // is pending (Windows / Linux have no menu bar), the install chip when
+    // something is.
+    initUpdateChip(
+      updateChipEl,
+      chipHost,
+      canCheckForUpdates() ? { idleCheck: () => checkForUpdatesNow({ quiet: true }) } : undefined,
+    );
+  }
 }
 
 // Timer pop-out reconciliation — the timer always LAUNCHES popped
@@ -7376,7 +7385,6 @@ const homeCallbacks: HomeScreenCallbacks = {
     const chipHost = getElectronHost();
     if (chipHost) initUpdateChip(el, chipHost);
   },
-  checkForUpdates: canCheckForUpdates() ? () => void checkForUpdatesNow() : undefined,
   // Clean: Electron gets the folder-recursive modal; web cleans one file at a time.
   clean:
     getHost().kind === 'electron'

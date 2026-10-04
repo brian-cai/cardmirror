@@ -86,4 +86,42 @@ describe('update chip', () => {
     el.click();
     expect(host.actions).toBe(1);
   });
+
+  it('status bar: idle shows "Check for updates"; a click checks and reports', async () => {
+    const el = makeEl();
+    const host = makeHost(null);
+    let resolveCheck: (o: string) => void = () => {};
+    initUpdateChip(el, host, { idleCheck: () => new Promise((r) => (resolveCheck = r)) });
+    await tick();
+    expect(el.hidden).toBe(false);
+    expect(el.textContent).toBe('Check for updates');
+    el.click();
+    expect(el.textContent).toBe('Checking for updates…');
+    el.click(); // a second click while checking is ignored
+    resolveCheck('latest');
+    await tick();
+    expect(el.textContent).toBe('Up to date');
+    expect(host.actions).toBe(0); // idle clicks never install
+  });
+
+  it('status bar: a pushed update replaces the idle control, and clicks install', async () => {
+    const el = makeEl();
+    const host = makeHost(null);
+    initUpdateChip(el, host, { idleCheck: () => Promise.resolve('updating') });
+    await tick();
+    el.click();
+    await tick();
+    expect(el.textContent).toBe('Downloading update…');
+    host.push({ state: 'ready', version: '1.14.5' });
+    expect(el.textContent).toBe('Update 1.14.5 ready — restart to install');
+    el.click();
+    expect(host.actions).toBe(1);
+  });
+
+  it('without idleCheck (home screen copy), no update stays hidden', async () => {
+    const el = makeEl();
+    initUpdateChip(el, makeHost(null));
+    await tick();
+    expect(el.hidden).toBe(true);
+  });
 });

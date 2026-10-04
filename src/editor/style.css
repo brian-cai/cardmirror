@@ -2286,21 +2286,18 @@ body:not(.pmd-multi-doc) #app {
 .pmd-home-update[hidden] {
   display: none;
 }
-/* Home screen "Check for updates": a quiet text button under the title
-   (the accent-outlined update button replaces it when one is waiting). */
-.pmd-home-check-updates {
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.85rem;
+/* Idle status-bar chip: a quiet "Check for updates" text control, not the
+   accent pill an available / ready update gets. */
+#update-chip[data-state="idle"],
+#update-chip[data-state="checking"] {
   color: var(--pmd-c-text-muted);
-  background: transparent;
-  border: none;
-  padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  border-color: transparent;
 }
-.pmd-home-check-updates:hover { color: var(--pmd-c-accent); }
-.pmd-home-check-updates[hidden] { display: none; }
+#update-chip[data-state="idle"]:hover {
+  color: var(--pmd-c-accent);
+  background: transparent;
+  border-color: var(--pmd-c-accent);
+}
 
 .status-segment {
   display: flex;

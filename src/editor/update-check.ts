@@ -16,33 +16,46 @@ export function canCheckForUpdates(): boolean {
   return !!getElectronHost() && !isLiteBuild();
 }
 
-/** Run a manual check and report the result in a toast. Resolves when the
- *  check has answered (the download, if any, continues in the background
- *  and ends in the update chip). */
-export async function checkForUpdatesNow(): Promise<void> {
+export type ManualCheckOutcome = 'latest' | 'updating' | 'dev' | 'error' | 'unavailable' | 'busy';
+
+/** Run a manual check and report the result (toasts unless `quiet` — the
+ *  status-bar chip shows its own progress). Resolves when the check has
+ *  answered; a download, if any, continues in the background and ends in
+ *  the update chip. */
+
+export async function checkForUpdatesNow(opts?: { quiet?: boolean }): Promise<ManualCheckOutcome> {
   const host = getElectronHost();
   if (!host || isLiteBuild()) {
     showToast(isLiteBuild() ? 'CardMirror Lite never checks for updates.' : 'Updates come with the desktop app.');
-    return;
+    return 'unavailable';
   }
-  if (inFlight) return;
+  if (inFlight) return 'busy';
   inFlight = true;
-  showToast('Checking for updates…');
+  // The status-bar chip shows its own progress; elsewhere, a toast does.
+  if (!opts?.quiet) showToast('Checking for updates…');
   try {
     // .catch-equivalent: a main process older than the renderer (dev
     // hot-reload) has no handler, so `invoke` rejects.
     const result = await host.checkForUpdates();
     if (result.status === 'latest') {
-      showToast("You're on the latest version.");
-    } else if (result.status === 'updating') {
-      showToast('Update found — downloading in the background. A button appears in the status bar when it’s ready to install.');
-    } else if (result.status === 'dev') {
-      showToast('Update checks are only active in packaged builds.');
-    } else {
-      showToast(`Update check failed: ${result.message ?? 'unknown error'}`);
+      if (!opts?.quiet) showToast("You're on the latest version.");
+      return 'latest';
     }
+    if (result.status === 'updating') {
+      if (!opts?.quiet) {
+        showToast('Update found — downloading in the background. A button appears in the status bar when it’s ready to install.');
+      }
+      return 'updating';
+    }
+    if (result.status === 'dev') {
+      showToast('Update checks are only active in packaged builds.');
+      return 'dev';
+    }
+    showToast(`Update check failed: ${result.message ?? 'unknown error'}`);
+    return 'error';
   } catch (err) {
     showToast(`Update check failed: ${err instanceof Error ? err.message : String(err)}`);
+    return 'error';
   } finally {
     inFlight = false;
   }

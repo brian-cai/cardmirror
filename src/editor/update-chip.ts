@@ -26,13 +26,21 @@ export interface UpdateChipHost {
   onUpdateChip(handler: (payload: UpdateChipState | null) => void): () => void;
 }
 
-/** Render one chip state into the button. Exported for tests. */
-export function renderUpdateChip(el: HTMLButtonElement, s: UpdateChipState | null): void {
+/** Render one chip state into the button. Exported for tests. With
+ *  `idle`, a null state shows the quiet "Check for updates" control (the
+ *  status bar) instead of hiding (the home screen's copy). */
+export function renderUpdateChip(el: HTMLButtonElement, s: UpdateChipState | null, idle = false): void {
   if (!s) {
-    el.hidden = true;
+    el.hidden = !idle;
+    if (idle) {
+      el.dataset['state'] = 'idle';
+      el.textContent = 'Check for updates';
+      el.title = 'Check for a CardMirror update now';
+    }
     return;
   }
   el.hidden = false;
+  el.dataset['state'] = s.state;
   if (s.state === 'ready') {
     el.textContent = `Update ${s.version} ready — restart to install`;
     el.title = 'Restart CardMirror now to finish installing the update';
@@ -44,16 +52,54 @@ export function renderUpdateChip(el: HTMLButtonElement, s: UpdateChipState | nul
 
 /** Wire the chip: initial state pull (late-opened windows), live
  *  subscription, click → the main process picks the action. */
-export function initUpdateChip(el: HTMLButtonElement, host: UpdateChipHost): () => void {
+export function initUpdateChip(
+  el: HTMLButtonElement,
+  host: UpdateChipHost,
+  opts?: {
+    /** Status bar: when no update is pending, show "Check for updates" and
+     *  run this on click. Resolves 'latest' / 'updating' / anything else. */
+    idleCheck?: () => Promise<string>;
+  },
+): () => void {
+  const idleCheck = opts?.idleCheck;
+  let current: UpdateChipState | null = null;
+  let revert: ReturnType<typeof setTimeout> | null = null;
+  const render = (s: UpdateChipState | null): void => {
+    current = s;
+    if (revert) clearTimeout(revert);
+    revert = null;
+    renderUpdateChip(el, s, !!idleCheck);
+  };
+  /** A transient idle label ("Checking…", "Up to date"), back to "Check
+   *  for updates" after `ms` unless a real update state arrives first. */
+  const flash = (text: string, ms: number): void => {
+    el.textContent = text;
+    if (revert) clearTimeout(revert);
+    revert = ms > 0 ? setTimeout(() => render(current), ms) : null;
+  };
   el.addEventListener('click', () => {
+    if (!current && idleCheck) {
+      if (el.dataset['state'] === 'checking') return;
+      el.dataset['state'] = 'checking';
+      flash('Checking for updates…', 0);
+      void idleCheck().then((outcome) => {
+        if (current) return; // an update state arrived meanwhile
+        el.dataset['state'] = 'idle';
+        if (outcome === 'latest') flash('Up to date', 4000);
+        else if (outcome === 'updating') flash('Downloading update…', 10 * 60 * 1000);
+        else render(null);
+      });
+      return;
+    }
     void host.updateChipAction().catch((err) => {
       console.warn('Update chip action failed:', err);
     });
   });
-  const unsubscribe = host.onUpdateChip((s) => renderUpdateChip(el, s));
+  const unsubscribe = host.onUpdateChip(render);
+  render(null);
   void host
     .getUpdateChipState()
-    .then((s) => renderUpdateChip(el, s))
+    .then(render)
     .catch(() => {});
   return unsubscribe;
 }
