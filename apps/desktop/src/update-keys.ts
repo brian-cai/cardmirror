@@ -10,4 +10,6 @@ import type { TrustedUpdateKey } from './update-signature.js';
  * `UPDATE_SIGNING_KEY` secret (and the owner's offline backup). Generate one
  * with `node apps/desktop/scripts/gen-update-key.cjs`.
  */
-export const TRUSTED_UPDATE_KEYS: readonly TrustedUpdateKey[] = [];
+export const TRUSTED_UPDATE_KEYS: readonly TrustedUpdateKey[] = [
+  { id: "brian-cai 2026-10-04", spki: "MCowBQYDK2VwAyEAdO1qH+c7c/2+RpQqdyAsoeYeJWptaOkQvmoiDQjfins=" },
+];
