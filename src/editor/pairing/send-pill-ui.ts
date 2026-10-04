@@ -379,7 +379,7 @@ export class SendPillController {
     this.recentRows.clear();
 
     // Click-open search (CSS hides it during a drag, when typing can't
-    // happen anyway): filters the rows; Enter sends to the top one. It sits
+    // happen anyway): filters the rows; Enter sends to the one nearest it. It sits
     // at the BOTTOM, just above the actions row, so it stays put while
     // the list above it shrinks and grows.
     const search = document.createElement('input');
@@ -392,8 +392,10 @@ export class SendPillController {
     search.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        const first = [...this.targets.keys()].find((r) => !this.recentRows.has(r) && !r.hidden);
-        if (first) this.sendFromRow(first);
+        // The match nearest the box (the list reads upward from it, most
+        // sent last), so Enter picks what's right above the cursor.
+        const nearest = [...this.targets.keys()].filter((r) => !this.recentRows.has(r) && !r.hidden).pop();
+        if (nearest) this.sendFromRow(nearest);
       } else if (e.key === 'Escape') {
         e.preventDefault();
         this.collapse();
@@ -406,15 +408,19 @@ export class SendPillController {
     // them, and a hidden starred partner keeps its quick-send
     // shortcut — hiding is about pill clutter, not reachability.
     const allPartners = settings.get('pairingPartners').filter((p) => p.code);
-    // Most-sent-to first (send-frequency.ts); ties keep the saved order.
+    // Most-sent-to LAST (send-frequency.ts): the pill opens upward from its
+    // search box, so the people you send to most sit nearest it. Ties keep
+    // the saved order.
     const score = sendScores();
-    const partners = byFrequency(allPartners.filter((p) => !p.hidden), (p) => normalizePairingCode(p.code), score);
+    const last = { mostLast: true };
+    const partners = byFrequency(allPartners.filter((p) => !p.hidden), (p) => normalizePairingCode(p.code), score, last);
     const groups = byFrequency(
       settings
         .get('pairingGroups')
         .filter((g) => g.memberCodes.some((c) => allPartners.some((p) => p.code === c))),
       (g) => groupKey(g.label),
       score,
+      last,
     );
 
     if (partners.length === 0 && groups.length === 0) {

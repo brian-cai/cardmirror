@@ -35,6 +35,8 @@ describe('send frequency', () => {
   it('sorts most-sent first, ties keep their order', () => {
     const score = (k: string) => ({ b: 2, c: 2 } as Record<string, number>)[k] ?? 0;
     expect(byFrequency(['a', 'b', 'c', 'd'], (x) => x, score)).toEqual(['b', 'c', 'a', 'd']);
+    // Read-from-the-bottom lists: most-sent last, ties still in order.
+    expect(byFrequency(['a', 'b', 'c', 'd'], (x) => x, score, { mostLast: true })).toEqual(['a', 'd', 'b', 'c']);
   });
 });
 

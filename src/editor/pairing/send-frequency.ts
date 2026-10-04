@@ -72,10 +72,18 @@ export function sendScores(now = Date.now()): (key: string) => number {
   return (key) => decayed(table[key], now);
 }
 
-/** Stable sort by score, highest first (ties keep their original order). */
-export function byFrequency<T>(items: readonly T[], keyOf: (item: T) => string, score: (key: string) => number): T[] {
+/** Stable sort by score, highest first — or, with `mostLast`, highest LAST
+ *  (for lists read from the bottom, like the Send pill, which opens upward
+ *  from its search box). Ties keep their original order either way. */
+export function byFrequency<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string,
+  score: (key: string) => number,
+  opts?: { mostLast?: boolean },
+): T[] {
+  const dir = opts?.mostLast ? -1 : 1;
   return items
     .map((item, i) => ({ item, i, s: score(keyOf(item)) }))
-    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .sort((a, b) => dir * (b.s - a.s) || a.i - b.i)
     .map((x) => x.item);
 }
