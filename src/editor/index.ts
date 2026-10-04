@@ -2277,6 +2277,11 @@ const ribbonContext: RibbonContext = {
     if (multiDocActive && multiDocToggleAllNav) multiDocToggleAllNav();
     else settings.set('navPaneVisible', !settings.get('navPaneVisible'));
   },
+  searchNavPane: () => {
+    if (multiDocActive && multiDocShowAllNav) multiDocShowAllNav();
+    else if (!settings.get('navPaneVisible')) settings.set('navPaneVisible', true);
+    activeNavPanelResolver()?.setSearchMode(true);
+  },
   setNavDepth: (level) => activeNavPanelResolver()?.setMaxLevel(level),
   // ─── No-default-binding hooks ────────────────────────────────
   // Each routes through the same button's existing click handler
@@ -4547,6 +4552,9 @@ const VIEWLESS_RIBBON_COMMANDS = new Set<AnyCommandId>([
   // Toggling the nav-pane visibility only flips a transient
   // setting + body class; works without an active doc.
   'toggleNavPane',
+  // Opening the nav search is pane UI too — works from the nav pane
+  // itself or with no doc focused.
+  'searchNavPane',
   // Home screen overlay — pure UI, no doc needed. Must be view-
   // less so it works in multi-pane with zero panes open.
   'goHome',
@@ -4605,6 +4613,7 @@ function runViewlessRibbon(id: AnyCommandId): void {
     case 'zoomReset': ribbonContext.zoomReset(); return;
     case 'resetDefaultColors': ribbonContext.resetDefaultColors(); return;
     case 'toggleNavPane': ribbonContext.toggleNavPane(); return;
+    case 'searchNavPane': ribbonContext.searchNavPane(); return;
     case 'goHome': ribbonContext.goHome(); return;
     case 'openQuickCardSearch': ribbonContext.openQuickCardSearch(); return;
     case 'insertLiveZone': ribbonContext.insertLiveZone(); return;

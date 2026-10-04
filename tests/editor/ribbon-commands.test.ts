@@ -788,6 +788,12 @@ describe('global hotkey fallback (focus outside the editor)', () => {
     expect(ribbonCommandForKey('Mod-Shift-y', { setPocket: 'Mod-Shift-Y' })).toBe('setPocket');
   });
 
+  it('Search Navigation Pane is unbound by default and bindable', () => {
+    expect(DEFAULT_RIBBON_KEYS['searchNavPane']).toBe('');
+    expect(ribbonCommandForKey('Mod-Shift-f')).toBe('toggleSlotExpand');
+    expect(ribbonCommandForKey('Alt-n', { searchNavPane: 'Alt-n' })).toBe('searchNavPane');
+  });
+
   it('leaves F-keys and multi-char names untouched', () => {
     expect(ribbonKeyStringFor(kbd({ key: 'F7', code: 'F7' }))).toBe('F7');
     expect(ribbonCommandForKey('F7')).toBe('setTag');

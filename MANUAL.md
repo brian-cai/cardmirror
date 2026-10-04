@@ -295,7 +295,9 @@ mirrors Word's Navigation Pane, but does more:
   Level 1** … **Show Levels 1–4** commands in Settings → Keyboard
   shortcuts (unbound by default); they act on the focused document's
   pane, exactly like the buttons.
-- **Search** — click the magnifier at the top of the pane to open the
+- **Search** — click the magnifier at the top of the pane (or bind the
+  **Search Navigation Pane** command under Settings → Keyboard shortcuts;
+  it shows the pane if hidden) to open the
   search bar under the level buttons. As you type, headings that
   contain the search are highlighted right in the outline — even ones
   hidden by the level filter or a collapsed section. Options, which

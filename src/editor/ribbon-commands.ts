@@ -4520,6 +4520,8 @@ export type RibbonCommandId =
   | 'openFindReplace'
   | 'openFindByProximity'
   | 'toggleNavPane'
+  // Open the navigation pane's heading search (showing the pane first).
+  | 'searchNavPane'
   // Set the navigation pane's depth, same as its 1 · 2 · 3 · 4 buttons.
   // No default bindings.
   | 'setNavDepth1'
@@ -4779,6 +4781,7 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'openFindReplace',
   'openFindByProximity',
   'toggleNavPane',
+  'searchNavPane',
   'setNavDepth1',
   'setNavDepth2',
   'setNavDepth3',
@@ -4993,6 +4996,7 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   openFindReplace: 'Find and Replace',
   openFindByProximity: 'Find Without Category Grouping',
   toggleNavPane: 'Show / Hide Navigation Pane',
+  searchNavPane: 'Search Navigation Pane',
   setNavDepth1: 'Navigation Pane: Show Level 1 (Pockets)',
   setNavDepth2: 'Navigation Pane: Show Levels 1–2 (Hats)',
   setNavDepth3: 'Navigation Pane: Show Levels 1–3 (Blocks)',
@@ -5080,6 +5084,7 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
   // show/hide ⇄ toggle visibility pairs
   toggleCommentsVisible: ['toggle comments', 'comments'],
   toggleNavPane: ['toggle navigation pane', 'toggle nav pane', 'sidebar', 'outline pane'],
+  searchNavPane: ['search headings', 'find heading', 'nav search', 'outline search'],
   setNavDepth1: ['nav depth', 'navigation depth', 'outline level', 'level 1', 'pockets'],
   setNavDepth2: ['nav depth', 'navigation depth', 'outline level', 'level 2', 'hats'],
   setNavDepth3: ['nav depth', 'navigation depth', 'outline level', 'level 3', 'blocks'],
@@ -5437,6 +5442,8 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   // ribbon + nav-pane × + pull-tab; the keybinding is a power-
   // user convenience layer, not a discoverable default.
   toggleNavPane: '',
+  // No default — the pane's magnifier is the primary UI.
+  searchNavPane: '',
   // No defaults — the pane's own 1–4 buttons are the primary UI.
   setNavDepth1: '',
   setNavDepth2: '',
@@ -5716,6 +5723,9 @@ export interface RibbonContext {
    *  (transient), so toggling in one window leaves siblings
    *  untouched. */
   toggleNavPane: () => void;
+  /** Show the navigation pane if hidden and open its heading search,
+   *  focusing the search field. */
+  searchNavPane: () => void;
   /** Set the focused document's navigation-pane depth, exactly as
    *  clicking its level button would (transient, per-panel — never
    *  written to settings). */
@@ -5868,6 +5878,7 @@ const DEFAULT_RIBBON_CONTEXT: RibbonContext = {
   openFindReplace: () => {},
   openFindByProximity: () => {},
   toggleNavPane: () => {},
+  searchNavPane: () => {},
   setNavDepth: () => {},
   lastFontColor: () => null,
   openSettings: () => {},
@@ -6709,6 +6720,12 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
       return (_state, dispatch) => {
         if (!dispatch) return true;
         ctx.toggleNavPane();
+        return true;
+      };
+    case 'searchNavPane':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.searchNavPane();
         return true;
       };
     case 'setNavDepth1':
