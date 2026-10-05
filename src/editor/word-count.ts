@@ -46,6 +46,12 @@ export interface ReaderRates {
  * tag/analytic/cite. When `from`/`to` are omitted, counts the whole doc.
  */
 export function countReadAloudSplit(doc: PMNode, from?: number, to?: number): ReadAloudCounts {
+  // Whole doc: sum cached per-node counts (see countSubtree), so after an
+  // edit only the nodes on the edited path are recounted.
+  if (from === undefined && to === undefined) {
+    const c = countSubtree(doc);
+    return { body: c.body, other: c.other };
+  }
   const lo = from ?? 0;
   const hi = to ?? doc.content.size;
   const counts: ReadAloudCounts = { body: 0, other: 0 };
@@ -63,6 +69,34 @@ export function countReadAloudSplit(doc: PMNode, from?: number, to?: number): Re
     counts[bucket] += countWords(text.slice(start, end));
     return false;
   });
+  return counts;
+}
+
+/** Read-aloud counts per node, keyed by node identity. ProseMirror nodes
+ *  are immutable and an edit rebuilds only the path from the root to the
+ *  changed text, so every untouched subtree keeps its node object — and its
+ *  cached count. The live whole-doc readout on a 10M-character masterfile
+ *  goes from a full walk (~55 ms after each typing pause) to a recount of
+ *  the one card being edited. A text node's bucket depends only on its
+ *  parent, which is inside the subtree, so a subtree's count is a pure
+ *  function of the subtree. */
+const subtreeCounts = new WeakMap<PMNode, ReadAloudCounts>();
+
+function countSubtree(node: PMNode): ReadAloudCounts {
+  const cached = subtreeCounts.get(node);
+  if (cached) return cached;
+  const counts: ReadAloudCounts = { body: 0, other: 0 };
+  node.forEach((child) => {
+    if (child.isText) {
+      const bucket = readAloudBucket(child, node);
+      if (bucket) counts[bucket] += countWords(child.text ?? '');
+    } else {
+      const c = countSubtree(child);
+      counts.body += c.body;
+      counts.other += c.other;
+    }
+  });
+  subtreeCounts.set(node, counts);
   return counts;
 }
 

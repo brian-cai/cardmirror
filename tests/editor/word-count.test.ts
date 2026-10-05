@@ -136,3 +136,22 @@ describe('two-rate read time', () => {
     expect(formatReadTimeFor(counts, { wpm: 0 })).toBe('—');
   });
 });
+
+describe('whole-doc count cache', () => {
+  it('matches a full walk, including after edits that change counts', async () => {
+    const { EditorState } = await import('prosemirror-state');
+    const { schema } = await import('../../src/schema/index.js');
+    const { countReadAloudSplit } = await import('../../src/editor/word-count.js');
+    const hl = schema.marks['highlight']!.create();
+    const p = (t: string, marks = [hl]) => schema.nodes['paragraph']!.create(null, schema.text(t, marks));
+    let state = EditorState.create({ doc: schema.nodes['doc']!.create(null, [p('one two three'), p('four five'), p('six', [])]) });
+    const full = (d: typeof state.doc) => countReadAloudSplit(d, 0, d.content.size);
+    expect(countReadAloudSplit(state.doc)).toEqual(full(state.doc));
+    // Add highlighted words in the second paragraph, then delete some in the first.
+    state = state.apply(state.tr.insertText(' seven eight', 26).addMark(26, 38, hl));
+    expect(countReadAloudSplit(state.doc)).toEqual(full(state.doc));
+    expect(countReadAloudSplit(state.doc).body).toBe(7);
+    state = state.apply(state.tr.delete(1, 5));
+    expect(countReadAloudSplit(state.doc)).toEqual(full(state.doc));
+  });
+});
