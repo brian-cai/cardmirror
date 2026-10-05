@@ -3313,15 +3313,15 @@ ipcMain.handle('host:set-update-source', async (event, input: unknown) => {
 
 /** The user manual (MANUAL.md), rendered on GitHub. Linked from the Help
  *  menu so the full guide is one click away. */
-const MANUAL_URL = 'https://github.com/ant981228/cardmirror/blob/main/MANUAL.md';
+const MANUAL_URL = 'https://github.com/brian-cai/cardmirror/blob/xtgg/MANUAL.md';
 
 /** The privacy policy (PRIVACY.md), rendered on GitHub. Linked from the Help
  *  menu alongside the manual (and from Settings → General). */
-const PRIVACY_URL = 'https://github.com/ant981228/cardmirror/blob/main/PRIVACY.md';
+const PRIVACY_URL = 'https://github.com/brian-cai/cardmirror/blob/xtgg/PRIVACY.md';
 
 /** The terms of use (TERMS.md), rendered on GitHub. Linked from the Help menu
  *  alongside the manual and privacy policy (and from Settings → General). */
-const TERMS_URL = 'https://github.com/ant981228/cardmirror/blob/main/TERMS.md';
+const TERMS_URL = 'https://github.com/brian-cai/cardmirror/blob/xtgg/TERMS.md';
 
 /** Best-effort dialog-parent lookup. Prefers the focused window,
  *  but if the user has alt-tabbed away between clicking

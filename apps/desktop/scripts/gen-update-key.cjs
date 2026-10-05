@@ -34,7 +34,7 @@ const one = (name, fallback) => {
 const all = (name) => args.flatMap((a, i) => (a === `--${name}` && args[i + 1] ? [args[i + 1]] : []));
 
 const publish = require(path.join(__dirname, '..', 'package.json')).build?.publish ?? {};
-const repo = one('repo', 'brian-cai/cardmirror' /* this fork's stream; package.json still names upstream */);
+const repo = one('repo', 'brian-cai/cardmirror');
 if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
   console.error('Pass --repo owner/repo (the repository whose releases this key will sign).');
   process.exit(2);

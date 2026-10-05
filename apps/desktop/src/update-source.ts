@@ -34,9 +34,9 @@ export interface PinnedUpdateSource extends UpdateSource {
   spki: string;
 }
 
-/** The official CardMirror release stream — used when the packaged app has
- *  no readable `app-update.yml` (it always should). */
-export const DEFAULT_UPDATE_SOURCE: UpdateSource = { owner: 'ant981228', repo: 'cardmirror' };
+/** This build's release stream — used when the packaged app has no
+ *  readable `app-update.yml` (it always should). */
+export const DEFAULT_UPDATE_SOURCE: UpdateSource = { owner: 'brian-cai', repo: 'cardmirror' };
 
 // GitHub's own limits: owners are alphanumerics + single hyphens (≤39),
 // repo names alphanumerics plus `-`, `_`, `.`.

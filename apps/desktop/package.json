@@ -3,7 +3,7 @@
   "version": "1.14.7",
   "description": "CardMirror — Electron desktop wrapper",
   "author": "Anthony Trufanov",
-  "homepage": "https://github.com/ant981228/cardmirror",
+  "homepage": "https://github.com/brian-cai/cardmirror",
   "private": true,
   "type": "commonjs",
   "main": "dist/main.js",
@@ -147,7 +147,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "ant981228",
+      "owner": "brian-cai",
       "repo": "cardmirror"
     },
     "afterSign": "scripts/sign-mac.js",

@@ -40,21 +40,6 @@ manual; [`PRIVACY.md`](./PRIVACY.md) for how CardMirror handles your data;
 [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design;
 [`PROJECT.md`](./PROJECT.md) for project orientation.
 
-A video walkthrough of CardMirror's basic functions (made by the original project, so it doesn't show this build's additions) is [here](https://www.youtube.com/playlist?list=PLXM5iwKNQkSs).
-
-## Sharing relay status
-
-[![Sharing relay status](https://uptime.betterstack.com/status-badges/v2/monitor/2xdk0.svg)](https://cardmirror.betteruptime.com/)
-
-Card sharing and collaboration sessions go through a small relay server.
-If sharing seems broken and you're on the official relay, check its
-status page at
-**[cardmirror.betteruptime.com](https://cardmirror.betteruptime.com/)**
-before troubleshooting on your end. (That relay and its status page are
-run by the original CardMirror project, not this build. If your team uses
-a private relay, ask whoever runs it.) Everything else in CardMirror works
-offline and does not depend on it.
-
 ## Install
 
 Desktop builds live on this repo's
@@ -118,30 +103,10 @@ Two options for installation, depending upon distribution:
   ```sh
   sudo pacman -U cardmirror-x.x.x.pacman
   ```
-  (The `cardmirror-bin` AUR package installs the original CardMirror,
-  not this build.)
 
-### Web app (Chromebook & browser)
+### Chromebook & browser
 
-This build is desktop-only: there's no hosted web version of it. The
-original CardMirror project runs hosted web editions at
-[cardmirror.app](https://cardmirror.app/) and
-[lite.cardmirror.app](https://lite.cardmirror.app/) — those are not run
-by this build and don't have its features, but they work on a Chromebook
-or a locked-down school machine (open in Chrome, Edge or ChromeOS and click
-**Install** in the address bar).
-
-> **Web feels slow on big documents? Check your extensions.** Some browser
-> extensions — password managers (1Password, LastPass, Bitwarden) and form
-> fillers especially — rescan the whole page every time you focus a text box,
-> which can freeze the editor for a second or more on a large file. The desktop
-> app never hits this because it loads no extensions. To confirm, open the app
-> in an Incognito window (extensions are off there) — if it's snappy, an
-> extension is the cause. To fix it without turning the extension off
-> everywhere, tell Chrome to run it only on this site by request: click the
-> **puzzle-piece (Extensions)** icon in the toolbar, click the **⋮** next to the
-> extension, and set **"This can read and change site data" → "When you click
-> the extension."**
+This build is desktop-only (macOS, Windows, Linux).
 
 ### Updates
 
