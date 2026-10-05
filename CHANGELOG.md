@@ -5,6 +5,34 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.7 — 2026-10-05
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **A heads-up before sharing or joining a large document.** Very large
+  files are slow to join and can make typing lag for everyone in the
+  session, so Start Session and Join now say so first (Start Anyway /
+  Join Anyway). Keeping your own copy and merging afterward at
+  extinction.gg/conflictingdocx works too.
+
+### Faster
+
+- **Co-editing feels quicker.** Your edits reach your partner sooner, and
+  theirs appear sooner for you — no more waiting out a send timer after
+  a pause.
+- **Joining a big shared document is far faster** — seconds become a
+  fraction of a second for large files.
+- **No more pauses a few seconds into a session**, and fewer periodic
+  pauses while sharing a big document.
+
+### Changed
+
+- **Opening a recovered draft opens it in a new window** instead of
+  replacing the document you're working on.
+
 ## 1.14.6 — 2026-10-05
 
 Brian's (@brian-cai) build of CardMirror, updating from
