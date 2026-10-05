@@ -40,6 +40,14 @@ manual; [`PRIVACY.md`](./PRIVACY.md) for how CardMirror handles your data;
 [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design;
 [`PROJECT.md`](./PROJECT.md) for project orientation.
 
+## Sharing relay status
+
+Card sharing and co-editing sessions go through a small relay server. If
+sharing seems broken, check the relay's live status at
+**[cardmirror.extinction.gg](https://cardmirror.extinction.gg/)** before
+troubleshooting on your end. Everything else in CardMirror works offline
+and doesn't depend on it.
+
 ## Install
 
 Desktop builds live on this repo's
