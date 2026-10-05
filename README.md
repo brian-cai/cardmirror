@@ -2,31 +2,36 @@
   <img src="./logo.png" alt="CardMirror" width="280" />
 </p>
 
-# CardMirror
+# CardMirror — XTGG build
 
-CardMirror is a debate text editor focused on high school and college
-policy debate. It's a standalone
+**This is Brian Cai's (XTGG) build of CardMirror**, a debate text editor
+focused on high school and college policy debate. It's a standalone
 replacement for the editor side of
 **[Verbatim](https://github.com/ashtarcommunications/verbatim)**, the
-Microsoft Word add-in most US debate teams use: same organizational structure, 
+Microsoft Word add-in most US debate teams use: same organizational structure,
 same F-key shortcuts, same send-to-speech
 workflow, same Word-compatible `.docx` files — but with no Word, no
 macros, and no add-in. That keeps it fast on the multi-megabyte
-evidence files debaters work in, and enables cross-platform feature parity.
+evidence files debaters work in.
 
-Run it as a **desktop app** for tournament-day work, or as a **web
-preview** in any browser for trying it out or working from a Chromebook
-or locked-down school machine.
+It's built from the original open-source CardMirror and adds its own
+features and fixes on top (team files, search-to-send, document frames,
+faster file opening and co-editing, signed updates, and more — see
+[`CHANGELOG.md`](./CHANGELOG.md)). **Download it from this repo's
+[Releases page](https://github.com/brian-cai/cardmirror/releases/latest)**
+and it updates itself from here.
 
-**▶ Try the live web preview: <https://cardmirror.app/>**
-
+> **Already have CardMirror installed?** Just install this build over it
+> (steps below). It replaces the app in place and keeps your settings,
+> documents and send codes; from then on it updates from this repo.
+>
 > **Keep backups.** CardMirror is stable and used daily, but no
 > editor is bug-free — keep a copy of anything critical in a second
 > format.
 >
-> **Desktop builds are unsigned**, so Windows and macOS warn you the
-> first time you launch. The one-time workaround for each is in the
-> install steps below.
+> **Desktop builds aren't signed with a paid certificate**, so Windows and
+> macOS warn you the first time you launch. The one-time workaround for
+> each is in the install steps below.
 
 See [`MANUAL.md`](./MANUAL.md) for the full user
 manual; [`PRIVACY.md`](./PRIVACY.md) for how CardMirror handles your data;
@@ -35,35 +40,35 @@ manual; [`PRIVACY.md`](./PRIVACY.md) for how CardMirror handles your data;
 [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design;
 [`PROJECT.md`](./PROJECT.md) for project orientation.
 
-You can find a video walkthrough of CardMirror's basic functions [here](https://www.youtube.com/playlist?list=PLXM5iwKNQkSs). 
+A video walkthrough of CardMirror's basic functions (made by the original project, so it doesn't show this build's additions) is [here](https://www.youtube.com/playlist?list=PLXM5iwKNQkSs).
 
 ## Sharing relay status
 
 [![Sharing relay status](https://uptime.betterstack.com/status-badges/v2/monitor/2xdk0.svg)](https://cardmirror.betteruptime.com/)
 
 Card sharing and collaboration sessions go through a small relay server.
-If sharing seems broken, check the live status page at
+If sharing seems broken and you're on the official relay, check its
+status page at
 **[cardmirror.betteruptime.com](https://cardmirror.betteruptime.com/)**
-before troubleshooting on your end. Everything else in CardMirror works
+before troubleshooting on your end. (That relay and its status page are
+run by the original CardMirror project, not this build. If your team uses
+a private relay, ask whoever runs it.) Everything else in CardMirror works
 offline and does not depend on it.
-
-## Support
-
-The core CardMirror editor is free, and built and maintained by one
-person. If it's useful to you, two ways to help keep it going:
-
-- **Subscribe at [Debate Decoded](https://debate-decoded.ghost.io/)** —
-  recurring support that funds ongoing development, and the best way to
-  keep the project moving.
-- **[Tip once on Ko-fi](https://ko-fi.com/anthonytrufanov)** — a
-  one-time contribution, no account needed. (Or use the **Sponsor**
-  button at the top of the repo.)
 
 ## Install
 
-Desktop builds live on the [Releases page](https://github.com/ant981228/cardmirror/releases).
-Pick the file for your operating system, run the installer, and
-launch CardMirror like any other app.
+Desktop builds live on this repo's
+**[Releases page](https://github.com/brian-cai/cardmirror/releases/latest)**
+(the direct download links are at the top of each release). Pick the
+file for your operating system, run the installer, and launch
+CardMirror like any other app. Installing over an existing CardMirror
+replaces it and keeps your settings.
+
+Each release also has **CardMirror Lite** files (`CardMirror-Lite-…`),
+a separate edition for school-managed devices that can't allow AI
+features or internet access: no AI, no card sharing or co-editing, and no
+update checks (so it doesn't update itself). It installs alongside the
+regular app. Most people want the regular build.
 
 ### macOS
 
@@ -89,7 +94,7 @@ launch CardMirror like any other app.
 
 ### Windows
 
-1. Download `CardMirror Setup x.x.x.exe`.
+1. Download `CardMirror-Setup-x.x.x.exe`.
 2. Run the installer (Next → Install → Finish).
 3. **First launch only.** SmartScreen shows "Windows protected your
    PC." Click **More info** → **Run anyway**.
@@ -108,37 +113,23 @@ Two options for installation, depending upon distribution:
   For most graphical desktop environments with modern file managers, you should
   be able to run the AppImage by double-clicking after the `chmod +x` command.
 
-- **Arch and Arch-based distributions** — use the AUR:
-  ```sh
-  yay -S cardmirror-bin
-  # or with paru: paru -S cardmirror-bin
-  ```
-  Or grab `cardmirror-x.x.x.pacman` from the release directly and:
+- **Arch and Arch-based distributions** — grab
+  `cardmirror-x.x.x.pacman` from the release and:
   ```sh
   sudo pacman -U cardmirror-x.x.x.pacman
   ```
+  (The `cardmirror-bin` AUR package installs the original CardMirror,
+  not this build.)
 
 ### Web app (Chromebook & browser)
 
-No download needed — open the
-[live web app](https://cardmirror.app/) in a Chromium browser
-(Chrome, Edge, or ChromeOS) and click the **Install** button in the address bar
-to run CardMirror in its own window, offline, updating itself on relaunch. On a
-Chromebook this is the way to run it — no desktop build required.
-
-Installed, the web app does most of what the desktop editions do: **save in
-place** and autosave (it may ask for permission to edit each file),
-one-keystroke **Paste Text**, **multiple windows** (New Document / New Speech
-Document open their own window) with the dropzone, Quick Cards, and send-to-speech
-kept in sync across them, the **three-pane workspace**, and single-file **Clean /
-Convert / Compress** tools on the home screen.
-
-Still desktop-only: background file-library search, folder-wide bulk operations,
-Send to Verbatim Flow, voice control, card sharing, and real-time **co-editing**
-(share a document and edit it together live — experimental). Firefox and Safari run the
-editor but lack the File System Access API, so there Save falls back to a
-download. See **[Desktop vs. web](./MANUAL.md#desktop-vs-web)** in the manual for
-the full breakdown.
+This build is desktop-only: there's no hosted web version of it. The
+original CardMirror project runs hosted web editions at
+[cardmirror.app](https://cardmirror.app/) and
+[lite.cardmirror.app](https://lite.cardmirror.app/) — those are not run
+by this build and don't have its features, but they work on a Chromebook
+or a locked-down school machine (open in Chrome, Edge or ChromeOS and click
+**Install** in the address bar).
 
 > **Web feels slow on big documents? Check your extensions.** Some browser
 > extensions — password managers (1Password, LastPass, Bitwarden) and form
@@ -158,8 +149,15 @@ the full breakdown.
 current, or announces an available update and downloads it in the
 background.
 
-CardMirror also checks for updates automatically — silently at launch
-and once a day, speaking up only when a new version is actually ready.
+CardMirror also checks for updates automatically — at launch, every
+4 hours, and when you come back to the app after an hour away — speaking
+up only when a new version is actually ready. The **Check for updates**
+button in the status bar (bottom of the window) checks on demand.
+
+Updates come from this repo's releases, and every one is
+cryptographically signed: the app refuses to install an update whose
+signature doesn't match this build's signing key (fingerprint
+`THSU-D7QH-EMVL`), so a tampered download can't get onto your machine.
 Turn this off (or pause it for a week — handy at a tournament) in
 Settings → General → "About this install" → **Check for updates
 automatically**.
@@ -176,9 +174,6 @@ the releases page instead so you can grab the new `.dmg`.
 Going to a tournament? **Pause update checks for 1 week** (Settings →
 General → "About this install") stops all automatic checks and
 downloads until the shown resume date.
-
-Linux users who installed via the AUR can update with `yay -Syu`
-instead.
 
 ## (Optional) Set up AI features
 
@@ -248,17 +243,17 @@ is installed.
 ### 2. Download the source
 
 1. Open
-   [the CardMirror page on GitHub](https://github.com/ant981228/cardmirror)
+   [this build's `xtgg` branch on GitHub](https://github.com/brian-cai/cardmirror/tree/xtgg)
    in your browser.
 2. Click the **green `<> Code` button** near the top of the file list.
 3. Click **"Download ZIP"** at the bottom of the dropdown.
 4. Unzip the download. You'll get a folder called
-   **`cardmirror-main`**. Move it somewhere you can find later —
+   **`cardmirror-xtgg`**. Move it somewhere you can find later —
    your Desktop or Documents is fine.
-5. **Open the `cardmirror-main` folder and look inside.** Some
+5. **Open the `cardmirror-xtgg` folder and look inside.** Some
    unzippers double-wrap. You want the folder that directly
    contains `package.json`, `README.md`, `index.html`, and `src/`
-   — if you only see another `cardmirror-main` folder, that's the
+   — if you only see another `cardmirror-xtgg` folder, that's the
    wrapper; open it.
 
 ### 3. Open a terminal inside that folder
@@ -494,12 +489,14 @@ third-party attributions and license terms.
 
 ## License
 
-CardMirror is licensed under the
+Required Notice: Copyright (c) 2026 Anthony Trufanov. CardMirror (the
+original project this build is based on) is licensed under the
 [PolyForm Noncommercial License 1.0.0](./LICENSE). You can read,
 fork, modify, and share the source for any noncommercial purpose
 (personal use, hobby projects, debate-team and academic use,
 research, government use, charitable / public-interest
-organizations); commercial use requires a separate license. See
+organizations); commercial use requires a separate license. This build
+is distributed under the same license. See
 [`LICENSE`](./LICENSE) for the full terms.
 
 Underlying dependencies (ProseMirror and friends) ship under their
