@@ -11221,6 +11221,28 @@ async function runStartupRecoveryInner(skipUids?: ReadonlySet<string>): Promise<
         }
         return;
       }
+      // One doc per window: when this window already holds a real document,
+      // the draft opens in a NEW window instead of replacing it. Only an
+      // empty window (the blank starter under the home screen) takes it in
+      // place.
+      if (!isPristineStarter && host.canSpawnWindow) {
+        try {
+          await host.spawnWindow({
+            filename: entry.filename,
+            bytes: entry.bytes,
+            handle: typeof entry.handle === 'string' ? entry.handle : null,
+            format: entry.format,
+            // Same uid, so the new window keeps journaling into this draft.
+            uid: entry.uid,
+            markDirty: true,
+            recoveredFromSavedAt: journalStalenessBaseline(entry),
+            ...(entry.diskBase ? { diskBase: entry.diskBase } : {}),
+          });
+          return;
+        } catch (err) {
+          console.warn(`Couldn't open recovered "${entry.filename}" in a new window; opening here:`, err);
+        }
+      }
       await applyRecovery(entry);
     },
     onDiscard: async (entry) => {
