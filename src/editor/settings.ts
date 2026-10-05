@@ -666,6 +666,14 @@ export interface Settings {
    *  style.css consume it. Composes with light/dark; explicit Color
    *  overrides still win (inline styles beat the CSS blocks). */
   colorVisionFriendly: boolean;
+  /** Blue frame around a doc that's in a collaboration session. */
+  frameSharedSession: boolean;
+  /** Its color: '#rrggbb', or '' for the theme default (blue). */
+  frameSharedColor: string;
+  /** Red frame around the speech doc. */
+  frameSpeechDoc: boolean;
+  /** Its color: '#rrggbb', or '' for the theme default (red). */
+  frameSpeechColor: string;
   /** Accessibility: add a shape-coded underline to each in-document
    *  annotation kind (comment dotted, flashcard solid, AI thread
    *  dashed, private note double) so the kinds don't rely on tint hue
@@ -1848,6 +1856,10 @@ const DEFAULTS: Settings = {
   reduceMotion: 'auto',
   readerReduceMotion: false,
   colorVisionFriendly: false,
+  frameSharedSession: true,
+  frameSharedColor: '',
+  frameSpeechDoc: true,
+  frameSpeechColor: '',
   annotationShapes: false,
   distinguishShading: true,
   navAnalyticItalics: false,
@@ -2178,6 +2190,7 @@ export interface SettingMeta {
   /** Settings UI hint: how should this be rendered? */
   kind:
     | 'toggle'
+    | 'frameColor'
     | 'number'
     | 'defaultZoomPct'
     | 'customDash'
@@ -3010,6 +3023,44 @@ export const SETTING_METADATA: SettingMeta[] = [
     category: 'accessibility',
     section: 'Text width',
     aliases: ['line length', 'column width', 'narrow text', 'reading width'],
+  },
+  {
+    key: 'frameSharedSession',
+    label: 'Frame documents in a collaboration session',
+    description:
+      'Draws a colored frame around a document you\u2019re co-editing (around its pane in three-pane mode, around the window otherwise), so it\u2019s obvious it\u2019s shared.',
+    kind: 'toggle',
+    category: 'appearance',
+    section: 'Document frames',
+    aliases: ['border', 'outline', 'shared', 'session color', 'collab frame'],
+  },
+  {
+    key: 'frameSharedColor',
+    label: 'Shared-session frame color',
+    description: 'Pick one of the highlighter colors or your own. Default is blue.',
+    kind: 'frameColor',
+    category: 'appearance',
+    section: 'Document frames',
+    dependsOn: 'frameSharedSession',
+  },
+  {
+    key: 'frameSpeechDoc',
+    label: 'Frame the speech document',
+    description:
+      'Draws a colored frame around your speech document, so you always know which one cards are going to.',
+    kind: 'toggle',
+    category: 'appearance',
+    section: 'Document frames',
+    aliases: ['border', 'outline', 'speech doc color', 'speech frame'],
+  },
+  {
+    key: 'frameSpeechColor',
+    label: 'Speech-document frame color',
+    description: 'Pick one of the highlighter colors or your own. Default is red.',
+    kind: 'frameColor',
+    category: 'appearance',
+    section: 'Document frames',
+    dependsOn: 'frameSpeechDoc',
   },
   {
     key: 'colorVisionFriendly',
@@ -4910,6 +4961,10 @@ function sanitize(s: Settings): Settings {
     overrideShadingColor: !!s.overrideShadingColor,
     showCursorColorNames: !!s.showCursorColorNames,
     colorVisionFriendly: !!s.colorVisionFriendly,
+    frameSharedSession: s.frameSharedSession !== false,
+    frameSharedColor: /^#[0-9a-f]{6}$/i.test(String(s.frameSharedColor ?? '')) ? String(s.frameSharedColor).toLowerCase() : '',
+    frameSpeechDoc: s.frameSpeechDoc !== false,
+    frameSpeechColor: /^#[0-9a-f]{6}$/i.test(String(s.frameSpeechColor ?? '')) ? String(s.frameSpeechColor).toLowerCase() : '',
     annotationShapes: !!s.annotationShapes,
     distinguishShading: !!s.distinguishShading,
     navAnalyticItalics: !!s.navAnalyticItalics,

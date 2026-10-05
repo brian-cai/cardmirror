@@ -3821,6 +3821,24 @@ function applyReduceMotion(pref: 'auto' | 'on' | 'off'): void {
  *  token blocks in style.css. Orthogonal to `data-theme` (composes
  *  with dark); hand-set Color overrides land as inline styles on
  *  documentElement and still beat the preset. */
+/** Document frames (shared session / speech doc): on-off classes on <html>
+ *  and the chosen colors as CSS variables ('' = the stylesheet's theme
+ *  defaults, which adapt to dark mode). */
+function applyDocumentFrames(s: {
+  frameSharedSession: boolean;
+  frameSharedColor: string;
+  frameSpeechDoc: boolean;
+  frameSpeechColor: string;
+}): void {
+  const root = document.documentElement;
+  root.classList.toggle('pmd-frame-shared-off', !s.frameSharedSession);
+  root.classList.toggle('pmd-frame-speech-off', !s.frameSpeechDoc);
+  if (s.frameSharedColor) root.style.setProperty('--pmd-frame-shared-user', s.frameSharedColor);
+  else root.style.removeProperty('--pmd-frame-shared-user');
+  if (s.frameSpeechColor) root.style.setProperty('--pmd-frame-speech-user', s.frameSpeechColor);
+  else root.style.removeProperty('--pmd-frame-speech-user');
+}
+
 function applyColorVision(on: boolean): void {
   if (on) document.documentElement.setAttribute('data-cvd', 'friendly');
   else document.documentElement.removeAttribute('data-cvd');
@@ -4082,6 +4100,7 @@ settings.subscribe((s) => {
   applyIconSet(s.iconSet);
   applyReduceMotion(s.reduceMotion);
   applyColorVision(s.colorVisionFriendly);
+  applyDocumentFrames(s);
   applyAnnotationShapes(s.annotationShapes);
   applyDistinguishShading(s.distinguishShading);
   applyNavAnalyticItalics(s.navAnalyticItalics);
@@ -4357,6 +4376,7 @@ applyShowDocNameChip(settings.get('showDocNameChip'));
 applyIconSet(settings.get('iconSet'));
 applyReduceMotion(settings.get('reduceMotion'));
 applyColorVision(settings.get('colorVisionFriendly'));
+applyDocumentFrames(settings.all());
 applyAnnotationShapes(settings.get('annotationShapes'));
 applyDistinguishShading(settings.get('distinguishShading'));
 applyNavAnalyticItalics(settings.get('navAnalyticItalics'));

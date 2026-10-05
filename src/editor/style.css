@@ -16706,6 +16706,12 @@ body.pmd-multi-doc #collab-chip {
   --pmd-c-frame-shared: #5a8fff;
   --pmd-c-frame-speech: #f87171;
 }
+/* Settings → Appearance → Document frames: a chosen color (set on <html>
+   as --pmd-frame-*-user) wins over the theme default. */
+:root {
+  --pmd-frame-shared-color: var(--pmd-frame-shared-user, var(--pmd-c-frame-shared));
+  --pmd-frame-speech-color: var(--pmd-frame-speech-user, var(--pmd-c-frame-speech));
+}
 .pmd-pane-shared::after,
 .pmd-pane-speech::after,
 body:not(.pmd-multi-doc).pmd-collab-active::after,
@@ -16726,15 +16732,72 @@ body:not(.pmd-multi-doc).pmd-speech-banner-visible::after {
 }
 .pmd-pane-shared::after,
 body:not(.pmd-multi-doc).pmd-collab-active::after {
-  box-shadow: inset 0 0 0 var(--pmd-frame-width) var(--pmd-c-frame-shared);
+  box-shadow: inset 0 0 0 var(--pmd-frame-width) var(--pmd-frame-shared-color);
 }
 .pmd-pane-speech::after,
 body:not(.pmd-multi-doc).pmd-speech-banner-visible::after {
-  box-shadow: inset 0 0 0 var(--pmd-frame-width) var(--pmd-c-frame-speech);
+  box-shadow: inset 0 0 0 var(--pmd-frame-width) var(--pmd-frame-speech-color);
 }
 .pmd-pane-speech.pmd-pane-shared::after,
 body:not(.pmd-multi-doc).pmd-speech-banner-visible.pmd-collab-active::after {
   box-shadow:
-    inset 0 0 0 var(--pmd-frame-width) var(--pmd-c-frame-speech),
-    inset 0 0 0 calc(var(--pmd-frame-width) * 2) var(--pmd-c-frame-shared);
+    inset 0 0 0 var(--pmd-frame-width) var(--pmd-frame-speech-color),
+    inset 0 0 0 calc(var(--pmd-frame-width) * 2) var(--pmd-frame-shared-color);
+}
+
+/* Frames turned off in Settings (html.pmd-frame-*-off): drop that layer,
+   keeping the other frame when a doc is both shared and the speech doc. */
+html.pmd-frame-shared-off .pmd-pane-shared:not(.pmd-pane-speech)::after,
+html.pmd-frame-shared-off body:not(.pmd-multi-doc).pmd-collab-active:not(.pmd-speech-banner-visible)::after,
+html.pmd-frame-speech-off .pmd-pane-speech:not(.pmd-pane-shared)::after,
+html.pmd-frame-speech-off body:not(.pmd-multi-doc).pmd-speech-banner-visible:not(.pmd-collab-active)::after,
+html.pmd-frame-shared-off.pmd-frame-speech-off .pmd-pane-speech.pmd-pane-shared::after,
+html.pmd-frame-shared-off.pmd-frame-speech-off body:not(.pmd-multi-doc).pmd-speech-banner-visible.pmd-collab-active::after {
+  box-shadow: none;
+}
+html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-pane-speech.pmd-pane-shared::after,
+html.pmd-frame-shared-off:not(.pmd-frame-speech-off) body:not(.pmd-multi-doc).pmd-speech-banner-visible.pmd-collab-active::after {
+  box-shadow: inset 0 0 0 var(--pmd-frame-width) var(--pmd-frame-speech-color);
+}
+html.pmd-frame-speech-off:not(.pmd-frame-shared-off) .pmd-pane-speech.pmd-pane-shared::after,
+html.pmd-frame-speech-off:not(.pmd-frame-shared-off) body:not(.pmd-multi-doc).pmd-speech-banner-visible.pmd-collab-active::after {
+  box-shadow: inset 0 0 0 var(--pmd-frame-width) var(--pmd-frame-shared-color);
+}
+
+/* Frame color picker: the highlighter swatches + custom + Default. */
+.pmd-frame-color-editor {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+}
+.pmd-frame-color-swatches {
+  display: grid;
+  grid-template-columns: repeat(8, 20px);
+  gap: 4px;
+}
+.pmd-frame-color-swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.pmd-frame-color-swatch:hover {
+  transform: scale(1.12);
+}
+.pmd-frame-color-selected {
+  outline: 2px solid var(--pmd-c-accent);
+  outline-offset: 1px;
+}
+.pmd-frame-color-custom {
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
 }

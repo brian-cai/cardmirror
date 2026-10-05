@@ -1191,6 +1191,10 @@ class SettingsModal {
       row.appendChild(text);
       row.appendChild(buildShadingHexEditor('defaultShadingColor'));
       return row;
+    } else if (meta.kind === 'frameColor') {
+      row.appendChild(text);
+      row.appendChild(buildFrameColorEditor(meta.key as 'frameSharedColor' | 'frameSpeechColor'));
+      return row;
     } else if (meta.kind === 'colorSlots') {
       row.appendChild(text);
       row.appendChild(buildColorSlotsEditor(meta.key as keyof Settings));
@@ -2363,6 +2367,51 @@ async function importTeamFile(): Promise<boolean> {
     showToast(`Imported team \u201c${file!.name}\u201d.`);
     return true;
   }
+}
+
+/** Document-frame color: the highlighter's 15 swatches, a custom color, and
+ *  Default (the theme's own blue / red, which adapts to dark mode). */
+function buildFrameColorEditor(key: 'frameSharedColor' | 'frameSpeechColor'): HTMLElement {
+  const fallback = key === 'frameSharedColor' ? '#2563eb' : '#dc2626';
+  const wrap = document.createElement('div');
+  wrap.className = 'pmd-frame-color-editor';
+  const swatches = document.createElement('div');
+  swatches.className = 'pmd-frame-color-swatches';
+  const buttons: Array<{ el: HTMLButtonElement; hex: string }> = [];
+  for (const c of WORD_HIGHLIGHT_COLORS) {
+    const hex = `#${c.rgb.toLowerCase()}`;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pmd-frame-color-swatch';
+    b.style.background = hex;
+    b.title = c.label;
+    b.setAttribute('aria-label', c.label);
+    b.addEventListener('click', () => settings.set(key, hex));
+    swatches.appendChild(b);
+    buttons.push({ el: b, hex });
+  }
+  const custom = document.createElement('input');
+  custom.type = 'color';
+  custom.className = 'pmd-frame-color-custom';
+  custom.title = 'Custom color';
+  custom.setAttribute('aria-label', 'Custom color');
+  custom.addEventListener('change', () => settings.set(key, custom.value.toLowerCase()));
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'pmd-settings-btn';
+  reset.textContent = 'Default';
+  reset.addEventListener('click', () => settings.set(key, ''));
+  const sync = (): void => {
+    const v = settings.get(key);
+    custom.value = v || fallback;
+    for (const { el, hex } of buttons) el.classList.toggle('pmd-frame-color-selected', hex === v);
+    reset.disabled = !v;
+  };
+  sync();
+  const unsubscribe = settings.subscribe(sync);
+  registerRowCleanup(wrap, () => unsubscribe());
+  wrap.append(swatches, custom, reset);
+  return wrap;
 }
 
 /** Crash-dumps section — its own header between About this install and
