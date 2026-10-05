@@ -5,6 +5,39 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.6 — 2026-10-05
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Your documents come back after a restart or update.** CardMirror
+  reopens the documents you had open, from their own files, in the same
+  windows. A document with unsaved changes reopens with those changes
+  restored (still unsaved), instead of as an untitled copy. Only drafts
+  whose file moved or was never saved go to Recover drafts. Settings →
+  General → Workspace → "Reopen them automatically when CardMirror
+  starts" (on by default).
+- **Switch Window shows which window is which.** In the window list (`w`
+  in Search Everything), the speech doc's window has a red bar and a
+  window in a shared session a blue one — the same colors as their
+  frames.
+
+### Faster
+
+- **Opening Word files is about twice as fast** (a new XML reader).
+- **Saving a Word file no longer freezes the window** — it builds the
+  file in the background.
+- **Smoother typing in very large files**: the live word count and the
+  crash-recovery snapshot only redo the part you edited.
+
+### Changed
+
+- **The three-pane workspace is gone** — documents always open in their
+  own windows. If you used three panes, your documents reopen as windows.
+- "Remember my last workspace" is now on by default.
+
 ## 1.14.5 — 2026-10-04
 
 Brian's (@brian-cai) build of CardMirror, updating from
