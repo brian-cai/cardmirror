@@ -168,14 +168,11 @@ describe('cyclable settings', () => {
     expect(keys()).toContain('iconSet');
     expect(keys()).toContain('headingMode');
 
-    // multiDocLayoutMode dependsOn multiDocWorkspace.
+    // Three-pane is retired in this build: its layout setting is never offered,
+    // even with the (now always-off) workspace flag set.
     const store = new SettingsStore();
-    store.set('multiDocWorkspace', false);
-    expect(cyclableSettings(mk({ store })).map((e) => String(e.setting.key))).not.toContain(
-      'multiDocLayoutMode',
-    );
     store.set('multiDocWorkspace', true);
-    expect(cyclableSettings(mk({ store })).map((e) => String(e.setting.key))).toContain(
+    expect(cyclableSettings(mk({ store })).map((e) => String(e.setting.key))).not.toContain(
       'multiDocLayoutMode',
     );
   });

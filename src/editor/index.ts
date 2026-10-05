@@ -802,10 +802,8 @@ async function runNewSpeechDocumentSingleDoc(): Promise<void> {
   if (!host.canSpawnWindow) {
     void alertDialog(
       'New Speech Document opens a separate window, which the web version can’t ' +
-        'create. To use a speech document here, turn on the Three-pane workspace ' +
-        '(Settings → General) — it shows several docs side by side in one window, ' +
-        'where one can be marked as the speech doc. (Or, in a second browser tab, ' +
-        'open a doc and use “Mark active doc as speech”.)',
+        'create. To use a speech document here, open it in a second browser tab ' +
+        'and use “Mark active doc as speech”.',
     );
     getActiveView()?.focus(); // reclaim focus the alert stole (Windows/Linux)
     return;
@@ -5568,19 +5566,8 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
 
-    // Section 5: Three-pane workspace
-    n['hat']!.create({ id: newHeadingId() }, schema.text('5. Three-pane workspace')),
-    paraText(
-      'Turn on ⚙ → General → "Three-pane workspace" for three side-by-side slots, each with its own outline, footer, and back/forward history (toggling reloads the editor). Mod-1 / Mod-2 / Mod-3 focus them.',
-    ),
-    blank(),
-    paraText(
-      'Drag a card or heading from one slot to another to copy it across — the source keeps its copy. Comments are off while multi-doc is on.',
-    ),
-    blank(),
-
-    // Section 6: Learn
-    n['hat']!.create({ id: newHeadingId() }, schema.text('6. Study your evidence')),
+    // Section 5: Learn
+    n['hat']!.create({ id: newHeadingId() }, schema.text('5. Study your evidence')),
     paraText(
       'CardMirror can turn evidence into spaced-repetition flashcards. They live only on your machine — they never travel with a .docx you share. Select some text and use Create Flashcard to anchor a question-and-answer or cloze card to it; anchored cards show up in the comments column beside the text they came from.',
     ),
@@ -5590,8 +5577,8 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
 
-    // Section 7: Collaboration
-    n['hat']!.create({ id: newHeadingId() }, schema.text('7. Share and co-edit')),
+    // Section 6: Collaboration
+    n['hat']!.create({ id: newHeadingId() }, schema.text('6. Share and co-edit')),
     paraText(
       'In the desktop app, CardMirror machines can send cards to each other and co-edit documents live — both end-to-end encrypted. Turn on Enable collaboration in ⚙ → Collaboration to get your pairing code and the Send / Receive pills, then swap codes with teammates to send cards straight to their machines.',
     ),
@@ -5605,8 +5592,8 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
 
-    // Section 8: Settings
-    n['hat']!.create({ id: newHeadingId() }, schema.text('8. Make it yours')),
+    // Section 7: Settings
+    n['hat']!.create({ id: newHeadingId() }, schema.text('7. Make it yours')),
     paraText(
       'Click ⚙ for Settings and 📖 for the full keyboard reference any time.',
     ),

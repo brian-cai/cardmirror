@@ -176,7 +176,7 @@ describe('UI tour', () => {
     tour.start();
     for (let i = 0; i < 6; i++) btn('Next')!.click();
     expect(card()!.textContent).toContain('Speech docs');
-    expect(card()!.textContent).toContain('three-pane workspace');
+    expect(card()!.textContent).toContain('Speech cluster lives here');
     btn('Next')!.click();
     expect(card()!.textContent).toContain('Read mode');
   });

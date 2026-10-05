@@ -155,9 +155,8 @@ function buildSteps(opts: { includeCreateDoc: boolean }): TourStep[] {
         'Build the doc you’ll actually read: start a speech, then send cards into it ' +
         'from your prep as you go.',
       absentBody:
-        'One more thing lives here when the three-pane workspace is on: the Speech ' +
-        'cluster — start a speech doc and send cards into it from your prep as you go. ' +
-        'Turn on three panes in ⚙ → General → "Three-pane workspace" to see it.',
+        'In the desktop app, the Speech cluster lives here — start a speech doc and ' +
+        'send cards into it from your prep as you go.',
       target: el('speech-stack'),
     },
     {

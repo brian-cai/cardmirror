@@ -67,7 +67,24 @@ const AI_COMMANDS = new Set<RibbonCommandId>([
   'repairFormatting',
 ]);
 
+/** Three-pane-only commands: slots exist only in the three-pane
+ *  workspace, which this build retires (one window per document). */
+const SLOT_COMMANDS = new Set<RibbonCommandId>([
+  'focusSlot1',
+  'focusSlot2',
+  'focusSlot3',
+  'sendDocToSlot1',
+  'sendDocToSlot2',
+  'sendDocToSlot3',
+  'toggleSlotExpand',
+  'hideSlot',
+  'revealAllSlots',
+  'cycleDocNext',
+  'cycleDocPrev',
+]);
+
 export function isRibbonCommandAvailable(id: RibbonCommandId): boolean {
+  if (SLOT_COMMANDS.has(id)) return false;
   if (isLiteBuild() && AI_COMMANDS.has(id)) return false;
   if (FLOW_COMMANDS.has(id)) return isWindowsHost();
   if (id === 'toggleVoice' || id === 'calibrateVoice') return getElectronHost() !== null;
