@@ -144,7 +144,9 @@ import { installPermissionPolicy, installWebHardening } from './web-hardening.js
 // main-process crash dialog. Nothing may log before this line.
 hardenStdio();
 
-const DEV_SERVER_URL = 'http://localhost:5173';
+// Dev only (unpackaged): CARDMIRROR_DEV_URL points at a vite on another
+// port when 5173 is taken. Packaged builds never read it.
+const DEV_SERVER_URL = (!app.isPackaged && process.env['CARDMIRROR_DEV_URL']) || 'http://localhost:5173';
 
 // Every webContents: no new windows (links go to the browser), no
 // navigation off the app's own pages, no <webview> (web-hardening.ts).
