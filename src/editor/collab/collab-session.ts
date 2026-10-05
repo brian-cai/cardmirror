@@ -43,6 +43,20 @@ import { schema } from '../../schema/index.js';
 /** Browsers cap the bytes a page may have in flight on keepalive requests
  *  (Chromium: 64 KB); the unload path only sends blobs under this. */
 const UNLOAD_KEEPALIVE_MAX_BYTES = 60_000;
+/** An edit after a quiet spell is sent this soon (not on the next flush
+ *  tick): long enough to coalesce the keystroke's follow-up transactions. */
+const EAGER_FLUSH_COALESCE_MS = 15;
+/** The relay's snapshot cap, on the base64 body (relay: MAX_UPDATE_BYTES
+ *  × 8). A snapshot over it only earns a 413. */
+const RELAY_SNAPSHOT_B64_CAP = 5 * 1024 * 1024 * 8;
+/** After an over-cap snapshot, wait this long before exporting another
+ *  (the document may shrink; the export itself is the cost). */
+const OVERSIZE_SNAPSHOT_RETRY_MS = 15 * 60_000;
+/** Keep compaction under ~1% of the main thread: the next snapshot waits
+ *  at least this many times the last export's duration. */
+const SNAPSHOT_COST_FACTOR = 100;
+/** Exports shorter than this are not worth spacing out by cost. */
+const NOTICEABLE_EXPORT_MS = 50;
 import {
   bytesToBase64,
   decryptBlob,
@@ -159,6 +173,9 @@ export interface CollabSessionOptions {
   /** Host compaction cadence: upload an encrypted snapshot every N
    *  posted updates. */
   snapshotEvery?: number;
+  /** ...and never sooner than this many ms after the previous one (a big
+   *  document's export is a visible pause; see uploadSnapshot). */
+  snapshotMinGapMs?: number;
   /** Self-echo watchdog deadline (see field docs); injectable for tests. */
   echoTimeoutMs?: number;
   /** Delay before the first room-history audit; injectable for tests. */
@@ -252,6 +269,14 @@ export class CollabSession {
   private ended = false;
   private postedCount = 0;
   private catchUpRunning = false;
+  /** When flush() last exported a diff — the eager-send idle test. */
+  private lastFlushAt = 0;
+  private eagerFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private offLocalUpdates: (() => void) | null = null;
+  private lastInboundDrainAt = 0;
+  private readonly snapshotMinGapMs: number;
+  private lastSnapshotAt = 0;
+  private snapshotCooldownMs = 0;
   /** Join only: asked once with the first downloaded page's sync-data
    *  size, BEFORE it is imported (the import is the slow, synchronous
    *  part on a large document); false cancels the join. */
@@ -339,6 +364,7 @@ export class CollabSession {
     this.backlogNoticeMinBlindMs = opts.backlogNoticeMinBlindMs ?? 60_000;
     this.receiveBatchMs = opts.receiveBatchMs ?? 120;
     this.snapshotEvery = opts.snapshotEvery ?? 50;
+    this.snapshotMinGapMs = opts.snapshotMinGapMs ?? 30_000;
     this.echoTimeoutMs = opts.echoTimeoutMs ?? 8000;
     this.auditDelayMs = opts.auditDelayMs ?? 15_000;
     this.inboundBatchBytes = opts.inboundBatchBytes ?? 8 * 1024 * 1024;
@@ -385,6 +411,7 @@ export class CollabSession {
     stallMs?: number;
     maxBackoffMs?: number;
     snapshotEvery?: number;
+    snapshotMinGapMs?: number;
     updateByteLimit?: number;
   }): Promise<{ session: CollabSession; shareCode: string; guestPass: string | null }> {
     const keyBytes = generateRoomKeyBytes();
@@ -399,7 +426,8 @@ export class CollabSession {
     const session = new CollabSession({ ...opts, roomId, key, role: 'host', loroDoc });
     const seed = loroDoc.export({ mode: 'snapshot' });
     let seq: number;
-    if (seed.length > session.updateByteLimit) {
+    const chunked = seed.length > session.updateByteLimit;
+    if (chunked) {
       // Large document: the seed exceeds the relay's per-update cap
       // (413 in the field on big master files). Ship it as cap-sized
       // update chunks — ordinary log entries that joins and live peers
@@ -416,6 +444,15 @@ export class CollabSession {
     session.lastSeq = seq;
     session.lastSentVersion = loroDoc.version();
     session.ackedVersion = session.lastSentVersion; // seed delivery succeeded
+    // The seed rows hold everything up to this version. Without this entry
+    // the host's audit ledger lacks its own seed, and the first audit (15 s
+    // in) escalated to a full-room scan: re-download, decrypt and decode
+    // every row — seconds of main thread on a big document.
+    session.foldTailVv(seq, loroDoc.version().toJSON());
+    // A chunked seed makes every joiner replay it op by op (30 s+ on a big
+    // document) until the room has a snapshot to load (~0.1 s) — so
+    // compact right away instead of after the first N posts.
+    if (chunked) void session.uploadSnapshot(seed);
     // Movable rooms mint a v2 share code carrying the compatibility
     // floor — its FORMAT is what fences pre-1.0 builds out of the
     // join-by-code path (see encodeShareCode). List rooms stay v1 so
@@ -521,6 +558,7 @@ export class CollabSession {
     stallMs?: number;
     maxBackoffMs?: number;
     snapshotEvery?: number;
+    snapshotMinGapMs?: number;
   }): Promise<CollabSession> {
     const key = await importRoomKey(opts.keyBytes);
     const loroDoc = new LoroDoc();
@@ -669,10 +707,12 @@ export class CollabSession {
       },
     });
     this.stream.start();
-    this.flushTimer = setInterval(() => {
-      this.flush();
-      this.checkEcho();
-    }, this.flushMs);
+    this.armFlushTimer();
+    // Eager first send (the Google Docs pattern): an edit after a quiet
+    // spell goes out at once instead of waiting up to a whole flush tick;
+    // continued typing rides the regular cadence, restarted from that
+    // send, so the request rate is unchanged.
+    this.offLocalUpdates ??= this.loroDoc.subscribeLocalUpdates(() => this.noteLocalChange());
     this.catchUpTimer = setInterval(() => void this.catchUp(), this.catchUpMs);
     // Every audit runs BEHIND a catch-up so its probe starts from a
     // current cursor: with its own unaligned timer the "~100B probe"
@@ -705,6 +745,7 @@ export class CollabSession {
     this.stopping = true;
     this.flush();
     await this.drainQueue().catch(() => {});
+    this.stopEagerFlush();
     if (this.flushTimer) clearInterval(this.flushTimer);
     if (this.catchUpTimer) clearInterval(this.catchUpTimer);
     if (this.auditTimer) clearInterval(this.auditTimer);
@@ -883,6 +924,32 @@ export class CollabSession {
 
   /** Export any local ops since the last flush into the send queue.
    *  Synchronous by design so `applyRemote` can call it pre-import. */
+  private armFlushTimer(): void {
+    if (this.flushTimer) clearInterval(this.flushTimer);
+    this.flushTimer = setInterval(() => {
+      this.flush();
+      this.checkEcho();
+    }, this.flushMs);
+  }
+
+  private noteLocalChange(): void {
+    if (this.ended || this.stopping || this.eagerFlushTimer || !this.flushTimer) return;
+    if (Date.now() - this.lastFlushAt < this.flushMs) return; // mid-burst: the tick sends it
+    this.eagerFlushTimer = setTimeout(() => {
+      this.eagerFlushTimer = null;
+      if (this.ended || this.stopping || !this.flushTimer) return;
+      this.flush();
+      this.armFlushTimer();
+    }, EAGER_FLUSH_COALESCE_MS);
+  }
+
+  private stopEagerFlush(): void {
+    if (this.eagerFlushTimer) clearTimeout(this.eagerFlushTimer);
+    this.eagerFlushTimer = null;
+    this.offLocalUpdates?.();
+    this.offLocalUpdates = null;
+  }
+
   flush(): void {
     if (this.ended) return;
     this.loroDoc.commit();
@@ -890,6 +957,7 @@ export class CollabSession {
     // An empty diff still exports a ~22-byte header blob, so gate on the
     // version vector actually advancing (compare() === 0 means equal).
     if (version.compare(this.lastSentVersion) === 0) return;
+    this.lastFlushAt = Date.now();
     const diff = this.loroDoc.export({ mode: 'update', from: this.lastSentVersion });
     const from = this.lastSentVersion;
     this.lastSentVersion = version;
@@ -1073,11 +1141,17 @@ export class CollabSession {
     } catch {
       return; /* undecodable — the audit's escalation full-scan remains the backstop */
     }
+    this.foldTailVv(seq, meta.partialEndVersionVector.toJSON());
+  }
+
+  /** foldTailMeta for a row whose end version is already known. */
+  private foldTailVv(seq: number, vv: Map<string, number>): void {
+    if (seq <= this.verifiedSnapCovers) return;
     const head = this.tailMetas[this.tailMetas.length - 1];
     if (head && this.tailBucketRowsInHead < this.tailBucketRows) {
       // Merge into the open bucket (vv maxima; bucket maxSeq advances).
       const merged = new Map(head.vv);
-      for (const [peer, counter] of meta.partialEndVersionVector.toJSON()) {
+      for (const [peer, counter] of vv) {
         if ((merged.get(peer) ?? 0) < counter) merged.set(peer, counter);
       }
       head.vv = [...merged];
@@ -1089,7 +1163,7 @@ export class CollabSession {
       this.tailOverflow = true;
       return;
     }
-    this.tailMetas.push({ seq, vv: [...meta.partialEndVersionVector.toJSON()] });
+    this.tailMetas.push({ seq, vv: [...vv] });
     this.tailBucketRowsInHead = 1;
   }
 
@@ -1165,15 +1239,22 @@ export class CollabSession {
     // never assume seq ordering here.
     this.inboundBuf.push(plain);
     this.inboundSeqs.push(u.seq);
-    this.inboundTimer ??= setTimeout(() => {
-      this.inboundTimer = null;
-      this.drainInbound();
-    }, this.receiveBatchMs);
+    if (this.inboundTimer === null) {
+      // Leading edge: a frame after a quiet spell imports on the next
+      // tick instead of after a full window; frames arriving within
+      // receiveBatchMs of the last import still collect into one batch.
+      const wait = Math.max(0, this.lastInboundDrainAt + this.receiveBatchMs - Date.now());
+      this.inboundTimer = setTimeout(() => {
+        this.inboundTimer = null;
+        this.drainInbound();
+      }, wait);
+    }
   }
 
   /** Import everything the micro-batch window collected, as one batch. */
   private drainInbound(): void {
     if (this.ended || this.inboundBuf.length === 0) return;
+    this.lastInboundDrainAt = Date.now();
     // Take at most inboundBatchBytes (always ≥1 frame); the remainder
     // drains on the next tick.
     let bytes = 0;
@@ -1603,15 +1684,32 @@ export class CollabSession {
 
   // --- compaction ---
 
-  private async uploadSnapshot(): Promise<void> {
+  private async uploadSnapshot(preExported?: Uint8Array): Promise<void> {
     // NEVER compact over ops that haven't integrated: coversThroughSeq
     // truncates the stored log, and a snapshot exported while imports
     // pend does NOT contain them — the room loses them permanently.
     if (this.pendingImports) return;
+    // Cadence by cost, not just count: the export is synchronous (seconds
+    // on a big document), so it waits out a gap proportional to the last
+    // one's duration.
+    const now = Date.now();
+    if (!preExported && now - this.lastSnapshotAt < this.snapshotCooldownMs) return;
+    this.lastSnapshotAt = now;
     try {
       this.loroDoc.commit();
       const covers = this.lastSeq;
-      const snapshot = this.loroDoc.export({ mode: 'snapshot' });
+      const t0 = performance.now();
+      const snapshot = preExported ?? this.loroDoc.export({ mode: 'snapshot' });
+      const exportMs = performance.now() - t0;
+      this.snapshotCooldownMs = Math.max(
+        this.snapshotMinGapMs,
+        exportMs >= NOTICEABLE_EXPORT_MS ? exportMs * SNAPSHOT_COST_FACTOR : 0,
+      );
+      // Encrypted = 12-byte IV + ciphertext + 16-byte tag, then base64.
+      if (4 * Math.ceil((snapshot.length + 28) / 3) > RELAY_SNAPSHOT_B64_CAP) {
+        this.snapshotCooldownMs = Math.max(this.snapshotCooldownMs, OVERSIZE_SNAPSHOT_RETRY_MS);
+        return;
+      }
       const sealed = await encryptBlob(this.key, snapshot);
       await this.client.postSnapshot(this.roomId, bytesToBase64(sealed), covers);
       // We exported it — its content is known without a download.
@@ -1730,6 +1828,7 @@ export class CollabSession {
     this.inboundTimer = null;
     this.inboundBuf = [];
     this.inboundSeqs = [];
+    this.stopEagerFlush();
     if (this.flushTimer) clearInterval(this.flushTimer);
     if (this.catchUpTimer) clearInterval(this.catchUpTimer);
     if (this.auditTimer) clearInterval(this.auditTimer);

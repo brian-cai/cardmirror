@@ -127,7 +127,7 @@ describe('collab session end-to-end', () => {
     await host.stop();
   });
 
-  it('inbound micro-batching: a burst of frames imports as ONE binding transaction', async () => {
+  it('inbound micro-batching: a burst imports in at most two binding transactions (leading edge + batch)', async () => {
     const { session: host, shareCode } = await CollabSession.host({
       pmDoc: mixedDoc(),
       client,
@@ -169,14 +169,43 @@ describe('collab session end-to-end', () => {
     }
     await sleep(600); // drain + settle
     expect(docText(joinView.state.doc)).toContain('batch2');
-    // All frames landed, but as ONE import → ONE doc-changing dispatch.
-    expect(docDispatches - baseline).toBe(1);
+    // All frames landed in at most TWO imports: the first frame after a
+    // quiet spell imports at once (leading edge, for latency); the rest
+    // of the burst collects into one batch behind it.
+    expect(docDispatches - baseline).toBeLessThanOrEqual(2);
 
     await joiner.stop();
     await host.stop();
     hostView.destroy();
     joinView.destroy();
   });
+
+  it('a partner edit after a quiet spell imports at once, not after the batch window', async () => {
+    const { session: host, shareCode } = await CollabSession.host({ pmDoc: simpleDoc('quick'), client, ...FAST });
+    const hostView = mkView(host.plugins());
+    await settle();
+    host.start();
+    const joiner = await CollabSession.join({
+      ...decodeShareCode(shareCode)!,
+      client,
+      ...FAST,
+      receiveBatchMs: 2000, // a window this wide would hold the frame for 2 s
+    });
+    const joinView = mkView(joiner.plugins());
+    await settle();
+    joiner.start();
+    await sleep(2100); // past any window opened by the initial sync
+    try {
+      typeAfter(hostView, 'quick', ' fox');
+      await sleep(400);
+      expect(docText(joinView.state.doc)).toContain('quick fox');
+    } finally {
+      await joiner.stop();
+      await host.stop();
+      hostView.destroy();
+      joinView.destroy();
+    }
+  }, 10_000);
 
   it('backlog notice: silent when catch-up re-fetches frames the stream already delivered', async () => {
     // The field complaint (2026-08-05): the "synced N edits" toast fired
@@ -498,6 +527,7 @@ describe('pendingImports must clear once the parked ops integrate', () => {
       client,
       ...FAST,
       snapshotEvery: 2, // compaction after every 2nd host post
+      snapshotMinGapMs: 0,
     });
     const hostView = mkView(host.plugins());
     await settle();
@@ -818,8 +848,12 @@ describe('outbound flush on tab-hide (2026-09-01 review, SC15)', () => {
     const roomId = decodeShareCode(shareCode)!.roomId;
     await sleep(60);
     try {
-      const before = mock.updateCount(roomId);
+      // The first edit after a quiet spell is sent eagerly; a second one
+      // right behind it waits for the (slow) tick — that's the queued edit.
       typeAfter(hostView, 'hide me', ' now');
+      await sleep(100);
+      const before = mock.updateCount(roomId);
+      typeAfter(hostView, 'hide me now', ' again');
       await sleep(100);
       expect(mock.updateCount(roomId), 'nothing posted before the tick').toBe(before);
       Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
@@ -828,6 +862,32 @@ describe('outbound flush on tab-hide (2026-09-01 review, SC15)', () => {
       expect(mock.updateCount(roomId), 'tab-hide flushed the edit').toBe(before + 1);
     } finally {
       Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+      await host.stop();
+      hostView.destroy();
+    }
+  }, 10_000);
+
+  it('the first edit after a quiet spell is sent at once; edits right behind it wait for the tick', async () => {
+    const { session: host, shareCode } = await CollabSession.host({
+      pmDoc: simpleDoc('eager'),
+      client,
+      ...FAST,
+      flushMs: 5000, // a slow tick: only the eager path can post in time
+    });
+    const hostView = mkView(host.plugins());
+    await settle();
+    host.start();
+    const roomId = decodeShareCode(shareCode)!.roomId;
+    await sleep(60);
+    try {
+      const before = mock.updateCount(roomId);
+      typeAfter(hostView, 'eager', ' one');
+      await sleep(150);
+      expect(mock.updateCount(roomId), 'eager send').toBe(before + 1);
+      typeAfter(hostView, 'eager one', ' two');
+      await sleep(150);
+      expect(mock.updateCount(roomId), 'mid-burst edit waits for the tick').toBe(before + 1);
+    } finally {
       await host.stop();
       hostView.destroy();
     }
@@ -976,6 +1036,52 @@ describe('room-history integrity (compaction-loss self-heal)', () => {
 });
 
 describe('large documents (413 avoidance via chunked updates)', () => {
+  it('a chunk-seeded room gets a snapshot at once, so joiners load it instead of replaying the chunks', async () => {
+    const { session: host, shareCode } = await CollabSession.host({
+      pmDoc: simpleDoc('the enormous master file body that will not fit in one update'),
+      client,
+      ...FAST,
+      updateByteLimit: 400,
+    });
+    const roomId = decodeShareCode(shareCode)!.roomId;
+    let page = await client.fetchUpdates(roomId, 0);
+    for (let i = 0; i < 40 && !page.snapshot; i++) {
+      await sleep(25);
+      page = await client.fetchUpdates(roomId, 0);
+    }
+    expect(page.snapshot, 'compacted right after seeding').toBeTruthy();
+    expect(page.updates, 'the seed chunks were folded into it').toHaveLength(0);
+    const joiner = await CollabSession.join({ ...decodeShareCode(shareCode)!, client, ...FAST });
+    expect(JSON.stringify(joiner.loroDoc.toJSON())).toContain('enormous master file');
+    await joiner.stop();
+    await host.stop();
+  });
+
+  it("the host's first audit does not full-scan the room for its own seed", async () => {
+    const proto = CollabSession.prototype as unknown as { scanRoomMax: () => Promise<unknown> };
+    const orig = proto.scanRoomMax;
+    let scans = 0;
+    proto.scanRoomMax = function (this: unknown) {
+      scans++;
+      return orig.call(this);
+    };
+    try {
+      for (const updateByteLimit of [undefined, 400]) {
+        const { session: host } = await CollabSession.host({
+          pmDoc: simpleDoc('the enormous master file body that will not fit in one update'),
+          client,
+          ...FAST,
+          ...(updateByteLimit ? { updateByteLimit } : {}),
+        });
+        await host.auditRoomHistory();
+        await host.stop();
+      }
+      expect(scans).toBe(0);
+    } finally {
+      proto.scanRoomMax = orig;
+    }
+  });
+
   it('P15: oversized seeds and updates ship as cap-sized chunks and still converge', async () => {
     const mock = await startRoomsMock();
     const client = new RoomsClient({ baseUrl: () => mock.url, token: () => mock.token });
