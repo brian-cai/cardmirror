@@ -175,6 +175,14 @@ function bytesEq(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
+/** The user declined a large-document join (see `confirmLargeJoin`). */
+export class JoinCancelledError extends Error {
+  constructor() {
+    super('join cancelled');
+    this.name = 'JoinCancelledError';
+  }
+}
+
 export class CollabSession {
   readonly loroDoc: LoroDoc;
   readonly roomId: string;
@@ -244,6 +252,10 @@ export class CollabSession {
   private ended = false;
   private postedCount = 0;
   private catchUpRunning = false;
+  /** Join only: asked once with the first downloaded page's sync-data
+   *  size, BEFORE it is imported (the import is the slow, synchronous
+   *  part on a large document); false cancels the join. */
+  private beforeFirstImport: ((bytes: number) => Promise<boolean>) | null = null;
   /** Self-echo watchdog: the server pushes our own posted update back
    *  to our stream, so "posted seq N, stream never showed ≥ N" proves
    *  the stream is attached to a stale relay instance (a deploy's old
@@ -436,6 +448,7 @@ export class CollabSession {
     stallMs?: number;
     maxBackoffMs?: number;
     updateByteLimit?: number;
+    confirmLargeJoin?: (bytes: number) => Promise<boolean>;
   }): Promise<CollabSession> {
     const key = await importRoomKey(opts.keyBytes);
     const loroDoc = new LoroDoc();
@@ -446,6 +459,7 @@ export class CollabSession {
       role: 'participant',
       loroDoc,
     });
+    session.beforeFirstImport = opts.confirmLargeJoin ?? null;
     // Strict initial sync: steady-state catchUp() swallows network
     // errors by design (resilience), but a join that can't reach the
     // relay must FAIL — otherwise the caller mounts an empty doc and
@@ -1289,6 +1303,12 @@ export class CollabSession {
           this.foldTailMeta(fresh[i]!.seq, plain);
           blobs.push(plain);
         }
+        if (blobs.length > 0 && this.beforeFirstImport) {
+          const ask = this.beforeFirstImport;
+          this.beforeFirstImport = null;
+          const bytes = blobs.reduce((n, b) => n + b.length, 0);
+          if (!(await ask(bytes))) throw new JoinCancelledError();
+        }
         if (blobs.length > 0) {
           importedAny = true;
           importedCount += blobs.length;
@@ -1397,6 +1417,7 @@ export class CollabSession {
       this.connected = this.stream ? this.stream.connected : true;
       this.emitStatus();
     } catch (err) {
+      if (err instanceof JoinCancelledError) throw err;
       if (err instanceof RoomsError && (err.status === 410 || err.status === 404)) {
         this.handleEnded();
         // A STRICT initial sync (join/first resume tick) must NOT silently

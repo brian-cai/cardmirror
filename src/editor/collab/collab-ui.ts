@@ -73,7 +73,8 @@ import { importRoomKey, decryptBlob } from './collab-crypto.js';
 import { resetSessionCommentIds } from '../comments-plugin.js';
 import { collabEnabled } from './collab-gate.js';
 import { decodeShareCode } from './collab-crypto.js';
-import { CollabSession } from './collab-session.js';
+import { CollabSession, JoinCancelledError } from './collab-session.js';
+import { joinWarning, shareWarning } from './large-doc.js';
 import { toggleSessionPeople } from './session-people.js';
 import { reportWindowShared } from './window-shared-report.js';
 import { compareAppVersions } from '../relay-protocol.js';
@@ -970,11 +971,14 @@ async function startSessionFlowInner(
   // A plain yes/no — two equal buttons (confirmDialog), NOT the big
   // route-choice cards, which are reserved for genuine multi-option
   // decisions (field feedback, 2026-07-11).
+  // Large documents get the cost spelled out in the same dialog (see
+  // large-doc.ts for what grows with size).
+  const sizeWarning = shareWarning(view.state.doc);
   const startConfirm = await confirmDialog(
-    'Anyone you share the code with can edit this document with you in real time.',
+    sizeWarning ?? 'Anyone you share the code with can edit this document with you in real time.',
     {
       title: `Start a co-editing session for ${startName ? `"${startName}"` : 'this document'}?`,
-      okLabel: 'Start Session',
+      okLabel: sizeWarning ? 'Start Anyway' : 'Start Session',
     },
   );
   if (!startConfirm) return;
@@ -1206,6 +1210,13 @@ async function joinSessionWithCodeInner(
         ...decoded,
         client,
         callbacks: sessionCallbacks(deps, () => sessRef),
+        // Asked after the download, before the (synchronous, possibly
+        // minute-long) import.
+        confirmLargeJoin: async (bytes) => {
+          const warning = joinWarning(bytes);
+          if (!warning) return true;
+          return confirmDialog(warning, { title: 'Join a large shared document?', okLabel: 'Join Anyway' });
+        },
       });
       session.guestPass = opts?.guestPass ?? null;
     } catch (err) {
@@ -1213,6 +1224,7 @@ async function joinSessionWithCodeInner(
       // condition — the seed would resume a session that no longer exists.
       // Surface it as ended.
       if (err instanceof RoomsError && (err.status === 410 || err.status === 404)) throw err;
+      if (err instanceof JoinCancelledError) throw err;
       // Offline (or relay unreachable): fall back to the invite's
       // prefetched seed (§4.1). Everything in it came FROM the room,
       // so resume() with no sentVersion is exact; start() syncs at the
@@ -1281,6 +1293,10 @@ async function joinSessionWithCodeInner(
     return true;
   } catch (err) {
     if (sessRef) void teardownSession(sessRef).catch((e) => surfaceError('collab teardown', e));
+    if (err instanceof JoinCancelledError) {
+      showToast('Join cancelled');
+      return false;
+    }
     // A dead room's invite and seed are useless — purge the seed and report
     // consumed so the Receive pill clears the row. Every other failure keeps
     // both, so the user can retry once the network/slot situation changes.
