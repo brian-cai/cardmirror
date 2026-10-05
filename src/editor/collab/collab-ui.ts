@@ -23,6 +23,7 @@ import { showToast } from '../toast.js';
 import { surfaceError } from '../error-surface.js';
 import { warmCausalMarkIndex } from './causal-mark-heal.js';
 import { RELAY_FIX_PATH } from '../relay-decline.js';
+import { offerSharingSetup } from '../pairing/sharing-setup.js';
 import { clearNotice, postNotice } from '../status-notices.js';
 import { promptForText, promptForRouteChoice, confirmDialog } from '../text-prompt.js';
 import { markSyncOrigin } from '../sync-origin.js';
@@ -965,6 +966,13 @@ async function startSessionFlowInner(
   view: EditorView,
   ownerUid: string,
 ): Promise<void> {
+  // Not set up to share yet: offer setup BEFORE the start confirm (it
+  // used to confirm first, then toast "No relay connection").
+  await ensureBakedRelay();
+  if (!relayClient()) {
+    void offerSharingSetup('Starting a co-editing session');
+    return;
+  }
   // Confirm, naming the doc the session will be created for — removes any
   // ambiguity about which doc is being shared (multi-pane: the focused one).
   const startName = sessionDocTitle(ownerUid);
@@ -986,7 +994,7 @@ async function startSessionFlowInner(
   await ensureBakedRelay();
   const client = relayClient();
   if (!client) {
-    showToast(`No relay connection — ${RELAY_FIX_PATH}`);
+    void offerSharingSetup('Starting a co-editing session');
     return;
   }
   try {
@@ -1176,7 +1184,7 @@ async function joinSessionWithCodeInner(
   const client =
     relayClient() ?? (opts?.guestPass ? relayClientWithGuestPass(opts.guestPass) : null);
   if (!client) {
-    showToast(`No relay connection — ${RELAY_FIX_PATH}`);
+    void offerSharingSetup('Joining a co-editing session');
     return false;
   }
   const decoded = decodeShareCode(code);
@@ -1377,7 +1385,7 @@ async function resumeSessionFlowInner(
     relayClient() ??
     (record.guestPass ? relayClientWithGuestPass(record.guestPass) : null);
   if (!client) {
-    showToast(`No relay connection — ${RELAY_FIX_PATH}`);
+    void offerSharingSetup('Rejoining a co-editing session');
     return false;
   }
   const decoded = decodeShareCode(record.shareCode);
@@ -1557,7 +1565,7 @@ export async function inviteStarredFlow(): Promise<void> {
     return;
   }
   if (!settings.get('pairingEnabled')) {
-    showToast('Card sharing is off — invites travel through it');
+    void offerSharingSetup('Inviting someone');
     return;
   }
   const target = resolveStarredTarget(
@@ -1585,7 +1593,7 @@ export async function inviteTargetFlow(
 ): Promise<void> {
   if (!collabEnabled()) return;
   if (!settings.get('pairingEnabled')) {
-    showToast('Card sharing is off — invites travel through it');
+    void offerSharingSetup('Inviting someone');
     return;
   }
   if (target.codes.length === 0) {

@@ -2277,7 +2277,7 @@ async function exportTeamFile(): Promise<void> {
 }
 
 /** Import a team file; resolves true when anything changed. */
-async function importTeamFile(): Promise<boolean> {
+export async function importTeamFile(): Promise<boolean> {
   const { mergeTeamFile, parseTeamFile, TEAM_FILE_EXTENSION } = await import('./pairing/team-file.js');
   const opened = await getHost().openFile({
     filters: [{ name: 'CardMirror team', extensions: [TEAM_FILE_EXTENSION, 'json'] }],

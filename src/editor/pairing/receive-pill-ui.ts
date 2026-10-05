@@ -26,6 +26,7 @@ import { insertReceivedItem, RECEIVE_NEEDS_DOC_MESSAGE } from './inbox-insert.js
 import { showToast } from '../toast.js';
 import { parseRoomInvite } from './room-invite.js';
 import { collabEnabled } from '../collab/collab-gate.js';
+import { offerSharingSetup } from './sharing-setup.js';
 import { collabSettingsAvailable, collabSettingsButton } from './collab-settings-button.js';
 import { collabInviteJoiner, collabSessionJoinPrompt } from '../collab/collab-hooks.js';
 import { deletePrefetch } from '../collab/collab-store.js';
@@ -156,6 +157,10 @@ export class ReceivePillController {
 
     const toggle = (e: Event): void => {
       e.stopPropagation();
+      if (!settings.get('pairingEnabled')) {
+        void offerSharingSetup('Receiving cards');
+        return;
+      }
       this.setOpen(!this.open);
     };
     this.bar.addEventListener('click', toggle);
@@ -207,8 +212,10 @@ export class ReceivePillController {
     this.root.remove();
   }
 
+  /** Always shown where sharing can exist (see sharing-setup.ts); before
+   *  it's set up, a click offers setup. */
   private applyVisibility(): void {
-    this.root.hidden = !settings.get('pairingEnabled');
+    this.root.hidden = !collabEnabled();
   }
 
   private onStoreChange(items: InboxItem[]): void {

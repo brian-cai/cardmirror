@@ -4088,7 +4088,7 @@ function applyPillVisibility(): void {
   // `html.pmd-pill-tray-active … padding-bottom` rules in style.css.
   document.documentElement.classList.toggle(
     'pmd-pill-tray-active',
-    settings.get('showDropzonePill') || settings.get('pairingEnabled'),
+    settings.get('showDropzonePill') || collabEnabled(),
   );
 }
 

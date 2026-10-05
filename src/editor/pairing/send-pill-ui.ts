@@ -27,6 +27,7 @@ import { settings, type PairingGroup } from '../settings.js';
 import { showToast } from '../toast.js';
 import { relayClient, sendOutcomeToast, type SendItem } from './relay-client.js';
 import { collabEnabled } from '../collab/collab-gate.js';
+import { offerSharingSetup } from './sharing-setup.js';
 import { collabSettingsAvailable, collabSettingsButton } from './collab-settings-button.js';
 import {
   collabActiveShareCode,
@@ -172,7 +173,10 @@ export class SendPillController {
     // the current doc first when none is active. Only offered while the
     // collab gate is open; otherwise the pill stays drag-only.
     this.bar.addEventListener('click', () => {
-      if (!settings.get('pairingEnabled')) return;
+      if (!settings.get('pairingEnabled')) {
+        void offerSharingSetup('Sending');
+        return;
+      }
       if (this.inviteMode) this.collapse();
       else this.openInviteMode();
     });
@@ -305,14 +309,14 @@ export class SendPillController {
 
   /** Cursor + tooltip reflect whether clicking does anything. */
   private applyClickAffordance(): void {
-    const clickable = settings.get('pairingEnabled');
-    this.bar.classList.toggle('pmd-send-bar-clickable', clickable);
+    const ready = settings.get('pairingEnabled');
+    this.bar.classList.toggle('pmd-send-bar-clickable', true);
     const canInvite = collabEnabled() && collabInviter() !== null;
-    this.bar.title = clickable
+    this.bar.title = ready
       ? canInvite
         ? 'Drag a card here to send it · Click to search and send, or invite to collaborate'
         : 'Drag a card here to send it · Click to search and send'
-      : 'Drag a card here to send it';
+      : 'Click to set up card sharing and co-editing';
   }
 
   /** Show only the rows whose name contains every word typed. */
@@ -368,8 +372,10 @@ export class SendPillController {
     this.root.remove();
   }
 
+  /** Always shown where sharing can exist (see sharing-setup.ts); before
+   *  it's set up, a click offers setup. */
   private applyVisibility(): void {
-    this.root.hidden = !settings.get('pairingEnabled');
+    this.root.hidden = !collabEnabled();
   }
 
   /** Rebuild the partner + group drop rows from settings. */

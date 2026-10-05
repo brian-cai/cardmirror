@@ -12,6 +12,7 @@ import { bundleSendItems } from './send-bundle.js';
 import { deriveDropzoneLabel } from '../dropzone-store.js';
 import { showToast } from '../toast.js';
 import { relayClient, sendOutcomeToast, type SendResult } from './relay-client.js';
+import { offerSharingSetup } from './sharing-setup.js';
 
 /** Resolve the starred ref → recipient codes + a display label (groups also
  *  carry a `via` label). Returns null when nothing is starred or the starred
@@ -58,7 +59,7 @@ export async function sendViewTo(
   emptyGroupMessage = 'That group has no recipients yet',
 ): Promise<void> {
   if (!settings.get('pairingEnabled')) {
-    showToast('Card sharing is off');
+    void offerSharingSetup('Sending a card');
     return;
   }
   if (target.codes.length === 0) {
