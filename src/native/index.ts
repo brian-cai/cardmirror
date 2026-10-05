@@ -116,9 +116,36 @@ export function setSaveHealListener(cb: ((report: SaveHealReport) => void) | nul
  *  the forensic shape, and load-time treats them exactly as it would
  *  have before. check() is a tree walk on par with the toJSON() walk
  *  below, and gzip dominates both. */
+/** Top-level blocks already known valid. Nodes are immutable, so a block
+ *  that passed `check()` once is still valid; an edit replaces only the
+ *  blocks on its path. Lets the journal's save-time check — every few
+ *  seconds while typing — validate just what changed instead of walking a
+ *  whole masterfile (~0.2–0.7 s) on the editor thread. */
+const checkedBlocks = new WeakSet<PMNode>();
+
+/** `doc.check()`, skipping top-level blocks validated before. Same verdict:
+ *  the doc's own content expression is always checked, and every new block
+ *  gets the full recursive `check()`. */
+export function checkDocCached(doc: PMNode): void {
+  if (doc.marks.length > 0 || Object.keys(doc.attrs).length > 0) {
+    doc.check();
+    return;
+  }
+  if (!doc.type.validContent(doc.content)) {
+    // Let the full check produce its usual, more specific error.
+    doc.check();
+    throw new RangeError(`Invalid content for node ${doc.type.name}`);
+  }
+  doc.forEach((child) => {
+    if (checkedBlocks.has(child)) return;
+    child.check();
+    checkedBlocks.add(child);
+  });
+}
+
 function tripwireForSave(doc: PMNode): PMNode {
   try {
-    doc.check();
+    checkDocCached(doc);
     return doc;
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
@@ -144,21 +171,43 @@ function tripwireForSave(doc: PMNode): PMNode {
  *  ~10× smaller files; the gzip magic (0x1F 0x8B) lets `parseNative`
  *  tell compressed files from legacy plaintext ones (which begin
  *  with `{`). */
+/** JSON text per top-level block, keyed by the immutable node: the crash
+ *  journal re-serializes the whole doc every few seconds while typing, and
+ *  an edit changes only the blocks on its path — so only those are
+ *  re-stringified (on a masterfile, ~1 s of editor-thread work per journal
+ *  write becomes a few ms). */
+const blockJson = new WeakMap<PMNode, string>();
+
+/** Exactly `JSON.stringify(doc.toJSON())`, assembled from cached block JSON. */
+export function docJsonText(doc: PMNode): string {
+  if (doc.marks.length > 0 || Object.keys(doc.attrs).length > 0) return JSON.stringify(doc.toJSON());
+  if (doc.content.size === 0) return `{"type":${JSON.stringify(doc.type.name)}}`;
+  const parts: string[] = [];
+  doc.forEach((child) => {
+    let json = blockJson.get(child);
+    if (json === undefined) {
+      json = JSON.stringify(child.toJSON());
+      blockJson.set(child, json);
+    }
+    parts.push(json);
+  });
+  return `{"type":${JSON.stringify(doc.type.name)},"content":[${parts.join(',')}]}`;
+}
+
 function buildNativeEnvelope(doc: PMNode, opts: SerializeNativeOptions): Uint8Array {
-  const file: NativeFile = {
+  // Same bytes as JSON.stringify of the NativeFile object below (same key
+  // order: format, formatVersion, createdBy, createdAt, doc, threads,
+  // docId), with the doc's JSON coming from the per-block cache.
+  const head: Omit<NativeFile, 'doc'> = {
     format: FORMAT_ID,
     formatVersion: FORMAT_VERSION,
     createdBy: opts.appVersion ?? 'CardMirror',
     createdAt: new Date().toISOString(),
-    doc: tripwireForSave(doc).toJSON(),
   };
-  if (opts.threads && opts.threads.length > 0) {
-    file.threads = [...opts.threads];
-  }
-  if (opts.docId) {
-    file.docId = opts.docId;
-  }
-  return new TextEncoder().encode(JSON.stringify(file));
+  let text = JSON.stringify(head).slice(0, -1) + `,"doc":${docJsonText(tripwireForSave(doc))}`;
+  if (opts.threads && opts.threads.length > 0) text += `,"threads":${JSON.stringify([...opts.threads])}`;
+  if (opts.docId) text += `,"docId":${JSON.stringify(opts.docId)}`;
+  return new TextEncoder().encode(text + '}');
 }
 
 /** Serialize a ProseMirror doc + optional threads to bytes in the
