@@ -60,3 +60,11 @@ if (typeof Element !== 'undefined') {
     proto['scrollIntoView'] = function scrollIntoView(): void {};
   }
 }
+
+/**
+ * The co-editing binding's identity fast path (patches/loro-prosemirror:
+ * cardmirrorIdentitySkip) skips unchanged children without asking Loro.
+ * Under test, every skip is re-checked against Loro and a wrong one
+ * throws — so every co-editing suite and fuzzer doubles as its proof.
+ */
+(globalThis as { __CM_VERIFY_SYNC_FASTPATH__?: boolean }).__CM_VERIFY_SYNC_FASTPATH__ = true;
