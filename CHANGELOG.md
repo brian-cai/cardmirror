@@ -5,6 +5,37 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.5 — 2026-10-04
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Team file.** Settings → Collaboration → Team file: export everyone's
+  send codes (yours included), your groups, and — if you choose — your
+  private relay and live sessions as one `.cmteam` file; importing it
+  adds them, so nobody pastes codes by hand. Importing never removes
+  anything. The file is plain text: groups list members by name, so you
+  can edit it in any text editor.
+- **Search to send.** Click the Send pill: type part of a name, then
+  Enter (or click a name) sends the card your cursor is in. The search
+  box sits just above Add contact / Start session.
+- **Most-sent first.** The Send pill (nearest the search box) and the
+  Send to Recipient picker order people and groups by how often you've
+  sent to them lately.
+- **Who's in a session.** Click "Session: synced" (or a pane's "Synced")
+  to see everyone in the session.
+- **Colored frames.** A blue frame around a document in a collaboration
+  session, a red frame around the speech doc. Turn either off or change
+  its color in Settings → Appearance → Document frames.
+
+### Changed
+
+- **Clearer buttons.** The session indicator and Check for updates are
+  outlined buttons, and the read-time readout links to the readers'
+  reading-speed (WPM) settings.
+
 ## 1.14.4 — 2026-10-04
 
 Brian's (@brian-cai) build of CardMirror, updating from
