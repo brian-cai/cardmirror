@@ -22,6 +22,7 @@
 
 import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
 import { isBackdropClick } from './backdrop-click.js';
+import { getElectronHost } from './host/index.js';
 
 /**
  * Shared modal key wiring (field bug 2026-07-27: Enter confirming the
@@ -569,7 +570,7 @@ export function alertDialog(message: string, opts?: { title?: string }): Promise
  *  overlay click. */
 export function confirmDialog(
   message: string,
-  opts?: { title?: string; okLabel?: string; cancelLabel?: string },
+  opts?: { title?: string; okLabel?: string; cancelLabel?: string; link?: { label: string; url: string } },
 ): Promise<boolean> {
   return new Promise((resolve) => {
     const restoreFocus = captureFocusForDialog();
@@ -590,6 +591,25 @@ export function confirmDialog(
     body.style.whiteSpace = 'pre-line'; // multi-line bodies keep their breaks
     body.textContent = message;
     dialog.appendChild(body);
+    if (opts?.link) {
+      // Desktop routes through the host so it opens in the OS browser
+      // rather than a new Electron window; web opens a normal tab.
+      const { label, url } = opts.link;
+      const a = document.createElement('a');
+      a.className = 'pmd-confirm-link';
+      a.href = url;
+      a.textContent = label;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.addEventListener('click', (e) => {
+        const electron = getElectronHost();
+        if (electron) {
+          e.preventDefault();
+          void electron.openExternal(url);
+        }
+      });
+      body.append(' ', a);
+    }
 
     const buttons = document.createElement('div');
     buttons.className = 'pmd-text-prompt-buttons';

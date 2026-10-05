@@ -74,7 +74,7 @@ import { resetSessionCommentIds } from '../comments-plugin.js';
 import { collabEnabled } from './collab-gate.js';
 import { decodeShareCode } from './collab-crypto.js';
 import { CollabSession, JoinCancelledError } from './collab-session.js';
-import { joinWarning, shareWarning } from './large-doc.js';
+import { joinWarning, MERGE_COPIES_LINK, shareWarning } from './large-doc.js';
 import { toggleSessionPeople } from './session-people.js';
 import { reportWindowShared } from './window-shared-report.js';
 import { compareAppVersions } from '../relay-protocol.js';
@@ -979,6 +979,7 @@ async function startSessionFlowInner(
     {
       title: `Start a co-editing session for ${startName ? `"${startName}"` : 'this document'}?`,
       okLabel: sizeWarning ? 'Start Anyway' : 'Start Session',
+      ...(sizeWarning ? { link: MERGE_COPIES_LINK } : {}),
     },
   );
   if (!startConfirm) return;
@@ -1215,7 +1216,11 @@ async function joinSessionWithCodeInner(
         confirmLargeJoin: async (bytes) => {
           const warning = joinWarning(bytes);
           if (!warning) return true;
-          return confirmDialog(warning, { title: 'Join a large shared document?', okLabel: 'Join Anyway' });
+          return confirmDialog(warning, {
+            title: 'Join a large shared document?',
+            okLabel: 'Join Anyway',
+            link: MERGE_COPIES_LINK,
+          });
         },
       });
       session.guestPass = opts?.guestPass ?? null;

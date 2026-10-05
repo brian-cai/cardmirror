@@ -47,6 +47,13 @@ function wordsLabel(positions: number): string {
   return `about ${rounded} words`;
 }
 
+/** Where people can merge copies they edited separately — the reassurance
+ *  that "everyone keeps their own copy" is a fine alternative. */
+export const MERGE_COPIES_LINK = {
+  label: 'extinction.gg/conflictingdocx',
+  url: 'https://extinction.gg/conflictingdocx',
+};
+
 const HUGE_NOTE =
   '\n\nAt this size the relay can’t keep a compact copy of the session, so joins stay slow for as long as it runs, and your app may pause for a few seconds now and then while it tries.';
 
@@ -59,7 +66,8 @@ export function shareWarning(doc: PMNode): string | null {
     '• partners may wait from several seconds to over a minute to join\n' +
     '• typing can lag for everyone while the session is open' +
     (cls === 'huge' ? HUGE_NOTE : '') +
-    '\n\nFor a smoother session, share a smaller document with just the part you need.'
+    '\n\nFor a smoother session, share a smaller document with just the part you need. ' +
+    'It’s also fine for everyone to keep their own copy and edit separately: conflicting copies can be merged afterward at'
   );
 }
 
@@ -72,6 +80,7 @@ export function joinWarning(bytes: number): string | null {
     `This shared document is ${cls === 'huge' ? 'very large' : 'large'} (about ${mb} MB to open). Joining works, but:\n` +
     '• opening it can take from several seconds to over a minute, and the app is unresponsive meanwhile\n' +
     '• typing can lag while you’re in the session' +
-    (cls === 'huge' ? HUGE_NOTE : '')
+    (cls === 'huge' ? HUGE_NOTE : '') +
+    '\n\nYou can also ask for a copy and work on it separately: conflicting copies can be merged afterward at'
   );
 }

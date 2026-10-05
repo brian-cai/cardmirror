@@ -47,6 +47,7 @@ describe('size classes and text', () => {
     const large = shareWarning(docOfSize(LARGE_DOC_POSITIONS))!;
     expect(large).toContain('large document (about 200,000 words)');
     expect(large).not.toContain('compact copy');
+    expect(large).toContain('conflicting copies can be merged');
     expect(shareWarning(docOfSize(HUGE_DOC_POSITIONS))).toContain('compact copy');
     expect(joinWarning(1_000_000)).toBeNull();
     expect(joinWarning(9_000_000)).toContain('about 9 MB to open');
