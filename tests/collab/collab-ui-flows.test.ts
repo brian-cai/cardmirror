@@ -437,7 +437,10 @@ describe('collab UI flows through the editor seams', () => {
       await sleep(900); // well past the 250ms test threshold
       expect(noticeCount(), 'offline notice posted').toBeGreaterThan(base);
       mock.resume();
-      await sleep(900); // reconnect → notice cleared
+      // Reconnect → notice cleared. Polled, not a fixed sleep: when the
+      // reconnect lands depends on where the failed post's retry backoff
+      // stands (an eager send fails sooner, so its retries fall later).
+      for (let waited = 0; noticeCount() !== base && waited < 5000; waited += 100) await sleep(100);
       expect(noticeCount(), 'reconnect clears it').toBe(base);
     } finally {
       mock.resume();
