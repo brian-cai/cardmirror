@@ -443,6 +443,8 @@ interface ElectronAPI {
   openPathRelease(path: string): Promise<void>;
   cloudProvider(path: string): Promise<CloudProvider | null>;
   onDiskChanged(handler: (payload: { path: string; mtimeMs: number; size: number }) => void): () => void;
+  onReopenRequested?(handler: (payload: { path: string; changed: boolean; fromSelf: boolean }) => void): () => void;
+  reopenSelf?(path: string): Promise<void>;
   saveConflictedCopy(handle: string, bytes: Uint8Array, userName: string | null): Promise<{ name: string; handle: string }>;
   /** "Show in context": if another window owns `path`, focus it and send
    *  it the anchor to scroll to. `delivered: false` ⇒ spawn a window. */
@@ -1353,6 +1355,18 @@ export class ElectronHost implements Host {
   onDiskChanged(handler: (payload: { path: string; mtimeMs: number; size: number }) => void): () => void {
     const fn = api().onDiskChanged;
     return typeof fn === 'function' ? fn(handler) : () => {};
+  }
+
+  /** The user asked to open this window's document again; `changed` = it
+   *  differs on disk from what this window loaded. */
+  onReopenRequested(handler: (payload: { path: string; changed: boolean; fromSelf: boolean }) => void): () => void {
+    const fn = api().onReopenRequested;
+    return typeof fn === 'function' ? fn(handler) : () => {};
+  }
+
+  reopenSelf(path: string): Promise<void> {
+    const fn = api().reopenSelf;
+    return typeof fn === 'function' ? fn(path) : Promise.resolve();
   }
 
   /** Keep both: write bytes as a conflicted copy beside `handle`. */

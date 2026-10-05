@@ -311,34 +311,52 @@ async function onBadgeClick(): Promise<void> {
     else if (choice === 'reveal') badgeDeps.reveal(handle);
     return;
   }
-  // changed — three ways out, no secondary confirmations (design call
-  // 2026-09-06): keep theirs (reload), keep mine (overwrite), keep both.
+  await decideChanged(handle, name, info);
+}
+
+/** The user asked to open `handle` again while it's open here and the
+ *  file on disk differs from it: offer the same three ways out the amber
+ *  badge does, right away (they just asked for this file, so it's no
+ *  interruption). No-op unless `handle` is the active document. */
+export async function promptDiskDecision(handle: string): Promise<void> {
+  if (!badgeDeps) return;
+  const active = badgeDeps.getActive();
+  if (active.handle !== handle) return;
+  const info = byHandle.get(handle);
+  if (!info || info.state !== 'changed') return;
+  await decideChanged(handle, active.name, info);
+}
+
+// changed — three ways out, no secondary confirmations (design call
+// 2026-09-06): reload from disk, save mine over it, keep both.
+async function decideChanged(handle: string, name: string | null, info: DocDiskInfo): Promise<void> {
+  if (!badgeDeps) return;
   const host = badgeDeps.isSessionHost(handle);
   const dirty = badgeDeps.isDirty?.() ?? false;
   const choices: Array<{ value: 'theirs' | 'mine' | 'both'; label: string; description: string }> = [];
   if (!host) {
     choices.push({
       value: 'theirs',
-      label: 'Keep their changes',
-      description: `Load their changes from disk. ${dirty ? 'Discards your unsaved changes.' : 'You have no unsaved changes.'}`,
+      label: 'Reload from disk',
+      description: `Open the version on disk instead. ${dirty ? 'Discards your unsaved changes.' : 'You have no unsaved changes.'}`,
     });
   }
   choices.push({
     value: 'mine',
-    label: 'Keep my changes',
-    description: 'Overwrite their changes with your version.',
+    label: 'Save my version',
+    description: 'Save the copy open here over the file on disk.',
   });
   choices.push({
     value: 'both',
     label: 'Keep both',
-    description: 'Saves a conflicted copy in the same folder.',
+    description: 'Save the copy open here as a separate file in the same folder.',
   });
   const choice = await promptForRouteChoice<'theirs' | 'mine' | 'both'>({
     message:
       `"${name ?? 'This document'}" was changed by another device or program while you were editing it` +
       `${info.provider ? ` (it is in ${PROVIDER_LABEL[info.provider]})` : ''}.`,
     ...(host
-      ? { detail: 'Keeping their changes is unavailable while you host a co-editing session — end the session first.' }
+      ? { detail: 'Reloading from disk is unavailable while you host a co-editing session — end the session first.' }
       : {}),
     choices,
   });

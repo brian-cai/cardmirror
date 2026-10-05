@@ -13,6 +13,7 @@ import {
   relativeTime,
   installDiskBadge,
   refreshDiskBadge,
+  promptDiskDecision,
   __resetDiskConflictForTests,
   type DiskBadgeDeps,
 } from '../../src/editor/disk-conflict.js';
@@ -171,5 +172,45 @@ describe('badge', () => {
     expect(relativeTime(now - 5 * 60_000, now)).toBe('5m ago');
     expect(relativeTime(now - 3 * 3_600_000, now)).toBe('3h ago');
     expect(relativeTime(now - 2 * 86_400_000, now)).toBe('2d ago');
+  });
+});
+
+describe('reopening an open document whose file changed on disk', () => {
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const buttons = () =>
+    [...document.querySelectorAll('.pmd-route-btn strong')].map((b) => b.textContent);
+
+  it('offers Reload from disk / Save my version / Keep both, and runs the pick', async () => {
+    const calls: string[] = [];
+    badge({
+      reloadFromDisk: async () => void calls.push('reload'),
+      overwrite: async () => void calls.push('overwrite'),
+      keepMineAsCopy: async () => void calls.push('copy'),
+    });
+    noteDocRegistered(A, 'fresh', null); // a LOCAL file: no poller, no badge
+    noteDiskChanged(A);
+    const done = promptDiskDecision(A);
+    await tick();
+    expect(buttons()).toEqual(['Reload from disk', 'Save my version', 'Keep both']);
+    (document.querySelectorAll('.pmd-route-btn')[0] as HTMLElement).click();
+    await done;
+    expect(calls).toEqual(['reload']);
+  });
+
+  it('does nothing when the file is unchanged or is not the active document', async () => {
+    badge();
+    noteDocRegistered(A, 'fresh', 'dropbox');
+    await promptDiskDecision(A); // synced, not changed
+    noteDocRegistered('/Dropbox/other.cmir', 'changed', 'dropbox');
+    await promptDiskDecision('/Dropbox/other.cmir'); // changed, but not active
+    expect(document.querySelector('.pmd-route-dialog')).toBeNull();
+  });
+
+  it('a session host is not offered Reload from disk', async () => {
+    badge({ isSessionHost: () => true });
+    noteDocRegistered(A, 'changed', null);
+    void promptDiskDecision(A);
+    await tick();
+    expect(buttons()).toEqual(['Save my version', 'Keep both']);
   });
 });

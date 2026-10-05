@@ -315,6 +315,7 @@ import {
   refreshDiskBadge,
   noteDocRegistered,
   noteDiskChanged,
+  promptDiskDecision,
   noteSavedInPlace,
   noteKeptCopy,
   noteReloaded,
@@ -6937,7 +6938,7 @@ async function routeOpenedFilesToSlot(opened: OpenedFile[]): Promise<void> {
       continue;
     }
     if (src.handle != null && (await isFileOpenInAnotherWindow(src.handle))) {
-      showToast(`"${src.name}" is already open in another window.`);
+      if (!getElectronHost()) showToast(`"${src.name}" is already open in another window.`);
       continue;
     }
     files.push({ name: src.name, bytes: src.bytes, handle: src.handle });
@@ -6976,7 +6977,7 @@ async function routeOpenedFile(opened: OpenedFile): Promise<void> {
   // docs (handle == null, incl. a recovered journal) have no identity yet so
   // they're not deduped.
   if (src.handle != null && (await isFileOpenInAnotherWindow(src.handle))) {
-    showToast(`"${src.name}" is already open in another window.`);
+    if (!getElectronHost()) showToast(`"${src.name}" is already open in another window.`);
     return;
   }
   if (multiDocActive && multiDocOnFileOpen) {
@@ -6998,7 +6999,11 @@ async function routeOpenedFile(opened: OpenedFile): Promise<void> {
   // Single-doc within-window duplicate-open guard: if the file is
   // already the current doc, refuse and toast.
   if (src.handle != null && (await isSameOpenHandle(currentDocHandle, src.handle))) {
-    showToast(`"${src.name}" is already open.`);
+    const electron = getElectronHost();
+    // Desktop: check the disk copy and offer Reload / Save mine if it
+    // changed (onReopenRequested); the web can't, so it just says so.
+    if (electron?.reopenSelf && typeof currentDocHandle === 'string') await electron.reopenSelf(currentDocHandle);
+    else showToast(`"${src.name}" is already open.`);
     return;
   }
   const format = src.format;
@@ -7530,7 +7535,7 @@ async function pickAndLoadInPlace(): Promise<boolean> {
     return false;
   }
   if (src.handle != null && (await isFileOpenInAnotherWindow(src.handle))) {
-    showToast(`"${src.name}" is already open in another window.`);
+    if (!getElectronHost()) showToast(`"${src.name}" is already open in another window.`);
     return false;
   }
   try {
@@ -7974,7 +7979,7 @@ async function openRecentInPlace(recent: RecentFile): Promise<void> {
   }
   const { takenByOther } = await electron.openPathCheck(file.handle);
   if (takenByOther) {
-    showToast(`"${file.name}" is already open in another window.`);
+    if (!getElectronHost()) showToast(`"${file.name}" is already open in another window.`);
     homeScreen.hide();
     return;
   }
@@ -9051,7 +9056,23 @@ function ensureDiskBadge(): void {
     openOriginal: (original) => openFileByPath(original, original.split(/[\\/]/u).pop() ?? original),
   });
   getElectronHost()?.onDiskChanged(({ path }) => noteDiskChanged(path));
+  getElectronHost()?.onReopenRequested?.(({ path, changed, fromSelf }) => void onReopenRequested(path, changed, fromSelf));
   subscribeTimer(() => refreshDiskBadge());
+}
+
+/** The user asked to open this window's document again (main already
+ *  brought this window forward). If the file on disk differs from what's
+ *  open here, offer Reload from disk / Save my version / Keep both right
+ *  away; otherwise a reopen from this same window just says so. */
+async function onReopenRequested(path: string, changed: boolean, fromSelf: boolean): Promise<void> {
+  const handle = activeFile().handle;
+  if (typeof handle !== 'string' || !(await isSameOpenHandle(handle, path))) return;
+  if (changed) {
+    noteDiskChanged(handle);
+    await promptDiskDecision(handle);
+    return;
+  }
+  if (fromSelf) showToast(`"${activeFile().filename ?? 'This document'}" is already open.`);
 }
 
 async function runSaveFlowInner(): Promise<boolean> {

@@ -112,6 +112,7 @@ import {
   isReadAllowed,
 } from './read-scope.js';
 import { promises as fs } from 'node:fs';
+import { createHash } from 'node:crypto';
 import {
   parseHistoryEnvelope,
   readHistoryHeader,
@@ -405,7 +406,7 @@ async function openExternalFile(filePath: string): Promise<void> {
   // double-clicks arrive here and must run the same check, or a file
   // already open in another window opens a second, conflicting copy
   // (whichever copy closes first then releases the shared claim).
-  if (focusExistingOwner(filePath)) return;
+  if (focusAndNotifyOwner(filePath)) return;
   const target = pickMultiPaneTarget();
   if (target) {
     // Hand off to the existing workspace — it reads the path and shows
@@ -2281,6 +2282,43 @@ function focusExistingOwner(p: string, excludeWinId?: number): boolean {
   return true;
 }
 
+/** The user asked to open `p` again while `ownerWin` already has it open
+ *  (the owner was just brought forward, or it's the asking window
+ *  itself). Tell the owner whether the file on disk still matches what
+ *  it loaded, so it can offer Reload from disk / Save my version right
+ *  away — the background poller only watches cloud folders, and only
+ *  every few seconds. Size + mtime first; when they differ and the
+ *  baseline has a content hash, the bytes decide (sync clients touch
+ *  timestamps without changing content). Reading is fine here: the user
+ *  explicitly asked for this file. */
+async function notifyReopen(p: string, ownerWin: BrowserWindow, fromSelf: boolean): Promise<void> {
+  let changed = false;
+  const base = baselineFor(p);
+  if (base) {
+    try {
+      const st = await fs.stat(p);
+      changed = st.mtimeMs !== base.state.mtimeMs || st.size !== base.state.size;
+      if (changed && base.state.contentHash) {
+        const bytes = await fs.readFile(p);
+        changed = createHash('sha256').update(bytes).digest('hex') !== base.state.contentHash;
+      }
+    } catch {
+      changed = false; // gone / unreadable: the save's own checks report it
+    }
+  }
+  if (ownerWin.isDestroyed()) return;
+  ownerWin.webContents.send('host:reopen-requested', { path: p, changed, fromSelf });
+}
+
+/** focusExistingOwner + notifyReopen for the owner it focused. */
+function focusAndNotifyOwner(p: string, excludeWinId?: number): boolean {
+  if (!focusExistingOwner(p, excludeWinId)) return false;
+  const ownerId = openPathOwners.get(canonicalOpenPath(p));
+  const ownerWin = ownerId === undefined ? null : BrowserWindow.fromId(ownerId);
+  if (ownerWin && !ownerWin.isDestroyed()) void notifyReopen(p, ownerWin, false);
+  return true;
+}
+
 /** Broadcast the current speech state to every window's renderer.
  *  Renderers reflect it in their UI (speech-mark button, etc.). */
 function broadcastSpeechState(): void {
@@ -2623,7 +2661,15 @@ ipcMain.handle('host:open-path-check', async (event, p: string) => {
   // Focus the owning window (and clean up a stale entry) via the same
   // helper the OS-open path uses; `win.id` is excluded so "already
   // owned by me" reads as free.
-  return { takenByOther: focusExistingOwner(p, win.id) };
+  return { takenByOther: focusAndNotifyOwner(p, win.id) };
+});
+
+// The asking window already has `p` open itself: same check as a reopen
+// from another window (see notifyReopen), answered to the asker.
+ipcMain.handle('host:reopen-self', async (event, p: string) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || typeof p !== 'string' || !p) return;
+  await notifyReopen(p, win, true);
 });
 
 // "Show in context" cross-window focus: if another window owns `p`,

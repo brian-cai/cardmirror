@@ -560,6 +560,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('host:disk-changed', listener);
     return () => ipcRenderer.removeListener('host:disk-changed', listener);
   },
+  /** The user asked to open this window's document again (from this or
+   *  another window); `changed` = the file on disk no longer matches what
+   *  this window loaded. */
+  onReopenRequested: (
+    handler: (payload: { path: string; changed: boolean; fromSelf: boolean }) => void,
+  ): (() => void) => {
+    const listener = (_evt: unknown, payload: { path: string; changed: boolean; fromSelf: boolean }): void => handler(payload);
+    ipcRenderer.on('host:reopen-requested', listener);
+    return () => ipcRenderer.removeListener('host:reopen-requested', listener);
+  },
+  /** This window already has `path` open: run the reopen check on it. */
+  reopenSelf: (path: string) => ipcRenderer.invoke('host:reopen-self', path) as Promise<void>,
   /** Keep both: write bytes as a conflicted copy beside `handle`. */
   saveConflictedCopy: (handle: string, bytes: Uint8Array, userName: string | null) =>
     ipcRenderer.invoke('host:save-conflicted-copy', handle, bytes, userName) as Promise<{
