@@ -1105,6 +1105,9 @@ export interface Settings {
    *  commands). Off by default: nothing is recorded and the section
    *  never renders until it is on. */
   lastWorkspaceEnabled: boolean;
+  /** Reopen the last workspace automatically at launch (with any unsaved
+   *  changes restored into their original files). Needs lastWorkspaceEnabled. */
+  reopenOnLaunch: boolean;
   /** Desktop: the Open dialog takes a multi-selection (one slot for the
    *  batch in three-pane, one window each otherwise). Off by default. */
   openMultipleFiles: boolean;
@@ -1960,7 +1963,8 @@ const DEFAULTS: Settings = {
   liveRemainingReadTime: false,
   wordCountOrder: 'doc-container-remaining',
   wordCountOrderReadMode: 'doc-container-remaining',
-  lastWorkspaceEnabled: false,
+  lastWorkspaceEnabled: true,
+  reopenOnLaunch: true,
   openMultipleFiles: false,
   arrangeSpeechSide: 'right',
   arrangeSpeechPct: 50,
@@ -2339,12 +2343,24 @@ export const SETTING_METADATA: SettingMeta[] = [
     key: 'lastWorkspaceEnabled',
     label: 'Remember my last workspace',
     description:
-      'Off by default. On, CardMirror remembers the documents open when you quit and lists them on the Home screen under Last workspace with a tick box each, so a whole working set comes back in one click; Save Workspace and Reopen Last Workspace work from the command bar too. Off, nothing is recorded and the section never appears. Desktop only.',
+      'On by default. CardMirror remembers the documents open when you quit and lists them on the Home screen under Last workspace with a tick box each, so a whole working set comes back in one click; Save Workspace and Reopen Last Workspace work from the command bar too. Off, nothing is recorded and the section never appears. Desktop only.',
     kind: 'toggle',
     category: 'general',
     section: 'Workspace',
     electronOnly: true,
     aliases: ['last workspace', 'reopen documents', 'restore session', 'remember open documents'],
+  },
+  {
+    key: 'reopenOnLaunch',
+    label: 'Reopen them automatically when CardMirror starts',
+    description:
+      'On by default. After a restart or an update, your documents reopen from their own files, in the same windows or panes. A document with unsaved changes reopens with those changes restored (still unsaved). Only drafts whose file has moved or was never saved go to Recover drafts. Documents you untick under Last workspace stay closed.',
+    kind: 'toggle',
+    category: 'general',
+    section: 'Workspace',
+    electronOnly: true,
+    dependsOn: 'lastWorkspaceEnabled',
+    aliases: ['restore on launch', 'reopen on startup', 'restore after update', 'session restore'],
   },
   {
     key: 'openMultipleFiles',
@@ -5103,7 +5119,8 @@ function sanitize(s: Settings): Settings {
     liveRemainingReadTime: s.liveRemainingReadTime === true,
     wordCountOrder: isWordCountOrder(s.wordCountOrder) ? s.wordCountOrder : DEFAULT_WORD_COUNT_ORDER,
     wordCountOrderReadMode: isWordCountOrder(s.wordCountOrderReadMode) ? s.wordCountOrderReadMode : DEFAULT_WORD_COUNT_ORDER,
-    lastWorkspaceEnabled: s.lastWorkspaceEnabled === true,
+    lastWorkspaceEnabled: s.lastWorkspaceEnabled !== false,
+    reopenOnLaunch: s.reopenOnLaunch !== false,
     openMultipleFiles: s.openMultipleFiles === true,
     arrangeSpeechSide: s.arrangeSpeechSide === 'left' ? 'left' : 'right',
     arrangeSpeechPct:
@@ -6265,6 +6282,20 @@ export function migrateHighSchoolTimerDefault(): void {
   settings.set('timerProfile', 'highSchool');
   settings.set('timerSpeechPresets', [...hs.speechPresets]);
   settings.set('timerPrepMinutes', hs.prepMinutes);
+}
+
+/** One-shot migration for "Remember my last workspace" becoming ON by
+ *  default (2026-10-05, alongside automatic reopen): an install carrying the
+ *  old stored `false` flips once; turning it off again sticks. */
+export function migrateWorkspaceOnByDefault(): void {
+  const MARKER = 'cm-workspace-default-migrated';
+  try {
+    if (localStorage.getItem(MARKER) !== null) return;
+    localStorage.setItem(MARKER, '1');
+  } catch {
+    return;
+  }
+  if (!settings.get('lastWorkspaceEnabled')) settings.set('lastWorkspaceEnabled', true);
 }
 
 export function migrateDistinguishShadingDefault(): void {

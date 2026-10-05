@@ -259,7 +259,7 @@ describe('workspace store', () => {
     }
   });
 
-  it('with the setting off (the default) nothing is recorded, offered, or saved', () => {
+  it('with the setting off nothing is recorded, offered, or saved', () => {
     settings.set('lastWorkspaceEnabled', false);
     report(['/w/a.cmir']);
     expect(localStorage.getItem(LIVE_KEY)).toBeNull();

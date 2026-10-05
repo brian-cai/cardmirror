@@ -171,7 +171,7 @@ import {
   ZOOM_MAX_PCT,
   CHROME_SCALE_MIN_PCT,
   CHROME_SCALE_MAX_PCT,
-  migrateAutoUpdateOptOut, migrateDistinguishShadingDefault, migrateHighSchoolTimerDefault, effectiveDocTypeFormat } from './settings.js';
+  migrateAutoUpdateOptOut, migrateDistinguishShadingDefault, migrateHighSchoolTimerDefault, migrateWorkspaceOnByDefault, effectiveDocTypeFormat } from './settings.js';
 import { openSaveAs, type SaveAsResult } from './save-as-ui.js';
 import { buildPrintHtml, printHtmlInBrowser } from './pdf-export.js';
 import { convertPdf, PdfOpenError } from './pdf-open.js';
@@ -10457,6 +10457,10 @@ if (getHost().kind === 'browser') {
   );
 }
 
+// "Remember my last workspace" is on by default now (it drives automatic
+// reopen at launch); flip an older install's stored `false` once, before
+// either boot path rolls the workspace over.
+migrateWorkspaceOnByDefault();
 if (BOOT_MULTI_DOC_WORKSPACE) {
   void (async () => {
     // Singleton: only one three-pane window. Run the check alongside the shell
@@ -10530,7 +10534,7 @@ if (BOOT_MULTI_DOC_WORKSPACE) {
       // the recovery sidebar overlays it, and a mode-switch reload's
       // auto-reopened docs hide it via the slot-populated hook.
       homeScreen.show();
-      await runStartupRecovery();
+      await runStartupReopenThenRecovery();
     }
   })();
 } else {
@@ -10644,7 +10648,7 @@ async function initSingleDocBoot(): Promise<void> {
     // runStartupRecovery's mount path. We show home first so a
     // no-recovery launch lands on the hub rather than a blank doc.
     homeScreen.show();
-    await runStartupRecovery();
+    await runStartupReopenThenRecovery();
   }
   if (isFirst) {
     const electron = getElectronHost();
@@ -11076,9 +11080,60 @@ async function journalAllForModeSwitch(): Promise<ModeSwitchDoc[]> {
  *  inspection before deciding whether to keep it (save) or
  *  discard it. Drafts left undecided when the sidebar closes
  *  remain in the journal store for the next launch. */
-async function runStartupRecovery(): Promise<void> {
+/** Launch (first window): put the user back where they were before the
+ *  usual Recover drafts offer — "Reopen them automatically when CardMirror
+ *  starts" (Settings → General → Workspace, on by default):
+ *    1. drafts whose original file still exists reopen ATTACHED to that
+ *       file, unsaved changes restored and marked unsaved (no untitled
+ *       copy, no click);
+ *    2. the rest of the last workspace reopens from disk, in its windows /
+ *       panes (unticked documents stay closed);
+ *    3. whatever's left — never-saved drafts, drafts whose file moved or
+ *       was deleted — goes to the Recover drafts sidebar as before.
+ *  A mode-switch reload, mobile, the web edition, or the setting off take
+ *  the plain recovery path unchanged. */
+async function runStartupReopenThenRecovery(): Promise<void> {
+  const electron = getElectronHost();
+  const modeSwitch = sessionStorage.getItem(MODE_SWITCH_MARKER_KEY) !== null;
+  if (
+    modeSwitch ||
+    BOOT_MOBILE ||
+    !electron ||
+    !settings.get('lastWorkspaceEnabled') ||
+    !settings.get('reopenOnLaunch')
+  ) {
+    await runStartupRecovery();
+    return;
+  }
+  const handled = new Set<string>();
   try {
-    await runStartupRecoveryInner();
+    const host = getHost();
+    const entries = host.journalsSupported ? await host.readJournals() : [];
+    const attached: JournalEntry[] = [];
+    for (const entry of entries) {
+      if (typeof entry.handle !== 'string' || !entry.handle) continue;
+      const onDisk = await electron.readFileAtPath(entry.handle).catch(() => null);
+      if (onDisk) attached.push(entry);
+    }
+    if (attached.length > 0) {
+      await autoRecoverAll(attached);
+      for (const entry of attached) handled.add(entry.uid);
+    }
+    const snapshot = lastWorkspace();
+    if (snapshot) {
+      const reopened = new Set(attached.map((e) => e.handle as string));
+      const rest: WorkspaceSnapshot = { ...snapshot, docs: snapshot.docs.filter((d) => !reopened.has(d.path)) };
+      if (selectedDocs(rest).length > 0) await restoreWorkspace(rest);
+    }
+  } catch (err) {
+    console.warn('Reopening the last workspace at launch failed:', err);
+  }
+  await runStartupRecovery({ skipUids: handled });
+}
+
+async function runStartupRecovery(opts?: { skipUids?: ReadonlySet<string> }): Promise<void> {
+  try {
+    await runStartupRecoveryInner(opts?.skipUids);
   } catch (err) {
     // Journals survive on disk — a recovery crash defers the offer to the
     // next launch rather than losing anything. Say so instead of dying mute
@@ -11090,7 +11145,7 @@ async function runStartupRecovery(): Promise<void> {
   }
 }
 
-async function runStartupRecoveryInner(): Promise<void> {
+async function runStartupRecoveryInner(skipUids?: ReadonlySet<string>): Promise<void> {
   // No recovery offers on mobile — the sidebar is a desktop surface
   // (it would fight the mobile chrome), and the view-first shell is
   // the wrong place to adjudicate drafts. Journals stay put and
@@ -11140,6 +11195,8 @@ async function runStartupRecoveryInner(): Promise<void> {
     // from the home-screen Sessions list, which slot-picks like a join.
     return;
   }
+  // Drafts the launch reopen already restored into their files.
+  if (skipUids && skipUids.size > 0) entries = entries.filter((e) => !skipUids.has(e.uid));
   if (entries.length === 0) return;
   const { openRecoverySidebar } = await import('./recovery-ui.js');
   await openRecoverySidebar(entries, {
