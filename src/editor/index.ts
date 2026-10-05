@@ -9959,26 +9959,29 @@ function confirmCloseCoEditedDoc(
   info: { role: 'host' | 'participant'; unsynced: number },
 ): Promise<'keep' | 'end' | 'cancel'> {
   const name = docName ? `"${docName}"` : 'this document';
-  const leaveLabel = info.role === 'host' ? 'End session' : 'Leave session';
+  const isHost = info.role === 'host';
   const syncing =
     info.unsynced > 0
-      ? ` ${info.unsynced} change${info.unsynced === 1 ? '' : 's'} still syncing will sync when you rejoin.`
+      ? ` Your ${info.unsynced} change${info.unsynced === 1 ? '' : 's'} not yet sent will go out when you reopen it.`
       : '';
+  // Say what each choice does to the document and to the others, and
+  // where "rejoin" actually is (field: "Close" vs "Leave" read alike).
   return promptForRouteChoice<'keep' | 'end'>({
-    message: `Close ${name}?`,
+    message: `Close ${name}? It's open in a live co-editing session.`,
     choices: [
       {
         value: 'keep',
-        label: 'Close',
-        description: `Keep the session — rejoin from the Sessions list to keep editing.${syncing}`,
+        label: 'Close, but stay in the session',
+        description:
+          'Everyone else keeps editing. Reopen it anytime from Sessions on the home ' +
+          `screen (or Join Session → Recent sessions) and you'll catch up on their changes.${syncing}`,
       },
       {
         value: 'end',
-        label: leaveLabel,
-        description:
-          info.role === 'host'
-            ? 'End the session for everyone.'
-            : 'Leave the session; your copy stays as it is.',
+        label: isHost ? 'End the session for everyone' : 'Leave the session',
+        description: isHost
+          ? 'Disconnects everyone; the session can\u2019t be rejoined. You keep this document as your own copy (you\u2019ll be asked to save it if it has unsaved changes).'
+          : 'Stop editing with the others. You keep this document as your own copy, without their future changes (you\u2019ll be asked to save it if it has unsaved changes).',
       },
     ],
   }).then((c) => c ?? 'cancel');
