@@ -20,6 +20,7 @@ import { Node as PMNode, type Mark } from 'prosemirror-model';
 import { schema, newHeadingId } from '../schema/index.js';
 import { toDocx, serializeNative, serializeNativeAsync, parseNative, parseNativeSalvage, NativeDamagedError, readDocIdFromBytes, stampDocId, setSaveHealListener } from '../index.js';
 import { openDocxOffThread } from './docx-open.js';
+import { toDocxOffThread } from './docx-save.js';
 import { transformForExport, countMarkedCards, bakesUnreadRedOnSave } from '../export/transform-for-export.js';
 import type { Thread, Comment } from './comments-plugin.js';
 import type { LocalComment } from './learn-store.js';
@@ -8373,7 +8374,9 @@ async function serializeForSave(
   // Word has no live-window concept: materialize each self_ref window to real
   // cards (resolved from the source, ids re-stamped) before export.
   const docxNode = flattenSelfRefs(exportDocNode, newHeadingId);
-  return toDocx(docxNode, {
+  // Off the renderer thread (docx-save.ts): a large file's export no longer
+  // freezes the window while it saves.
+  return toDocxOffThread(docxNode, {
     ...threadsOpt,
     ...(docId ? { docId } : {}),
     defaultFont: settings.get('bodyFont'),
