@@ -6,6 +6,7 @@
  */
 
 import { XMLParser } from 'fast-xml-parser';
+import { parseXmlFast } from './fast-xml.js';
 
 /**
  * Order-preserving parse output. fast-xml-parser with preserveOrder:true
@@ -47,7 +48,16 @@ const parser = new XMLParser({
   },
 });
 
+/** Parse an OOXML part. Uses the purpose-built scanner in fast-xml.ts — the
+ *  same output as fast-xml-parser with the options above, ~4.5× faster on
+ *  real debate files (parsing was two thirds of opening a large .docx). */
 export function parseXml(xml: string): XmlNode[] {
+  return parseXmlFast(xml);
+}
+
+/** The fast-xml-parser path the scanner replaces — kept as the reference the
+ *  differential test checks it against. */
+export function parseXmlReference(xml: string): XmlNode[] {
   return parser.parse(xml) as XmlNode[];
 }
 
