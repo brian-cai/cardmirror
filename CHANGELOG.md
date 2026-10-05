@@ -3788,7 +3788,7 @@ properly, with a real on-switch, once it's ready. What's in the preview:
   opened the search palette or Find bar. Those inputs now carry the standard
   "ignore this field" hints, so the managers are more likely to skip the scan.
   If it still lags, see the note in the
-  [README](./README.md#web-app-chromebook--browser) about running the extension
+  [README](./README.md#chromebook--browser) about running the extension
   only on click. The desktop app is unaffected — it loads no extensions.
 
 ## 0.1.0-beta.4 — 2026-06-29
