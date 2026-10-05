@@ -28,6 +28,7 @@
 
 import { EditorState, Selection, TextSelection } from 'prosemirror-state';
 import { toggleSessionPeople } from './collab/session-people.js';
+import { reportWindowShared } from './collab/window-shared-report.js';
 import { isFileChangedOnDiskError } from './error-surface.js';
 import {
   noteSavedInPlace,
@@ -1240,6 +1241,7 @@ class Slot {
     const cp = uid ? collabCopresenceFor(uid) : null;
     // Blue frame around a pane whose doc is in a collaboration session.
     this.paneEl.classList.toggle('pmd-pane-shared', !!cp);
+    reportWindowShared();
     if (!cp) {
       this.copresenceEl.hidden = true;
       this.copresenceEl.replaceChildren();

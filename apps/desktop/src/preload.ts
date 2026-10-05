@@ -817,6 +817,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   /** Every document window, most recently focused first (the Switch
    *  Window palette). `docNames` are the window's saved docs' filenames. */
+  /** This window's doc is / isn't in a collaboration session (Switch Window). */
+  setWindowShared: (shared: boolean) => ipcRenderer.invoke('host:set-window-shared', shared) as Promise<void>,
   listWindows: () =>
     ipcRenderer.invoke('host:list-windows') as Promise<
       Array<{

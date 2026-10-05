@@ -16801,3 +16801,28 @@ html.pmd-frame-speech-off:not(.pmd-frame-shared-off) body:not(.pmd-multi-doc).pm
   background: none;
   cursor: pointer;
 }
+
+/* Switch Window rows (Search Everything, `w `): the window's frame colors —
+   red bar for the speech doc, blue for a shared session, both stacked. */
+.pmd-qcs-row-speech {
+  box-shadow: inset 4px 0 0 var(--pmd-frame-speech-color);
+}
+.pmd-qcs-row-shared {
+  box-shadow: inset 4px 0 0 var(--pmd-frame-shared-color);
+}
+.pmd-qcs-row-speech.pmd-qcs-row-shared {
+  box-shadow:
+    inset 4px 0 0 var(--pmd-frame-speech-color),
+    inset 8px 0 0 var(--pmd-frame-shared-color);
+}
+html.pmd-frame-speech-off .pmd-qcs-row-speech:not(.pmd-qcs-row-shared),
+html.pmd-frame-shared-off .pmd-qcs-row-shared:not(.pmd-qcs-row-speech),
+html.pmd-frame-speech-off.pmd-frame-shared-off .pmd-qcs-row-speech.pmd-qcs-row-shared {
+  box-shadow: none;
+}
+html.pmd-frame-speech-off:not(.pmd-frame-shared-off) .pmd-qcs-row-speech.pmd-qcs-row-shared {
+  box-shadow: inset 4px 0 0 var(--pmd-frame-shared-color);
+}
+html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs-row-shared {
+  box-shadow: inset 4px 0 0 var(--pmd-frame-speech-color);
+}

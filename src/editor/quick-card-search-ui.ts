@@ -486,6 +486,10 @@ interface PaletteResult {
   fileRange?: { from: number; to: number };
   /** Window to bring to the front (window source). */
   windowId?: number;
+  /** Window holds the speech doc / a shared session — the row is marked in
+   *  that frame's color (window source). */
+  windowSpeech?: boolean;
+  windowShared?: boolean;
   /** Outline depth (1-4) for indentation in the nav-pane-style browse. */
   indentLevel?: number;
   /** Index into `inFile.outline` (outline browse rows only) — the key
@@ -767,12 +771,14 @@ export function searchWindowSource(windows: WindowListEntry[], query: string): P
     .map((w) => ({
       source: 'window' as const,
       name: windowLabel(w),
-      meta: [w.isSpeech ? 'Speech doc' : '', w.isMinimized ? 'Minimized' : '']
+      meta: [w.isSpeech ? 'Speech doc' : '', w.isShared ? 'Shared session' : '', w.isMinimized ? 'Minimized' : '']
         .filter(Boolean)
         .join(' · '),
       matchedName: true,
       snippet: null,
       windowId: w.windowId,
+      windowSpeech: w.isSpeech,
+      windowShared: !!w.isShared,
     }));
 }
 
@@ -2358,6 +2364,9 @@ class QuickCardSearchUI {
       const row = document.createElement('div');
       row.className = 'pmd-qcs-row';
       row.setAttribute('role', 'option');
+      // Switch Window: the same colors as the window's frame.
+      if (r.windowSpeech) row.classList.add('pmd-qcs-row-speech');
+      if (r.windowShared) row.classList.add('pmd-qcs-row-shared');
       if (i === this.selected) {
         row.classList.add('pmd-qcs-row-active');
         row.setAttribute('aria-selected', 'true');

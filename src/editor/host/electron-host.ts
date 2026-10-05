@@ -123,6 +123,8 @@ export interface WindowListEntry {
   /** Filenames of the window's saved docs (untitled docs are omitted). */
   docNames: string[];
   isSpeech: boolean;
+  /** Its document is in a collaboration session (absent from older mains). */
+  isShared?: boolean;
   /** The window asking — listed so the palette can mark or skip it. */
   isOwnWindow: boolean;
   isMinimized: boolean;
@@ -230,6 +232,7 @@ interface ElectronAPI {
   getPathForFile(file: File): string;
   minimizeWindow?(): Promise<void>;
   listWindows?(): Promise<WindowListEntry[]>;
+  setWindowShared?(shared: boolean): Promise<void>;
   focusWindow?(windowId: number): Promise<boolean>;
   htmlToPdf?(html: string): Promise<Uint8Array>;
   syncLibraryRoots?(roots: string[]): Promise<void>;
@@ -796,6 +799,10 @@ export class ElectronHost implements Host {
 
   /** Every document window, most recently focused first. Empty on an
    *  older preload. */
+  async setWindowShared(shared: boolean): Promise<void> {
+    await api().setWindowShared?.(shared);
+  }
+
   async listWindows(): Promise<WindowListEntry[]> {
     return (await api().listWindows?.()) ?? [];
   }

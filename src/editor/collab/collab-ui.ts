@@ -75,6 +75,7 @@ import { collabEnabled } from './collab-gate.js';
 import { decodeShareCode } from './collab-crypto.js';
 import { CollabSession } from './collab-session.js';
 import { toggleSessionPeople } from './session-people.js';
+import { reportWindowShared } from './window-shared-report.js';
 import { compareAppVersions } from '../relay-protocol.js';
 import { appVersion } from '../install-info.js';
 
@@ -330,6 +331,7 @@ function updateChip(status: { connected: boolean; queuedUpdates: number } | null
   if (!chip) return;
   // Blue window frame while this window's doc is in a session.
   document.body.classList.toggle('pmd-collab-active', !!status);
+  reportWindowShared();
   if (!status) {
     chip.hidden = true;
     chip.replaceChildren();

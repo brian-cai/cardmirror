@@ -2397,6 +2397,20 @@ ipcMain.handle('host:list-docs', async (event) => {
 // Focus order is recorded here because only main sees every window's
 // focus changes; closed windows drop out when listed.
 const windowFocusOrder: number[] = []; // window ids, most recent first
+/** Windows whose document is in a collaboration session — each window
+ *  reports its own state (renderer: reportWindowShared), so Switch Window
+ *  can mark shared windows like the speech doc. */
+const sharedWindows = new Set<number>();
+ipcMain.handle('host:set-window-shared', (event, shared: unknown) => {
+  const id = BrowserWindow.fromWebContents(event.sender)?.id;
+  if (id === undefined) return;
+  if (shared === true) sharedWindows.add(id);
+  else sharedWindows.delete(id);
+});
+app.on('browser-window-created', (_event, win) => {
+  const id = win.id;
+  win.once('closed', () => sharedWindows.delete(id));
+});
 
 app.on('browser-window-focus', (_event, win) => {
   const i = windowFocusOrder.indexOf(win.id);
@@ -2420,6 +2434,7 @@ ipcMain.handle('host:list-windows', async (event) => {
         .map((uid) => docInfo.get(uid)?.filename ?? null)
         .filter((n): n is string => !!n),
       isSpeech: speechRegistration?.windowId === w.id,
+      isShared: sharedWindows.has(w.id),
       isOwnWindow: w.id === senderId,
       isMinimized: w.isMinimized(),
     }));

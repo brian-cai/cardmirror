@@ -229,3 +229,23 @@ describe('Mod-Tab display', () => {
     expect(formatKeyForDisplay('Mod-Tab')).toBe('Ctrl+Tab');
   });
 });
+
+describe('Switch Window marks speech and shared windows', () => {
+  it('carries the speech / shared flags and names them in the row', async () => {
+    const { searchWindowSource } = await import('../../src/editor/quick-card-search-ui.js');
+    const base = { title: 'X — CardMirror', isOwnWindow: false, isMinimized: false };
+    const rows = searchWindowSource(
+      [
+        { ...base, windowId: 1, docNames: ['Aff.docx'], isSpeech: true, isShared: false },
+        { ...base, windowId: 2, docNames: ['Neg.docx'], isSpeech: false, isShared: true },
+        { ...base, windowId: 3, docNames: ['Both.docx'], isSpeech: true, isShared: true },
+      ],
+      '',
+    );
+    expect(rows.map((r) => [r.windowSpeech, r.windowShared, r.meta])).toEqual([
+      [true, false, 'Speech doc'],
+      [false, true, 'Shared session'],
+      [true, true, 'Speech doc · Shared session'],
+    ]);
+  });
+});
