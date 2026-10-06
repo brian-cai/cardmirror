@@ -331,6 +331,20 @@ export class SendPillController {
     for (const el of this.panel.querySelectorAll<HTMLElement>('.pmd-send-section')) {
       el.hidden = words.length > 0;
     }
+    this.scrollToBottom();
+  }
+
+  /** The list reads from the bottom: most-sent people and the search box
+   *  sit next to the pill (the popup rises above it). The popup is one
+   *  scrolling box, so a long list opened at its TOP — least-sent first,
+   *  with the search box and the people you want scrolled out of sight.
+   *  Pin it to the bottom on open and after each search. */
+  private scrollToBottom(): void {
+    const pin = (): void => {
+      this.panel.scrollTop = this.panel.scrollHeight;
+    };
+    pin();
+    requestAnimationFrame(pin); // again once the open state has laid out
   }
 
   /** Click-open send: the focused doc's card / selection to this row's
@@ -436,18 +450,21 @@ export class SendPillController {
       this.panel.appendChild(hint);
     }
 
-    if (groups.length > 0) {
-      this.panel.appendChild(this.sectionLabel('Groups'));
-      for (const g of groups) {
-        const row = this.groupRow(g, allPartners);
-        this.addInviteButton(row);
-        this.panel.appendChild(row);
-      }
-    }
+    // People first, GROUPS LAST: the list reads upward from the search box,
+    // and groups (a whole team) are what most sends go to — they sat at the
+    // far top, a scroll away from the box the pill opens at.
     if (partners.length > 0) {
       this.panel.appendChild(this.sectionLabel('To'));
       for (const p of partners) {
         const row = this.targetRow(p.name || p.code, [p.code], p.name || p.code);
+        this.addInviteButton(row);
+        this.panel.appendChild(row);
+      }
+    }
+    if (groups.length > 0) {
+      this.panel.appendChild(this.sectionLabel('Groups'));
+      for (const g of groups) {
+        const row = this.groupRow(g, allPartners);
         this.addInviteButton(row);
         this.panel.appendChild(row);
       }
@@ -817,6 +834,7 @@ export class SendPillController {
     if (this.expanded) return;
     this.expanded = true;
     this.root.dataset['open'] = 'true';
+    this.scrollToBottom();
     // Expanded by a drag (not a click): the actions row is in zone mode.
     if (!this.inviteMode) this.applyDragZoneLabels(true);
   }

@@ -274,7 +274,7 @@ describe('drag autoscroll over the send pill (field report 2026-09-04)', () => {
     expect(edgeAutoscrollStep(150, { top: 100, bottom: 140 })).toBe(0); // too short for bands
   });
 
-  it('a pointer resting in the bottom band scrolls the expanded list frame after frame and re-hit-tests', () => {
+  it('opens pinned to the bottom (by the pill); a pointer resting in the top band scrolls it up frame after frame and re-hit-tests', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
     try {
       settings.set(
@@ -290,25 +290,29 @@ describe('drag autoscroll over the send pill (field report 2026-09-04)', () => {
       Object.defineProperty(panel, 'scrollHeight', { value: 1200, configurable: true });
       Object.defineProperty(panel, 'clientHeight', { value: 300, configurable: true });
       let top = 0;
-      Object.defineProperty(panel, 'scrollTop', { get: () => top, set: (v: number) => { top = v; }, configurable: true });
+      // Clamped like a browser's: 0 … scrollHeight − clientHeight (900).
+      Object.defineProperty(panel, 'scrollTop', { get: () => top, set: (v: number) => { top = Math.max(0, Math.min(900, v)); }, configurable: true });
       const surface = (pill as unknown as { surface: { hitTest: (x: number, y: number) => unknown; highlight: (el: HTMLElement | null) => void } }).surface;
       const rehits = vi.spyOn(dragController, 'dispatchHit').mockImplementation(() => {});
-      // Expand (the controller does this via highlight) and rest the pointer in the bottom band.
+      // Expand (the controller does this via highlight): the list reads up
+      // from the pill, so it opens scrolled to the bottom.
       surface.highlight(bar);
-      expect(surface.hitTest(150, 395)).not.toBeNull();
+      expect(top).toBe(900);
+      // Rest the pointer in the TOP band: it scrolls up toward the rest.
+      expect(surface.hitTest(150, 105)).not.toBeNull();
       vi.advanceTimersByTime(16 * 5);
-      expect(top).toBeGreaterThan(0);
+      expect(top).toBeLessThan(900);
       expect(rehits).toHaveBeenCalled();
       const afterFive = top;
       vi.advanceTimersByTime(16 * 5);
-      expect(top).toBeGreaterThan(afterFive);
+      expect(top).toBeLessThan(afterFive);
       // Moving to the middle of the list stops it.
       surface.hitTest(150, 250);
       const settled = top;
       vi.advanceTimersByTime(16 * 5);
       expect(top).toBe(settled);
       // Collapse (drag end) stops it too.
-      surface.hitTest(150, 395);
+      surface.hitTest(150, 105);
       surface.highlight(null);
       const collapsedAt = top;
       vi.advanceTimersByTime(16 * 5);
