@@ -5493,7 +5493,7 @@ function makeStarterDoc(): PMNode {
     // Section 2: Bring your setup (settings file + team file)
     n['hat']!.create({ id: newHeadingId() }, schema.text('2. Bring your setup')),
     paraText(
-      'If your coach or another computer gave you a settings file (cardmirror-settings.json): ⚙ → General → Back up settings → Import settings…. It brings over shortcuts, ribbon buttons, appearance, your dictionary and the rest. Importing replaces your current settings; API keys come along only if the file has them and you say so. File search folders are copied as exact paths, so they only work if your files live in the same place as on the computer the file came from \u2014 otherwise set your own (section 5).',
+      'If your coach or another computer gave you a settings file (cardmirror-settings.json): ⚙ → General → Back up settings → Import settings…. It brings over shortcuts, ribbon buttons, appearance, your dictionary and the rest. Nothing you already have is removed: contacts, groups, folders, macros and dictionary words are merged, and your own sharing code stays yours. Folders from the file are added only if they exist on this computer \u2014 if your files live somewhere else, set your own (section 5). API keys come along only if the file has them and you say so.',
     ),
     blank(),
     paraText(

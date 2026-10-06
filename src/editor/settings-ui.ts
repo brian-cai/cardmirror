@@ -54,6 +54,7 @@ import {
   type StyleAlignment,
   applyNumberingSeparator,
 } from './settings.js';
+import { mergeImportedSettings } from './settings-import.js';
 import { CATEGORY_TABS, visibleCategoryTabs, type SettingsTarget } from './settings-categories.js';
 import { compileSettingsQuery } from './settings-search.js';
 import { generateGroupId, normalizePairingCode } from './pairing/pairing-ids.js';
@@ -815,7 +816,7 @@ class SettingsModal {
     const desc = document.createElement('div');
     desc.className = 'pmd-settings-row-desc';
     desc.textContent =
-      'Save all your settings — shortcuts, keyboard macros, ribbon buttons, file search folders, relay settings, your dictionary words, appearance, and the rest — to a file, or import a file to replace them, e.g. to move your setup to another computer. Importing overwrites your current settings. Your API keys (Anthropic, OpenRouter, Google Translate) and MyMemory email are included only if you choose to when exporting.';
+      'Save all your settings — shortcuts, keyboard macros, ribbon buttons, file search folders, relay settings, your dictionary words, appearance, and the rest — to a file, or import one, e.g. to move your setup to another computer or start from a teammate\u2019s. Importing sets your preferences to the file\u2019s but never removes anything you have: contacts, groups, folders, macros, custom buttons and dictionary words are merged, folders that don\u2019t exist on this computer are skipped, and your own sharing code and name are kept. Your API keys (Anthropic, OpenRouter, Google Translate) and MyMemory email are included only if you choose to when exporting.';
     section.appendChild(desc);
 
     const actions = document.createElement('div');
@@ -904,7 +905,7 @@ class SettingsModal {
       const choice = await promptForChoice({
         message: 'Import settings?',
         detail:
-          'This replaces all your current settings. The file also contains API keys — use them in place of yours, or keep your own.',
+          'Your preferences are set to the file\u2019s. Your contacts, groups, folders, macros and custom buttons all stay \u2014 the file\u2019s new ones are added. The file also contains API keys \u2014 use them in place of yours, or keep your own.',
         choices: [
           { value: 'with', label: 'Import with API keys', primary: true },
           { value: 'without', label: 'Import, keep my keys' },
@@ -914,15 +915,22 @@ class SettingsModal {
       importSecrets = choice === 'with';
     } else if (
       !(await confirmDialog(
-        'Import settings? This replaces all your current settings (your API keys are kept).',
+        'Import settings? Your preferences are set to the file\u2019s. Your contacts, groups, folders, macros and custom buttons all stay \u2014 the file\u2019s new ones are added. Your API keys and your sharing code are kept.',
         { okLabel: 'Import' },
       ))
     ) {
       return;
     }
-    settings.replaceAll(obj, { importSecrets });
-    importUserDictionary(wrapper?.userDictionary);
     const electronHost = getElectronHost();
+    // Merge, don't wipe: see settings-import.ts. Folders are checked
+    // against this computer on desktop (the web edition can't look).
+    const { merged, skippedFolders } = await mergeImportedSettings(
+      settings.all(),
+      obj as Record<string, unknown>,
+      electronHost ? { exists: async (p) => (await getHost().statFile(p).catch(() => null)) !== null } : {},
+    );
+    settings.replaceAll(merged, { importSecrets });
+    importUserDictionary(wrapper?.userDictionary);
     // A settings file can name an update source, but it never switches on
     // its own: setUpdateSource shows the native fingerprint dialog (main
     // process), and only the user's explicit confirmation pins it.
@@ -934,7 +942,11 @@ class SettingsModal {
       }
     }
     this.render(); // rebuild the dialog so every control reflects the import
-    showToast('Settings imported.');
+    showToast(
+      skippedFolders.length === 0
+        ? 'Settings imported.'
+        : `Settings imported. ${skippedFolders.length === 1 ? '1 folder' : `${skippedFolders.length} folders`} from the file ${skippedFolders.length === 1 ? 'isn\u2019t' : 'aren\u2019t'} on this computer, so your own folder settings were kept for ${skippedFolders.length === 1 ? 'it' : 'them'}.`,
+    );
   }
 
   /** Re-binding handle so tab buttons can change the active panel
