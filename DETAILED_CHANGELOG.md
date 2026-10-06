@@ -9,7 +9,7 @@ in each release, see `CHANGELOG.md`.
 
 ### Added: nav pane search, as a results view
 
-Brian's PR #92 adds a search bar to the nav pane header (level select,
+BCai's PR #92 adds a search bar to the nav pane header (level select,
 "Hide non-matches", "Search content"; `computeSearch` over the heading
 entries, cached per doc + query + options; matches revealed even below the
 level filter or inside a collapsed section; ancestors kept as a skeleton).
@@ -174,7 +174,7 @@ not visit the keybindings editor; Ctrl folds into Mod in
 `formatKeyForDisplay` renders a Mod chord on Tab as ⌃ on macOS instead
 of ⌘ (⌘Tab is the OS app switcher and never reaches the app), so the
 keybindings editor and tooltips say ⌃Tab. Tests: switch-window.test.ts.
-Brian's PR #87.
+BCai's PR #87.
 
 ### Changed: find pre-fills a short highlight; a larger selection still scopes
 
@@ -210,7 +210,7 @@ editor selection onto it; Ctrl-F → Ctrl-H) changes neither the input nor
 the captured scope — it used to be able to overwrite "smith" with "SMITH".
 On a re-open the toggle keeps the user's own setting.
 
-Brian's PR #97 pre-filled a one-line highlight and scoped only after the
+BCai's PR #97 pre-filled a one-line highlight and scoped only after the
 nav pane's "Select heading and contents", tracked with a per-view mark
 that any document change expired (so a partner's edit in a session
 silently unscoped it), and left a dragged multi-card selection unscoped —
