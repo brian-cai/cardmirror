@@ -5,6 +5,24 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.10 — 2026-10-06
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Windows you aren't using rest to save memory.** Each open document is
+  its own window, and each one holds a lot of memory — with many files
+  open, the whole computer can slow down. A window you haven't clicked
+  into for 15 minutes now rests: it frees its memory (down to a few
+  percent) and shows a picture of itself. Click it and it's back in a
+  second or two, scrolled to the same place with your cursor where it was
+  and any unsaved changes intact. Your speech doc, shared documents and
+  the window you used last never rest. Change the time (or turn it off
+  with 0) in Settings → General → Workspace. Undo history from before a
+  window rested isn't kept.
+
 ## 1.14.9 — 2026-10-06
 
 Brian's (@brian-cai) build of CardMirror, updating from
