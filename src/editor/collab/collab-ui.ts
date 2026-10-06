@@ -74,7 +74,7 @@ import { importRoomKey, decryptBlob } from './collab-crypto.js';
 import { resetSessionCommentIds } from '../comments-plugin.js';
 import { collabEnabled } from './collab-gate.js';
 import { decodeShareCode } from './collab-crypto.js';
-import { CollabSession, JoinCancelledError } from './collab-session.js';
+import { CollabSession, JoinCancelledError, SessionStartCancelledError, type HostProgress } from './collab-session.js';
 import { joinWarning, MERGE_COPIES_LINK, shareWarning } from './large-doc.js';
 import { toggleSessionPeople } from './session-people.js';
 import { reportWindowShared } from './window-shared-report.js';
@@ -496,6 +496,75 @@ async function sessionPrepOverlay(text: string): Promise<() => void> {
   return () => {
     clearTimeout(failsafe);
     overlay.remove();
+  };
+}
+
+/** The Start Session progress window: what's happening, how far along, and
+ *  a Cancel that works while the shared copy is built and uploaded (big
+ *  documents take a while; it used to be one frozen veil). */
+async function sessionProgressOverlay(onCancel: () => void): Promise<{
+  update: (p: HostProgress) => void;
+  lockCancel: () => void;
+  close: () => void;
+}> {
+  const overlay = document.createElement('div');
+  overlay.className = 'pmd-bulk-overlay pmd-session-prep';
+  const card = document.createElement('div');
+  card.className = 'pmd-session-prep-card pmd-session-progress';
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-label', 'Starting the collaboration session');
+  const title = document.createElement('div');
+  title.className = 'pmd-session-progress-title';
+  title.textContent = 'Starting the collaboration session';
+  const label = document.createElement('div');
+  label.className = 'pmd-session-progress-label';
+  label.textContent = 'Preparing the document…';
+  const track = document.createElement('div');
+  track.className = 'pmd-session-progress-track';
+  const fill = document.createElement('div');
+  fill.className = 'pmd-session-progress-fill';
+  track.appendChild(fill);
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'pmd-session-progress-cancel';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', () => {
+    cancel.disabled = true;
+    cancel.textContent = 'Cancelling…';
+    onCancel();
+  });
+  card.append(title, label, track, cancel);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  // Escape hatch: a veil must never be permanent (big uploads can be slow,
+  // so the cap is generous).
+  const failsafe = setTimeout(() => overlay.remove(), 15 * 60_000);
+  await new Promise((r) => setTimeout(r, 30));
+  return {
+    update: (p) => {
+      // Build 0–70 %, package 70–75 %, upload 75–100 %.
+      let frac = 0;
+      if (p.phase === 'build') {
+        frac = 0.7 * (p.done / Math.max(1, p.total));
+        label.textContent = `Preparing the document… ${Math.floor((p.done / Math.max(1, p.total)) * 100)}%`;
+      } else if (p.phase === 'package') {
+        frac = 0.72;
+        label.textContent = 'Packaging…';
+      } else {
+        frac = 0.75 + 0.25 * (p.done / Math.max(1, p.total));
+        label.textContent = p.total > 1 ? `Uploading… ${p.done} of ${p.total}` : 'Uploading…';
+      }
+      fill.style.width = `${Math.round(Math.min(1, frac) * 100)}%`;
+    },
+    lockCancel: () => {
+      cancel.disabled = true;
+      label.textContent = 'Opening the session…';
+      fill.style.width = '100%';
+    },
+    close: () => {
+      clearTimeout(failsafe);
+      overlay.remove();
+    },
   };
 }
 
@@ -1019,9 +1088,9 @@ async function startSessionFlowInner(
     // its own synchronous pass — the veil must outlive BOTH, or it
     // vanishes while the editor is still frozen (field find, 2026-08-12
     // three-pane test). The finally releases it via setTimeout(0).
-    const prepDone = await sessionPrepOverlay(
-      'Preparing collaboration session — a large document can take a moment…',
-    );
+    const controller = new AbortController();
+    const progressUi = await sessionProgressOverlay(() => controller.abort());
+    const prepDone = progressUi.close;
     let session: CollabSession;
     let shareCode: string;
     let sess: ActiveSession;
@@ -1030,7 +1099,10 @@ async function startSessionFlowInner(
         pmDoc: view.state.doc,
         client,
         callbacks: sessionCallbacks(deps, () => sessRef),
+        onProgress: (p) => progressUi.update(p),
+        signal: controller.signal,
       }));
+      progressUi.lockCancel();
       // ownerUid captured at flow start (line ~427), under the doc that was
       // focused when Start was chosen — host() shared THAT doc's content, so
       // the seams must bind to it even if focus has since moved.
@@ -1075,6 +1147,10 @@ async function startSessionFlowInner(
         : 'Session started — use "Copy Session Share Code" to invite',
     );
   } catch (err) {
+    if (err instanceof SessionStartCancelledError) {
+      showToast('Session not started');
+      return;
+    }
     showToast(relayFailureMessage(err, { initiating: true, verb: 'start the session' }));
   }
 }

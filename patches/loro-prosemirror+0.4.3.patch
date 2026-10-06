@@ -1,5 +1,5 @@
 diff --git a/node_modules/loro-prosemirror/dist/index.cjs b/node_modules/loro-prosemirror/dist/index.cjs
-index 74c4b30..32aff2c 100644
+index 74c4b30..3a1c5b5 100644
 --- a/node_modules/loro-prosemirror/dist/index.cjs
 +++ b/node_modules/loro-prosemirror/dist/index.cjs
 @@ -15,6 +15,7 @@ const NODE_NAME_KEY = "nodeName";
@@ -322,7 +322,8 @@ index 74c4b30..32aff2c 100644
 +	const keys = new Set([...Object.keys(av), ...Object.keys(bv)]);
 +	for (const key of keys) {
 +		if (!cardmirrorCanonicalAttrsEqual(av[key] ?? null, bv[key] ?? null)) return false;
-+	}
+ 	}
+-	return eq;
 +	return true;
 +}
 +function cardmirrorCanonicalizeAttrs(attrs) {
@@ -330,8 +331,7 @@ index 74c4b30..32aff2c 100644
 +	for (const key of Object.keys(attrs ?? {})) {
 +		const v = attrs[key];
 +		if (v !== null && v !== undefined) out[key] = v;
- 	}
--	return eq;
++	}
 +	return out;
 +}
 +// PATCHED (cardmirror): canonical equality — the old form counted
@@ -626,8 +626,7 @@ index 74c4b30..32aff2c 100644
  function getLoroMapChildren(obj) {
 -	return obj.getOrCreateContainer(CHILDREN_KEY, new loro_crdt.LoroList());
 +	return obj.getOrCreateContainer(CHILDREN_KEY, cardmirrorChildrenKind(obj) === "movable" ? new loro_crdt.LoroMovableList() : new loro_crdt.LoroList());
- }
--function updateLoroMapChildren(obj, node, mapping) {
++}
 +/**
 + * CardMirror patch: per-ROOM container format. A new children container
 + * inherits the kind of the doc ROOT's children, so a room stays
@@ -652,7 +651,8 @@ index 74c4b30..32aff2c 100644
 +		/* detached/odd shape — fall through to the seed flag */
 +	}
 +	return globalThis.__CM_MOVABLE_LIST__ ? "movable" : "list";
-+}
+ }
+-function updateLoroMapChildren(obj, node, mapping) {
 +/**
 + * CardMirror patch: identity-preserving reconcile for MOVABLE lists when
 + * the span is NOT a pure permutation — a child was inserted or removed
@@ -1245,7 +1245,33 @@ index 74c4b30..32aff2c 100644
  			return null;
  		},
  		view: (view) => {
-@@ -630,6 +1600,28 @@ function init(view) {
+@@ -615,6 +1585,25 @@ function init(view) {
+ 	});
+ 	else docSubscription = state.doc.subscribe((event) => updateNodeOnLoroEvent(view, event));
+ 	const innerDoc = state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY);
++	// CardMirror patch: a host that seeded the CRDT from this very document
++	// passes the seeding mapping (LoroSyncPlugin's `mapping` prop). When it
++	// still maps the root to the view's document — the same object — the
++	// containers already map onto the live nodes: nothing to rebuild or
++	// render (that full rebuild was 2–5 s frozen on a big file).
++	const cmPrior = state.mapping;
++	if (!state.containerId && cmPrior && cmPrior.size > 0 && cmPrior.get(innerDoc.id) === view.state.doc) {
++		const tr = view.state.tr;
++		tr.setMeta(loroSyncPluginKey, {
++			type: "update-state",
++			state: {
++				mapping: cmPrior,
++				docSubscription,
++				snapshot: null
++			}
++		});
++		view.dispatch(tr);
++		return;
++	}
+ 	const mapping = /* @__PURE__ */ new Map();
+ 	if (innerDoc.size === 0) {
+ 		const tr = view.state.tr.delete(0, view.state.doc.content.size);
+@@ -630,6 +1619,28 @@ function init(view) {
  	} else {
  		const schema = view.state.schema;
  		const node = createNodeFromLoroObj(schema, innerDoc, mapping);
@@ -1274,7 +1300,7 @@ index 74c4b30..32aff2c 100644
  		const tr = view.state.tr.replace(0, view.state.doc.content.size, new prosemirror_model.Slice(prosemirror_model.Fragment.from(node), 0, 0));
  		tr.setMeta(loroSyncPluginKey, {
  			type: "update-state",
-@@ -642,22 +1634,245 @@ function init(view) {
+@@ -642,22 +1653,245 @@ function init(view) {
  		view.dispatch(tr);
  	}
  }
@@ -1527,7 +1553,7 @@ index 74c4b30..32aff2c 100644
  }
  /**
  * Update ProseMirror selection based on the given Loro cursors.
-@@ -848,7 +2063,14 @@ const LoroUndoPlugin = (props) => {
+@@ -848,7 +2082,14 @@ const LoroUndoPlugin = (props) => {
  				if (!undoState || !loroState) return state;
  				const canUndo = undoState.undoManager.canUndo();
  				const canRedo = undoState.undoManager.canRedo();
@@ -1544,7 +1570,7 @@ index 74c4b30..32aff2c 100644
  					lastSelection = {
  						anchor: anchor ?? null,
 diff --git a/node_modules/loro-prosemirror/dist/index.js b/node_modules/loro-prosemirror/dist/index.js
-index e41095d..5c651dd 100644
+index e41095d..17aad73 100644
 --- a/node_modules/loro-prosemirror/dist/index.js
 +++ b/node_modules/loro-prosemirror/dist/index.js
 @@ -1,6 +1,185 @@
@@ -2798,7 +2824,33 @@ index e41095d..5c651dd 100644
  			return null;
  		},
  		view: (view) => {
-@@ -629,6 +1600,28 @@ function init(view) {
+@@ -614,6 +1585,25 @@ function init(view) {
+ 	});
+ 	else docSubscription = state.doc.subscribe((event) => updateNodeOnLoroEvent(view, event));
+ 	const innerDoc = state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY);
++	// CardMirror patch: a host that seeded the CRDT from this very document
++	// passes the seeding mapping (LoroSyncPlugin's `mapping` prop). When it
++	// still maps the root to the view's document — the same object — the
++	// containers already map onto the live nodes: nothing to rebuild or
++	// render (that full rebuild was 2–5 s frozen on a big file).
++	const cmPrior = state.mapping;
++	if (!state.containerId && cmPrior && cmPrior.size > 0 && cmPrior.get(innerDoc.id) === view.state.doc) {
++		const tr = view.state.tr;
++		tr.setMeta(loroSyncPluginKey, {
++			type: "update-state",
++			state: {
++				mapping: cmPrior,
++				docSubscription,
++				snapshot: null
++			}
++		});
++		view.dispatch(tr);
++		return;
++	}
+ 	const mapping = /* @__PURE__ */ new Map();
+ 	if (innerDoc.size === 0) {
+ 		const tr = view.state.tr.delete(0, view.state.doc.content.size);
+@@ -629,6 +1619,28 @@ function init(view) {
  	} else {
  		const schema = view.state.schema;
  		const node = createNodeFromLoroObj(schema, innerDoc, mapping);
@@ -2827,7 +2879,7 @@ index e41095d..5c651dd 100644
  		const tr = view.state.tr.replace(0, view.state.doc.content.size, new Slice(Fragment.from(node), 0, 0));
  		tr.setMeta(loroSyncPluginKey, {
  			type: "update-state",
-@@ -641,22 +1634,254 @@ function init(view) {
+@@ -641,22 +1653,254 @@ function init(view) {
  		view.dispatch(tr);
  	}
  }
@@ -3089,7 +3141,7 @@ index e41095d..5c651dd 100644
  }
  /**
  * Update ProseMirror selection based on the given Loro cursors.
-@@ -847,7 +2072,14 @@ const LoroUndoPlugin = (props) => {
+@@ -847,7 +2091,14 @@ const LoroUndoPlugin = (props) => {
  				if (!undoState || !loroState) return state;
  				const canUndo = undoState.undoManager.canUndo();
  				const canRedo = undoState.undoManager.canRedo();

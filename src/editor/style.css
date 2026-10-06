@@ -16289,6 +16289,46 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   max-width: 26rem;
   text-align: center;
 }
+.pmd-session-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 20rem;
+}
+.pmd-session-progress-title {
+  font-weight: 600;
+}
+.pmd-session-progress-label {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+.pmd-session-progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--pmd-c-border, rgba(127, 127, 127, 0.25));
+  overflow: hidden;
+}
+.pmd-session-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--pmd-c-accent, #3b82f6);
+  transition: width 120ms linear;
+}
+.pmd-session-progress-cancel {
+  align-self: center;
+  margin-top: 0.2rem;
+  padding: 0.3rem 1.1rem;
+  border-radius: 6px;
+  border: 1px solid var(--pmd-c-border, rgba(127, 127, 127, 0.4));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.pmd-session-progress-cancel:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 
 /* Three-pane: the GLOBAL session chip is redundant with the per-slot
    footers — and its sole-session fallback (show the one live session

@@ -32,7 +32,7 @@
 
 import { installRemoteStepBuilder } from './remote-steps.js';
 import { LoroDoc, VersionVector, decodeImportBlobMeta } from 'loro-crdt';
-import type { Node as PMNode } from 'prosemirror-model';
+import { Fragment, type Node as PMNode } from 'prosemirror-model';
 import type { Plugin } from 'prosemirror-state';
 import { EditorState } from 'prosemirror-state';
 import { LoroSyncPlugin, updateLoroToPmState } from 'loro-prosemirror';
@@ -192,6 +192,74 @@ function bytesEq(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
+/** The user cancelled starting a session (see host's `signal`). Nothing is
+ *  left behind: a room created before the cancel is deleted. */
+export class SessionStartCancelledError extends Error {
+  constructor() {
+    super('session start cancelled');
+    this.name = 'SessionStartCancelledError';
+  }
+}
+
+/** Progress of `CollabSession.host`: building the shared copy (`done` /
+ *  `total` in document positions), packaging it (one step, no fraction),
+ *  then uploading (`done` / `total` pieces). */
+export interface HostProgress {
+  phase: 'build' | 'package' | 'upload';
+  done: number;
+  total: number;
+}
+
+/** Let the page paint (progress bar) and handle input (Cancel) between
+ *  slices of work. */
+function yieldToUi(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(resolve, 0));
+    else setTimeout(resolve, 0);
+  });
+}
+
+/** Document positions per build slice — ~100–200 ms of work each. */
+const SEED_SLICE_POSITIONS = 150_000;
+
+/** Seed `loroDoc` from `doc` a slice of top-level blocks at a time, so the
+ *  page can show progress and take a Cancel between slices. It used to be
+ *  one synchronous pass (4–11 s frozen on a big file). Each pass syncs a
+ *  longer prefix of the same blocks; the binding's identity fast path skips
+ *  the blocks already written, so the total cost is the same as one pass.
+ *  The final pass syncs `doc` itself, so the mapping ends up naming the
+ *  caller's very document (the binding's init can then skip re-rendering). */
+async function seedInSlices(
+  loroDoc: LoroDoc,
+  mapping: Map<string, unknown>,
+  doc: PMNode,
+  onProgress: (p: HostProgress) => void,
+  checkCancelled: () => void,
+): Promise<void> {
+  const kids: PMNode[] = [];
+  doc.forEach((child) => kids.push(child));
+  const total = Math.max(1, doc.content.size);
+  let i = 0;
+  let done = 0;
+  do {
+    const start = i;
+    let size = 0;
+    while (i < kids.length && (i === start || size < SEED_SLICE_POSITIONS)) {
+      size += kids[i]!.nodeSize;
+      i++;
+    }
+    const prefix = i >= kids.length ? doc : doc.copy(Fragment.from(kids.slice(0, i)));
+    updateLoroToPmState(loroDoc as SyncDoc, mapping as Map<never, never>, EditorState.create({ doc: prefix }));
+    done += size;
+    onProgress({ phase: 'build', done: Math.min(done, total), total });
+    if (i < kids.length) {
+      await yieldToUi();
+      checkCancelled();
+    }
+  } while (i < kids.length);
+  loroDoc.commit();
+}
+
 /** The user declined a large-document join (see `confirmLargeJoin`). */
 export class JoinCancelledError extends Error {
   constructor() {
@@ -269,6 +337,10 @@ export class CollabSession {
   private ended = false;
   private postedCount = 0;
   private catchUpRunning = false;
+  /** Host only: the node↔container mapping built while seeding. Handed to
+   *  the binding so its init doesn't rebuild the whole document it was
+   *  seeded from (2–5 s on a big file). */
+  private seedMapping: Map<string, unknown> | null = null;
   /** When flush() last exported a diff — the eager-send idle test. */
   private lastFlushAt = 0;
   private eagerFlushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -413,33 +485,57 @@ export class CollabSession {
     snapshotEvery?: number;
     snapshotMinGapMs?: number;
     updateByteLimit?: number;
+    /** Progress for a start dialog (big documents take a while). */
+    onProgress?: (p: HostProgress) => void;
+    /** Cancel: throws SessionStartCancelledError, deleting a room it had
+     *  already created. */
+    signal?: AbortSignal;
   }): Promise<{ session: CollabSession; shareCode: string; guestPass: string | null }> {
+    const onProgress = opts.onProgress ?? ((): void => {});
+    const checkCancelled = (): void => {
+      if (opts.signal?.aborted) throw new SessionStartCancelledError();
+    };
     const keyBytes = generateRoomKeyBytes();
     const key = await importRoomKey(keyBytes);
-    const { roomId, guestPass } = await opts.client.createRoom();
 
+    // Build the shared copy FIRST, locally and in slices: cancelling here
+    // leaves nothing anywhere.
     const loroDoc = new LoroDoc();
     configTextStyle(loroDoc);
-    updateLoroToPmState(loroDoc as SyncDoc, new Map(), EditorState.create({ doc: opts.pmDoc }));
-    loroDoc.commit();
+    const seedMapping = new Map<string, unknown>();
+    await seedInSlices(loroDoc, seedMapping, opts.pmDoc, onProgress, checkCancelled);
+    checkCancelled();
+    onProgress({ phase: 'package', done: 0, total: 1 });
+    await yieldToUi();
+    checkCancelled();
 
+    const { roomId, guestPass } = await opts.client.createRoom();
     const session = new CollabSession({ ...opts, roomId, key, role: 'host', loroDoc });
-    const seed = loroDoc.export({ mode: 'snapshot' });
+    session.seedMapping = seedMapping;
     let seq: number;
-    const chunked = seed.length > session.updateByteLimit;
-    if (chunked) {
+    let seed: Uint8Array;
+    let chunked = false;
+    try {
+      seed = loroDoc.export({ mode: 'snapshot' });
+      chunked = seed.length > session.updateByteLimit;
       // Large document: the seed exceeds the relay's per-update cap
       // (413 in the field on big master files). Ship it as cap-sized
       // update chunks — ordinary log entries that joins and live peers
       // consume through the normal paths.
-      const emptyVersion = new LoroDoc().version();
-      const chunks = session.exportChunks(emptyVersion);
+      const pieces = chunked ? session.exportChunks(new LoroDoc().version()) : [seed];
       seq = 0;
-      for (const chunk of chunks) {
-        seq = await opts.client.postUpdate(roomId, await encryptBlob(key, chunk));
+      onProgress({ phase: 'upload', done: 0, total: pieces.length });
+      for (let i = 0; i < pieces.length; i++) {
+        checkCancelled();
+        seq = await opts.client.postUpdate(roomId, await encryptBlob(key, pieces[i]!));
+        onProgress({ phase: 'upload', done: i + 1, total: pieces.length });
       }
-    } else {
-      seq = await opts.client.postUpdate(roomId, await encryptBlob(key, seed));
+      checkCancelled();
+    } catch (err) {
+      // Cancelled (or failed) after the room exists: don't leave a
+      // half-uploaded room behind on the relay.
+      await opts.client.deleteRoom(roomId).catch(() => {});
+      throw err;
     }
     session.lastSeq = seq;
     session.lastSentVersion = loroDoc.version();
@@ -635,7 +731,12 @@ export class CollabSession {
   plugins(): Plugin[] {
     // Partner edits render as exact steps (see remote-steps.ts).
     installRemoteStepBuilder();
-    return [LoroSyncPlugin({ doc: this.loroDoc as SyncDoc })];
+    return [
+      LoroSyncPlugin({
+        doc: this.loroDoc as SyncDoc,
+        ...(this.seedMapping ? { mapping: this.seedMapping as never } : {}),
+      }),
+    ];
   }
 
   start(): void {
