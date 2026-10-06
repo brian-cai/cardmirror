@@ -27,7 +27,7 @@
     "appId": "com.cardmirror.app",
     "productName": "CardMirror",
     "executableName": "cardmirror",
-    "electronVersion": "42.2.0",
+    "electronVersion": "42.11.10",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -166,11 +166,14 @@
     "koffi": "3.0.2"
   },
   "devDependencies": {
-    "concurrently": "9.2.1",
-    "electron": "42.2.0",
-    "electron-builder": "26.8.1",
+    "concurrently": "9.2.4",
+    "electron": "42.11.10",
+    "electron-builder": "26.15.3",
     "sherpa-onnx-node": "1.13.7",
     "typescript": "5.9.3",
     "wait-on": "8.0.5"
+  },
+  "overrides": {
+    "shell-quote": "1.11.0"
   }
 }
