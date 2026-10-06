@@ -5482,8 +5482,19 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
 
-    // Section 2: Structural styles
-    n['hat']!.create({ id: newHeadingId() }, schema.text('2. Structural styles')),
+    // Section 2: Bring your setup (settings file + team file)
+    n['hat']!.create({ id: newHeadingId() }, schema.text('2. Bring your setup')),
+    paraText(
+      'If your coach or another computer gave you a settings file (cardmirror-settings.json): ⚙ → General → Back up settings → Import settings…. It brings over shortcuts, ribbon buttons, file search folders, your dictionary and the rest. Importing replaces your current settings; API keys come along only if the file has them and you say so.',
+    ),
+    blank(),
+    paraText(
+      'If you got a team file (.cmteam): click the Send pill at the bottom-left (or ⚙ → Collaboration → Team file) and choose Import a team file. It adds your teammates and groups to send cards to, sets up the team\u2019s sharing server, and turns sharing on. It only adds — nothing you already have is removed.',
+    ),
+    blank(),
+
+    // Section 3: Structural styles
+    n['hat']!.create({ id: newHeadingId() }, schema.text('3. Structural styles')),
     paraText(
       'CardMirror uses Verbatim\'s four heading levels — Pocket, Hat, Block, Tag — plus Analytics and Undertags. Each has a function key (rebindable in Settings → Keyboard shortcuts):',
     ),
@@ -5543,10 +5554,10 @@ function makeStarterDoc(): PMNode {
     ]),
     blank(),
 
-    // Section 3: Moving things around
-    n['hat']!.create({ id: newHeadingId() }, schema.text('3. Moving things around')),
+    // Section 4: Moving things around
+    n['hat']!.create({ id: newHeadingId() }, schema.text('4. Moving things around')),
     paraText(
-      'The nav pane on the left is your outline. Click an entry to jump to it; double-click to fold its sub-tree. The 1 · 2 · 3 · 4 buttons set how deep the outline goes.',
+      'The nav pane on the left is your outline. Click an entry to jump to it; double-click to fold its sub-tree. The 1 · 2 · 3 · 4 buttons set how deep the outline goes. Mod-Shift-F searches the headings in it.',
     ),
     blank(),
     paraText(
@@ -5558,8 +5569,52 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
 
-    // Section 4: Read mode
-    n['hat']!.create({ id: newHeadingId() }, schema.text('4. Read mode')),
+    // Section 5: Search Everything (power search)
+    n['hat']!.create({ id: newHeadingId() }, schema.text('5. Search Everything')),
+    paraText(
+      'Mod-Shift-Space opens one search box for everything: your files, commands, settings, Quick Cards and other windows. Type to search all of them at once, or start with a letter and a space to search just one kind:',
+    ),
+    blank(),
+    paraIndented('f = your files (Enter opens one; Tab looks inside it to insert a card)'),
+    paraIndented('/ = browse your file-search folders'),
+    paraIndented('q = Quick Cards'),
+    paraIndented('c = commands (each shows its shortcut)'),
+    paraIndented('s = settings'),
+    paraIndented('w = your other CardMirror windows'),
+    blank(),
+    paraText(
+      'Set it up once: ⚙ → Search → File search folders — add the folders where your files live (Dropbox, Google Drive, your team\u2019s backfiles). The priority lists below it decide what comes first: Highest priority always on top, Preferred wins ties, Deprioritized always last (good for old archives).',
+    ),
+    blank(),
+    paraText(
+      'Pin the files you use every round: select one in the list and press Alt-P (★). Pinned files stay at the top and open instantly.',
+    ),
+    blank(),
+
+    // Section 6: The speech doc and your windows
+    n['hat']!.create({ id: newHeadingId() }, schema.text('6. Your speech doc and switching windows')),
+    paraText(
+      'Each document opens in its own window. One of them is your speech doc — where the cards you send go. The Speech group in the ribbon has everything for it:',
+    ),
+    blank(),
+    paraIndented('New Speech Document — a fresh speech doc, already marked'),
+    paraIndented('Mark Active as Speech — make the document you\u2019re in the speech doc'),
+    paraIndented('Select Speech Doc — a panel listing every open document; pick the speech doc from anywhere, or clear it'),
+    paraIndented('` (backtick) — send the card or selection you\u2019re on to the speech doc at its cursor'),
+    paraIndented('Alt-` — send it to the end of the speech doc instead'),
+    paraIndented('Arrange Windows — the speech doc on one side of the screen, everything else stacked on the other'),
+    blank(),
+    paraText(
+      'A red frame marks the speech doc\u2019s window (a blue one marks a shared document), so you always know where sends land. Change the colors in ⚙ → Appearance → Document frames.',
+    ),
+    blank(),
+    paraText(
+      'Ctrl-Tab (on a Mac too) switches windows: it lists your other CardMirror windows, most recent first, with the speech doc in red. Press Enter to jump back to the last one, Ctrl-Tab again to move down the list, or type part of a name to jump straight to it.',
+    ),
+    blank(),
+
+    // Section 7: Read mode
+    n['hat']!.create({ id: newHeadingId() }, schema.text('7. Read mode')),
     paraText(
       'Click 👁️ to read at the podium. Everything but Tags, Cites, Analytics, and highlighted text hides, and typing is locked out so a stray key can\'t edit the doc. Click 👁️ again or press Esc to exit.',
     ),
@@ -5569,8 +5624,8 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
 
-    // Section 5: Learn
-    n['hat']!.create({ id: newHeadingId() }, schema.text('5. Study your evidence')),
+    // Section 8: Learn
+    n['hat']!.create({ id: newHeadingId() }, schema.text('8. Study your evidence')),
     paraText(
       'CardMirror can turn evidence into spaced-repetition flashcards. They live only on your machine — they never travel with a .docx you share. Select some text and use Create Flashcard to anchor a question-and-answer or cloze card to it; anchored cards show up in the comments column beside the text they came from.',
     ),
@@ -5580,23 +5635,19 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
 
-    // Section 6: Collaboration
-    n['hat']!.create({ id: newHeadingId() }, schema.text('6. Share and co-edit')),
+    // Section 9: Collaboration
+    n['hat']!.create({ id: newHeadingId() }, schema.text('9. Share and co-edit')),
     paraText(
-      'In the desktop app, CardMirror machines can send cards to each other and co-edit documents live — both end-to-end encrypted. Turn on Enable collaboration in ⚙ → Collaboration to get your pairing code and the Send / Receive pills, then swap codes with teammates to send cards straight to their machines.',
+      'In the desktop app, CardMirror machines can send cards to each other and co-edit documents live — both end-to-end encrypted. The quickest setup is your team file (section 2). Without one, click the Send pill and choose Set up in Settings to turn sharing on and swap codes with teammates.',
     ),
     blank(),
     paraText(
       'For live co-editing, click the Send pill and press the invite button on a recipient — or run Start Collaboration Session from the command bar and share the code it copies. Up to 10 people type in one document with live cursors, and everyone keeps their copy when the session ends.',
     ),
     blank(),
-    paraText(
-      'On the official relay these features require a linked paid Debate Decoded membership (⚙ → Collaboration).',
-    ),
-    blank(),
 
-    // Section 7: Settings
-    n['hat']!.create({ id: newHeadingId() }, schema.text('7. Make it yours')),
+    // Section 10: Settings
+    n['hat']!.create({ id: newHeadingId() }, schema.text('10. Make it yours')),
     paraText(
       'Click ⚙ for Settings and 📖 for the full keyboard reference any time.',
     ),
