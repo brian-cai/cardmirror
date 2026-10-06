@@ -7,7 +7,7 @@ see `DETAILED_CHANGELOG.md`.
 
 ## 1.14.10 — 2026-10-06
 
-Brian's (@brian-cai) build of CardMirror, updating from
+BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
 ### Added
@@ -25,7 +25,7 @@ github.com/brian-cai/cardmirror.
 
 ## 1.14.9 — 2026-10-06
 
-Brian's (@brian-cai) build of CardMirror, updating from
+BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
 ### Security
@@ -48,7 +48,7 @@ github.com/brian-cai/cardmirror.
 
 ## 1.14.8 — 2026-10-05
 
-Brian's (@brian-cai) build of CardMirror, updating from
+BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
 ### Added
@@ -85,7 +85,7 @@ github.com/brian-cai/cardmirror.
 
 ## 1.14.7 — 2026-10-05
 
-Brian's (@brian-cai) build of CardMirror, updating from
+BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
 ### Added
@@ -113,7 +113,7 @@ github.com/brian-cai/cardmirror.
 
 ## 1.14.6 — 2026-10-05
 
-Brian's (@brian-cai) build of CardMirror, updating from
+BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
 ### Added
@@ -146,7 +146,7 @@ github.com/brian-cai/cardmirror.
 
 ## 1.14.5 — 2026-10-04
 
-Brian's (@brian-cai) build of CardMirror, updating from
+BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
 ### Added
@@ -177,7 +177,7 @@ github.com/brian-cai/cardmirror.
 
 ## 1.14.4 — 2026-10-04
 
-Brian's (@brian-cai) build of CardMirror, updating from
+BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
 ### Added
@@ -197,7 +197,7 @@ github.com/brian-cai/cardmirror.
 
 ## 1.14.3 — 2026-10-04
 
-Brian's (@brian-cai) build of CardMirror, updating from
+BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
 ### Security
@@ -213,7 +213,7 @@ github.com/brian-cai/cardmirror.
 
 ## 1.14.2 — 2026-10-04
 
-Brian's (@brian-cai) build of CardMirror, updating from
+BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
 ### Security
@@ -235,7 +235,7 @@ github.com/brian-cai/cardmirror.
 
 ## 1.14.1 — 2026-10-03
 
-Brian's (@brian-cai) build of CardMirror: everything in the official
+BCai's (@brian-cai) build of CardMirror: everything in the official
 1.14.0, plus the changes below. Installs of this build update from
 github.com/brian-cai/cardmirror; to go back to the official releases,
 open Settings → General → About this install and press Reset to default

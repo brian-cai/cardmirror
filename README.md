@@ -4,7 +4,7 @@
 
 # CardMirror — XTGG build
 
-**This is Brian Cai's (XTGG) build of CardMirror**, a debate text editor
+**This is BCai's (XTGG) build of CardMirror**, a debate text editor
 focused on high school and college policy debate. It's a standalone
 replacement for the editor side of
 **[Verbatim](https://github.com/ashtarcommunications/verbatim)**, the
