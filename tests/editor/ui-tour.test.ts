@@ -4,7 +4,7 @@
  * UI tour (spotlight onboarding, 2026-08-18). Pinned:
  *  - sequencing: next/back/skip/Esc, Done ends; new order (styles →
  *    char styles → outline → files → speech → read mode → word count
- *    → timer → learn → command bar → ⚙ → finish)
+ *    → timer → command bar → ⚙ → finish)
  *  - availability adapter: absent target → adapted centered card (the
  *    single-pane speech-stack case), never a crash or a silent skip;
  *    a target clipped by an overflow ancestor counts as hidden
@@ -143,7 +143,6 @@ describe('UI tour', () => {
       'Read mode',
       'Read time, live',
       'Timer',
-      'Study your evidence',
       'One shortcut',
       'Settings, the clickable way',
       'Keyboard reference',
@@ -236,7 +235,7 @@ describe('UI tour', () => {
     buildChrome({ speech: true });
     const tour = new UiTourController();
     tour.start();
-    for (let i = 0; i < 11; i++) btn('Next')!.click();
+    for (let i = 0; i < 10; i++) btn('Next')!.click();
     expect(card()!.textContent).toContain('One shortcut');
 
     (qcs as unknown as { __fireOpen: () => void }).__fireOpen();
@@ -387,12 +386,12 @@ describe('UI tour', () => {
     buildChrome({ speech: true });
     const tour = new UiTourController();
     tour.start();
-    for (let i = 0; i < 11; i++) btn('Next')!.click();
+    for (let i = 0; i < 10; i++) btn('Next')!.click();
     expect(card()!.textContent).toContain('One shortcut');
 
     // Not typing: ArrowLeft backs out of the interactive step.
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
-    expect(card()!.textContent).toContain('Study your evidence');
+    expect(card()!.textContent).toContain('Timer');
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
     expect(card()!.textContent).toContain('One shortcut');
 

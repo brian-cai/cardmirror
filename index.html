@@ -198,15 +198,20 @@
                lives on the status bar (next to the live read-aloud
                counter) since they answer the same family of
                question. -->
+          <!-- Reading view (paginated columns) is hidden in BCai's build;
+               Toggle Reading View is still in Search Everything. -->
           <button id="read-mode-btn" class="ribbon-doc-ops-btn" type="button"
                   title="Read mode" aria-label="Read mode"><span class="pmd-icon pmd-icon-read-mode" aria-hidden="true"></span></button>
-          <button id="reader-view-btn" class="ribbon-doc-ops-btn" type="button"
+          <button id="reader-view-btn" class="ribbon-doc-ops-btn" type="button" hidden
                   title="Reading view" aria-label="Reading view"><span class="pmd-icon pmd-icon-book" aria-hidden="true"></span></button>
         </div>
         <div id="comments-ops-panel" class="ribbon-doc-ops-panel ribbon-doc-ops-panel-3col" role="group" aria-label="Comments">
           <!-- 2-row × 3-col grid (row-major):
                   comments-toggle    add-comment       add-note
                   manage-flashcards  create-flashcard  ask-ai
+               The flashcard buttons are hidden in BCai's build (2026-10-06:
+               the commands stay in Search Everything); a button's `hidden`
+               attribute takes it out of the grid.
                Top row toggles the column / adds a comment / adds a
                private note to the selection; bottom row opens Manage
                Flashcards (with a red due-today dot), makes a flashcard
@@ -219,9 +224,9 @@
                   title="Add a comment on the selection" aria-label="Add comment"><span class="pmd-icon pmd-icon-plus" aria-hidden="true"></span></button>
           <button id="add-note-btn" class="ribbon-doc-ops-btn" type="button"
                   title="Add a private note on the selection" aria-label="Add note"><span class="pmd-icon pmd-icon-note" aria-hidden="true"></span></button>
-          <button id="manage-flashcards-btn" class="ribbon-doc-ops-btn" type="button"
+          <button id="manage-flashcards-btn" class="ribbon-doc-ops-btn" type="button" hidden
                   title="Manage flashcards" aria-label="Manage flashcards"><span class="pmd-icon pmd-icon-manage" aria-hidden="true"></span></button>
-          <button id="create-flashcard-btn" class="ribbon-doc-ops-btn" type="button"
+          <button id="create-flashcard-btn" class="ribbon-doc-ops-btn" type="button" hidden
                   title="Create flashcard from selection" aria-label="Create flashcard from selection"><span class="pmd-icon pmd-icon-flashcard" aria-hidden="true"></span></button>
           <button id="ask-ai-btn" class="ribbon-doc-ops-btn" type="button" hidden
                   title="Ask AI about selection" aria-label="Ask AI about selection"><span class="pmd-icon pmd-icon-ai" aria-hidden="true"></span></button>

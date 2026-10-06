@@ -5576,6 +5576,10 @@ function makeStarterDoc(): PMNode {
       'To drag a card straight from the page, hold Mod-Shift-Alt and drag it. Drops are schema-aware: invalid targets don\'t light up.',
     ),
     blank(),
+    paraText(
+      'To get around between files rather than inside one: Mod-Shift-Space finds and opens any file, command or setting (section 5), and Ctrl-Tab jumps between your open windows (section 6).',
+    ),
+    blank(),
 
     // Section 5: Search Everything (power search)
     n['hat']!.create({ id: newHeadingId() }, schema.text('5. Search Everything')),
@@ -5590,8 +5594,18 @@ function makeStarterDoc(): PMNode {
     paraIndented('s = settings'),
     paraIndented('w = your other CardMirror windows'),
     blank(),
+    paraText('A few things to try:'),
+    paraIndented('"c save as" — run Save As; any command works this way, and the list shows its shortcut so you learn it'),
+    paraIndented('"s ribbon size" — jump straight to that setting (any setting: "s theme", "s readers", "s shortcuts")'),
+    paraIndented('"f spending da" — find a file by part of its name, even if it isn\u2019t open; Enter opens it'),
+    paraIndented('"w 1AC" — switch to an open window by part of its name'),
+    blank(),
     paraText(
-      'Set it up once: ⚙ → Search → File search folders — add the folders where your files live (Dropbox, Google Drive, your team\u2019s backfiles). The priority lists below it decide what comes first: Highest priority always on top, Preferred wins ties, Deprioritized always last (good for old archives).',
+      'Files only show up once CardMirror knows where they live. Set it up once in ⚙ → Search → File search folders: click + Add folder and pick the folders with your files (Dropbox, Google Drive, your team\u2019s backfiles). Subfolders are included.',
+    ),
+    blank(),
+    paraText(
+      'Then decide what comes first, in the priority lists under it. Add a folder to Highest priority and its files always sit on top (this year\u2019s files); Preferred wins ties between equally good matches (your own files over the team\u2019s); Deprioritized always sinks to the bottom (old archives, last year\u2019s backfiles).',
     ),
     blank(),
     paraText(
@@ -5632,19 +5646,8 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
 
-    // Section 8: Learn
-    n['hat']!.create({ id: newHeadingId() }, schema.text('8. Study your evidence')),
-    paraText(
-      'CardMirror can turn evidence into spaced-repetition flashcards. They live only on your machine — they never travel with a .docx you share. Select some text and use Create Flashcard to anchor a question-and-answer or cloze card to it; anchored cards show up in the comments column beside the text they came from.',
-    ),
-    blank(),
-    paraText(
-      'The Home screen\'s Learn section runs your due reviews. With AI features on, CardMirror can draft cards for you too.',
-    ),
-    blank(),
-
-    // Section 9: Collaboration
-    n['hat']!.create({ id: newHeadingId() }, schema.text('9. Share and co-edit')),
+    // Section 8: Collaboration
+    n['hat']!.create({ id: newHeadingId() }, schema.text('8. Share and co-edit')),
     paraText(
       'In the desktop app, CardMirror machines can send cards to each other and co-edit documents live — both end-to-end encrypted. The quickest setup is your team file (section 2). Without one, click the Send pill and choose Set up in Settings to turn sharing on and swap codes with teammates.',
     ),
@@ -5654,8 +5657,8 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
 
-    // Section 10: Settings
-    n['hat']!.create({ id: newHeadingId() }, schema.text('10. Make it yours')),
+    // Section 9: Settings
+    n['hat']!.create({ id: newHeadingId() }, schema.text('9. Make it yours')),
     paraText(
       'Click ⚙ for Settings and 📖 for the full keyboard reference any time.',
     ),

@@ -5,7 +5,7 @@
  * the current target and a floating card beside it (Back / Next /
  * Skip, step dots, ←/→/Esc). Sequenced as a first session's arc:
  * editor → structural styles → character styles → outline → files →
- * speech → read mode → word count → timer → learn → command bar
+ * speech → read mode → word count → timer → command bar
  * (interactive: open it, run "settings", tour the opened dialog) →
  * the ⚙ button → finish. A first boot that lands on the home screen
  * gets a leading step that has the user create their first document.
@@ -183,14 +183,6 @@ function buildSteps(opts: { includeCreateDoc: boolean }): TourStep[] {
         'Speech and prep timers, with presets. It pops out into its own always-on-top ' +
         'window too, for reading off one screen while timing on another.',
       target: el('timer-toggle-btn'),
-    },
-    {
-      id: 'learn',
-      title: 'Study your evidence',
-      body:
-        'Turn evidence into spaced-repetition flashcards: create one from a selection, ' +
-        'manage the deck, and watch for the red dot when reviews are due.',
-      target: () => document.getElementById('manage-flashcards-btn')?.parentElement ?? null,
     },
     {
       id: COMMAND_BAR_STEP_ID,

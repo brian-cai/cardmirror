@@ -1988,7 +1988,7 @@ const DEFAULTS: Settings = {
   bodyFont: 'Times New Roman',
   uiFont: '',
   ribbonTooltipMode: 'both',
-  ribbonScale: 100,
+  ribbonScale: 130,
   showDropzonePill: false,
   showQuickCardButtons: false,
   fileSearchRoots: [],
@@ -5956,10 +5956,11 @@ function sanitizeUiFont(raw: unknown): string {
 /** The ribbon sizes offered in Settings, percent of normal. */
 export const RIBBON_SCALES = [100, 115, 130, 150] as const;
 
-/** Snap a stored ribbon size to the nearest offered one (100 if junk). */
+/** Snap a stored ribbon size to the nearest offered one (the default,
+ *  Larger, if missing or junk). */
 export function sanitizeRibbonScale(v: unknown): number {
-  if (typeof v !== 'number' || !Number.isFinite(v)) return 100;
-  return RIBBON_SCALES.reduce((best, n) => (Math.abs(n - v) < Math.abs(best - v) ? n : best), 100);
+  if (typeof v !== 'number' || !Number.isFinite(v)) return 130;
+  return RIBBON_SCALES.reduce((best, n) => (Math.abs(n - v) < Math.abs(best - v) ? n : best), 130);
 }
 
 function sanitizeRibbonTooltipMode(
