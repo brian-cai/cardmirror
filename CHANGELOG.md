@@ -5,6 +5,41 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.11 — 2026-10-06
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Bigger ribbon buttons.** Settings → Appearance → Ribbon button size:
+  Normal, Large, Larger or Largest. Larger is the new default. On a narrow
+  window the least-used panels hide sooner to make room.
+- **Starting a shared session on a big document shows progress** and has
+  a Cancel button, instead of freezing until it's done.
+- **A new Welcome guide**: how to bring over a settings file or team file,
+  set up Search Everything (commands, settings, files, windows) and your
+  file search folders and priorities, use the speech doc panel, and switch
+  windows with Ctrl-Tab.
+
+### Changed
+
+- **Importing settings no longer wipes anything out.** Your preferences
+  are set to the file's, but your contacts, groups, folders, macros,
+  custom buttons and dictionary words all stay — the file's new ones are
+  added. Folders from the file are added only if they exist on your
+  computer.
+- **In the Send list, groups sit right above the search box**, and the
+  list opens scrolled there.
+- **The Reading view and flashcard buttons are gone from the ribbon.**
+  Their commands are still in Search Everything.
+
+### Fixed
+
+- **Importing someone else's settings file no longer takes over their
+  sharing code.** Before, a teammate's or coach's cards could start
+  arriving on your computer instead of theirs.
+
 ## 1.14.10 — 2026-10-06
 
 BCai's (@brian-cai) build of CardMirror, updating from
