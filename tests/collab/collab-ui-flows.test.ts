@@ -237,9 +237,13 @@ describe('collab UI flows through the editor seams', () => {
     });
     collabUi.setCollabDocTitleResolver(() => null); // untitled: no name to resolve
     document.title = 'CardMirror';
+    settings.set('pairingDisplayName', 'Brian');
     await startSession(hostDeps);
     const hostSess = collabUi.activeSession()!;
-    expect((hostSess.loroDoc.getMap('meta').get('title') as string | undefined) ?? '').toBe('');
+    // An unsaved doc publishes the dated default, never an empty title or
+    // "Untitled": "Oct 5, 8:14 PM - Brian".
+    const firstTitle = (hostSess.loroDoc.getMap('meta').get('title') as string | undefined) ?? '';
+    expect(firstTitle).toMatch(/^[A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M - Brian$/u);
 
     // A second "window" joins through the real flow (installSeams runs,
     // including the meta watcher). Distinct owner uid; adoption spied.
@@ -258,17 +262,18 @@ describe('collab UI flows through the editor seams', () => {
     };
     expect(await collabUi.joinSessionWithCode(joinDeps, shareCode)).toBe(true);
     await sleep(150);
-    expect(adopted).toEqual([]); // nothing published yet — nothing adopted
+    expect(adopted).toEqual([firstTitle]); // the joiner's copy is named after it
 
     // The host saves the doc: the resolver now knows its name, and the
     // save path republishes to the room's meta map.
     collabUi.setCollabDocTitleResolver((uid) => (uid === HOST_UID ? 'Neg Blocks.cmir' : null));
     collabUi.republishSessionTitle(HOST_UID);
-    expect(hostSess.loroDoc.getMap('meta').get('title')).toBe('Neg Blocks.cmir');
+    // Kept as the default, the name follows the document: "Filename - Name".
+    expect(hostSess.loroDoc.getMap('meta').get('title')).toBe('Neg Blocks - Brian');
     // Default flush cadence (500ms) + the inbound micro-batch drain
     // (120ms) + margin — the flows here run on production timings.
     await sleep(1000);
-    expect(adopted).toContain('Neg Blocks.cmir');
+    expect(adopted).toContain('Neg Blocks - Brian');
 
     // Cleanup: host ends; the joiner session tears down on the remote end.
     const endP = collabUi.endSessionFlow(hostDeps);
@@ -283,6 +288,7 @@ describe('collab UI flows through the editor seams', () => {
     // test's synthetic windows aren't deterministically chip-bound.
     document.getElementById('collab-chip')!.hidden = true;
     collabUi.setCollabDocTitleResolver(null);
+    settings.set('pairingDisplayName', '');
     hostView.destroy();
     joinerView.destroy();
   }, 20_000);

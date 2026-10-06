@@ -513,12 +513,12 @@ function installSeams(
   const wakeCleanup = installWakeHooks(session);
   const commentsSync = installCommentsSync(session.loroDoc, ownerView);
   // Recent rooms: kept past a Leave so Join session can offer a rejoin.
-  rememberRecentRoom(session, shareCode, sessionDocTitle(ownerUid) || sharedDocTitle(session));
+  rememberRecentRoom(session, shareCode, sessionLabel(ownerUid, session));
   // M3: crash-surviving session record (home-screen Sessions list resumes it).
   const persist = attachSessionPersistence(
     session,
     shareCode,
-    () => sessionDocTitle(ownerUid) || sharedDocTitle(session),
+    () => sessionLabel(ownerUid, session),
     () => docIdResolver?.(ownerUid) ?? null,
     { onFailure: (n) => noteWriterFailure('collab-persist-failing', 'crash-resume record', n) },
   );
@@ -537,7 +537,7 @@ function installSeams(
   idle(() => warmCausalMarkIndex(session.loroDoc));
   const history = attachSessionHistory(
     session,
-    () => sessionDocTitle(ownerUid) || sharedDocTitle(session),
+    () => sessionLabel(ownerUid, session),
     undefined,
     { onFailure: (n) => noteWriterFailure('collab-history-failing', 'session history', n) },
   );
@@ -680,7 +680,7 @@ function teardownSession(
     rememberRecentRoom(
       sess.session,
       sess.shareCode,
-      sessionDocTitle(sess.ownerUid) || sharedDocTitle(sess.session),
+      sessionLabel(sess.ownerUid, sess.session),
       Date.now(),
     );
   }
@@ -973,24 +973,38 @@ async function startSessionFlowInner(
     void offerSharingSetup('Starting a co-editing session');
     return;
   }
-  // Confirm, naming the doc the session will be created for — removes any
-  // ambiguity about which doc is being shared (multi-pane: the focused one).
   const startName = sessionDocTitle(ownerUid);
-  // A plain yes/no — two equal buttons (confirmDialog), NOT the big
-  // route-choice cards, which are reserved for genuine multi-option
-  // decisions (field feedback, 2026-07-11).
-  // Large documents get the cost spelled out in the same dialog (see
-  // large-doc.ts for what grows with size).
+  // Large documents get the cost spelled out first (see large-doc.ts for
+  // what grows with size).
   const sizeWarning = shareWarning(view.state.doc);
-  const startConfirm = await confirmDialog(
-    sizeWarning ?? 'Anyone you share the code with can edit this document with you in real time.',
-    {
+  if (sizeWarning) {
+    const ok = await confirmDialog(sizeWarning, {
       title: `Start a co-editing session for ${startName ? `"${startName}"` : 'this document'}?`,
-      okLabel: sizeWarning ? 'Start Anyway' : 'Start Session',
-      ...(sizeWarning ? { link: MERGE_COPIES_LINK } : {}),
-    },
-  );
-  if (!startConfirm) return;
+      okLabel: 'Start Anyway',
+      link: MERGE_COPIES_LINK,
+    });
+    if (!ok) return;
+  }
+  // Name the session: it's what everyone sees in their Sessions list and
+  // what joiners' copies are called. Pre-filled with "Filename - Display
+  // Name"; cleared, the same default (never "Untitled").
+  const docName = namedDocTitle(startName);
+  const fallbackName = defaultSessionName(docName, settings.get('pairingDisplayName'));
+  const typed = await promptForText({
+    message: 'Start a co-editing session',
+    detail:
+      'Anyone you share the code with can edit this document with you in real time. ' +
+      'Name the session — it\u2019s what everyone sees in their Sessions list.',
+    initial: fallbackName,
+    placeholder: fallbackName,
+    okLabel: 'Start Session',
+  });
+  if (typed === null) return;
+  const sessionName = typed.trim() || fallbackName;
+  // A name the host typed sticks: saving or renaming the document no
+  // longer republishes over it. Kept as the default, it follows the
+  // document's name (see republishSessionTitle).
+  const customName = sessionName !== fallbackName;
   await ensureBakedRelay();
   const client = relayClient();
   if (!client) {
@@ -1026,7 +1040,8 @@ async function startSessionFlowInner(
       // existing comment threads alongside the seeded doc — and the doc
       // title, so joiners can name their unsaved copy.
       sess.commentsSync.seedFromView(view);
-      session.loroDoc.getMap('meta').set('title', sessionDocTitle(ownerUid));
+      session.loroDoc.getMap('meta').set('title', sessionName);
+      if (customName) session.loroDoc.getMap('meta').set(META_TITLE_CUSTOM, true);
       session.loroDoc.commit({ origin: META_COMMIT_ORIGIN });
       deps.refreshPlugins();
       session.start();
@@ -1498,14 +1513,51 @@ export function republishSessionTitle(uid: string | null): void {
   if (!uid) return;
   const sess = sessions.get(uid);
   if (!sess || sess.session.role !== 'host') return;
-  const name = sessionDocTitle(uid);
-  if (!name || name === sharedDocTitle(sess.session)) return;
+  if (titleIsCustom(sess.session)) return; // the host named it: keep that
+  // Default naming ("Filename - Display Name"), once the document has a
+  // real name — an unsaved doc keeps its dated default.
+  const docName = namedDocTitle(sessionDocTitle(uid));
+  if (!docName) return;
+  const name = defaultSessionName(docName, settings.get('pairingDisplayName'));
+  if (name === sharedDocTitle(sess.session)) return;
   sess.session.loroDoc.getMap('meta').set('title', name);
   sess.session.loroDoc.commit({ origin: META_COMMIT_ORIGIN });
 }
 
 /** The host-published doc title from the room's meta map ('' when the
  *  host predates title publishing or hasn't named the doc). */
+/** Meta flag: the host typed a session name of their own (not the doc's). */
+const META_TITLE_CUSTOM = 'titleCustom';
+
+function titleIsCustom(session: CollabSession): boolean {
+  return session.loroDoc.getMap('meta').get(META_TITLE_CUSTOM) === true;
+}
+
+/** What to call a session in lists, records and invites: its published
+ *  name (the host's typed name or the "Filename - Display Name" default),
+ *  else the document's name. */
+function sessionLabel(ownerUid: string | null | undefined, session: CollabSession): string {
+  return sharedDocTitle(session) || sessionDocTitle(ownerUid);
+}
+
+/** The document's name if it has a real one (a saved file), without the
+ *  extension; null for a never-saved "Untitled" document. */
+export function namedDocTitle(title: string): string | null {
+  const t = title.replace(/\.(docx|cmir)$/iu, '').trim();
+  return t && !/^untitled\b/iu.test(t) ? t : null;
+}
+
+/** The default session name: "Filename - Display Name" (e.g. "Aff -
+ *  Brian"). A never-saved document has no filename, so the date stands in
+ *  ("Oct 5, 8:14 PM - Brian") — never "Untitled". No display name set:
+ *  just the first part. */
+export function defaultSessionName(docName: string | null, displayName: string, now: Date = new Date()): string {
+  const first =
+    docName ?? now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const who = displayName.trim();
+  return who ? `${first} - ${who}` : first;
+}
+
 function sharedDocTitle(session: CollabSession): string {
   const t = session.loroDoc.getMap('meta').get('title');
   return typeof t === 'string' ? t.trim() : '';
@@ -1541,7 +1593,10 @@ async function sendInviteTo(
 ): Promise<void> {
   const item = buildRoomInviteItem({
     shareCode,
-    title: sessionDocTitle(ownerUid),
+    title: (() => {
+      const live = sessionFor(ownerUid);
+      return live ? sessionLabel(ownerUid, live.session) : sessionDocTitle(ownerUid);
+    })(),
   });
   // Movable-format rooms carry the higher floor: a pre-movable build
   // joining one couldn't read its containers at all, so it must get

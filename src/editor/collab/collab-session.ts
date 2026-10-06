@@ -713,6 +713,10 @@ export class CollabSession {
     // continued typing rides the regular cadence, restarted from that
     // send, so the request rate is unchanged.
     this.offLocalUpdates ??= this.loroDoc.subscribeLocalUpdates(() => this.noteLocalChange());
+    // Whatever was committed before start() (the host's session name and
+    // comment threads, set right after seeding) goes out now, so a partner
+    // joining at once sees the name instead of waiting for the first tick.
+    if (this.loroDoc.version().compare(this.lastSentVersion) !== 0) this.noteLocalChange();
     this.catchUpTimer = setInterval(() => void this.catchUp(), this.catchUpMs);
     // Every audit runs BEHIND a catch-up so its probe starts from a
     // current cursor: with its own unaligned timer the "~100B probe"
