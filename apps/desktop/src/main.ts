@@ -462,11 +462,22 @@ function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
   // most of a large screen empty. A normal window, not OS full screen —
   // it can still be resized and moved.
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  // Windows / Linux: open MAXIMIZED (below) — sizing a normal window to the
+  // work area there doesn't fill it (invisible resize borders, display
+  // scaling on large monitors), and a real maximize is what users expect.
+  // The normal-state size is then a centered 80%, so un-maximizing gives a
+  // visibly smaller window instead of one identical to the maximized one.
+  const fillsByMaximizing = process.platform !== 'darwin';
+  const normal = fillsByMaximizing
+    ? {
+        width: Math.round(workArea.width * 0.8),
+        height: Math.round(workArea.height * 0.8),
+        x: workArea.x + Math.round(workArea.width * 0.1),
+        y: workArea.y + Math.round(workArea.height * 0.1),
+      }
+    : { x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height };
   const win = new BrowserWindow({
-    x: workArea.x,
-    y: workArea.y,
-    width: workArea.width,
-    height: workArea.height,
+    ...normal,
     // Explicit 0×0 minimum: Electron + Chromium will otherwise
     // advertise its own default minimum to the WM (~800×600 on some
     // Linux compositors). Pinning both to 0 advertises "no minimum"
@@ -492,6 +503,8 @@ function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
       backgroundThrottling: false,
     },
   });
+
+  if (fillsByMaximizing) win.maximize();
 
   // Mirror tagged renderer console lines to the main-process stdout —
   // renderer console output is otherwise only visible in DevTools,
