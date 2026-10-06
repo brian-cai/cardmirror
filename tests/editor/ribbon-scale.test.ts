@@ -23,3 +23,15 @@ describe('ribbon button size setting', () => {
     expect(meta?.category).toBe('appearance');
   });
 });
+
+describe('nav pane text size setting', () => {
+  it('defaults to normal and snaps to the offered sizes', async () => {
+    const { NAV_TEXT_SCALES, sanitizeNavTextScale } = await import('../../src/editor/settings.js');
+    expect(settings.get('navTextScale')).toBe(100);
+    for (const n of NAV_TEXT_SCALES) expect(sanitizeNavTextScale(n)).toBe(n);
+    expect(sanitizeNavTextScale(80)).toBe(85);
+    expect(sanitizeNavTextScale(140)).toBe(130);
+    expect(sanitizeNavTextScale(null)).toBe(100);
+    expect(SETTING_METADATA.find((m) => m.key === 'navTextScale')?.category).toBe('appearance');
+  });
+});

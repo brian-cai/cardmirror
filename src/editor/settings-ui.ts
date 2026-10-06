@@ -45,6 +45,7 @@ import {
   type RibbonCustomButton,
   MAX_RIBBON_CUSTOM_BUTTONS,
   RIBBON_SCALES,
+  NAV_TEXT_SCALES,
   condenseWarningCloseFor,
   NUMBERING_SEPARATORS,
   type NumberingSeparator,
@@ -1262,7 +1263,13 @@ class SettingsModal {
       return row;
     } else if (meta.kind === 'ribbonScale') {
       row.appendChild(text);
-      row.appendChild(buildRibbonScaleEditor());
+      row.appendChild(buildScaleEditor('ribbonScale', RIBBON_SCALES, { 100: 'Normal', 115: 'Large', 130: 'Larger', 150: 'Largest' }));
+      return row;
+    } else if (meta.kind === 'navTextScale') {
+      row.appendChild(text);
+      row.appendChild(
+        buildScaleEditor('navTextScale', NAV_TEXT_SCALES, { 85: 'Smaller', 100: 'Normal', 115: 'Large', 130: 'Larger', 150: 'Largest' }),
+      );
       return row;
     } else if (meta.kind === 'colorOverrides') {
       row.appendChild(text);
@@ -5586,23 +5593,27 @@ function buildArrangeSpeechSideEditor(): HTMLElement {
   return wrap;
 }
 
-/** Segmented control for the ribbon button size. */
-function buildRibbonScaleEditor(): HTMLElement {
+/** Segmented control for a percent size setting (ribbon buttons, nav
+ *  pane text): one button per offered size. */
+function buildScaleEditor(
+  key: 'ribbonScale' | 'navTextScale',
+  values: readonly number[],
+  labels: Record<number, string>,
+): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'pmd-theme-editor';
-  const labels: Record<number, string> = { 100: 'Normal', 115: 'Large', 130: 'Larger', 150: 'Largest' };
-  for (const value of RIBBON_SCALES) {
+  for (const value of values) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'pmd-theme-editor-btn';
     btn.textContent = labels[value] ?? `${value}%`;
     btn.title = `${value}%`;
     btn.dataset['value'] = String(value);
-    btn.addEventListener('click', () => settings.set('ribbonScale', value));
+    btn.addEventListener('click', () => settings.set(key, value));
     wrap.appendChild(btn);
   }
   function refresh(): void {
-    const cur = String(settings.get('ribbonScale'));
+    const cur = String(settings.get(key));
     for (const btn of wrap.querySelectorAll<HTMLButtonElement>('.pmd-theme-editor-btn')) {
       btn.setAttribute('aria-pressed', btn.dataset['value'] === cur ? 'true' : 'false');
     }

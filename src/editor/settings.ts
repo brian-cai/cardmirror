@@ -1182,6 +1182,8 @@ export interface Settings {
   /** Ribbon button size, percent of normal (one of RIBBON_SCALES). The
    *  whole ribbon scales; panels that no longer fit hide as usual. */
   ribbonScale: number;
+  /** Nav pane (outline) text size, percent of normal (one of NAV_TEXT_SCALES). */
+  navTextScale: number;
   /** Whether the cross-window dropzone pill (the floating shelf in
    *  the editor's bottom-left corner) is visible. The shelf state still
    *  works when off (Ctrl+\` sends, content is reachable from the
@@ -1989,6 +1991,7 @@ const DEFAULTS: Settings = {
   uiFont: '',
   ribbonTooltipMode: 'both',
   ribbonScale: 130,
+  navTextScale: 100,
   showDropzonePill: false,
   showQuickCardButtons: false,
   fileSearchRoots: [],
@@ -2275,6 +2278,7 @@ export interface SettingMeta {
     | 'wordCountOrder'
     | 'arrangeSpeechSide'
     | 'ribbonScale'
+    | 'navTextScale'
     | 'password'
     | 'voiceInputDevice'
     | 'voiceDashStyle'
@@ -3321,6 +3325,16 @@ export const SETTING_METADATA: SettingMeta[] = [
     category: 'appearance',
     section: 'Theme & chrome',
     aliases: ['bigger buttons', 'larger buttons', 'button size', 'ribbon size', 'toolbar size', 'icon size', 'scale ribbon'],
+  },
+  {
+    key: 'navTextScale',
+    label: 'Nav pane text size',
+    description:
+      'Makes the headings in the navigation pane (the outline on the left) smaller or bigger. The document itself isn\u2019t affected \u2014 use the zoom in the status bar for that.',
+    kind: 'navTextScale',
+    category: 'appearance',
+    section: 'Theme & chrome',
+    aliases: ['nav pane font', 'navigation text', 'outline size', 'nav font size', 'bigger nav', 'smaller nav', 'sidebar text'],
   },
   {
     key: 'ribbonTooltipMode',
@@ -5112,6 +5126,7 @@ function sanitize(s: Settings): Settings {
     uiFont: sanitizeUiFont(s.uiFont),
     ribbonTooltipMode: sanitizeRibbonTooltipMode(s.ribbonTooltipMode),
     ribbonScale: sanitizeRibbonScale(s.ribbonScale),
+    navTextScale: sanitizeNavTextScale(s.navTextScale),
     showDropzonePill: s.showDropzonePill === true,
     showQuickCardButtons: s.showQuickCardButtons === true,
     fileSearchRoots: sanitizeFileSearchRoots(s),
@@ -5951,6 +5966,15 @@ function sanitizeUiFont(raw: unknown): string {
   // quote / comma stripping as `sanitizeBodyFont`.
   if (typeof raw !== 'string') return DEFAULTS.uiFont;
   return raw.replace(/["',]/g, '').trim();
+}
+
+/** The nav pane text sizes offered in Settings, percent of normal. */
+export const NAV_TEXT_SCALES = [85, 100, 115, 130, 150] as const;
+
+/** Snap a stored nav text size to the nearest offered one (100 if junk). */
+export function sanitizeNavTextScale(v: unknown): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return 100;
+  return NAV_TEXT_SCALES.reduce((best, n) => (Math.abs(n - v) < Math.abs(best - v) ? n : best), 100);
 }
 
 /** The ribbon sizes offered in Settings, percent of normal. */

@@ -3904,6 +3904,12 @@ function applyRibbonScale(pct: number): void {
   document.documentElement.style.setProperty('--ribbon-scale', String(pct / 100));
 }
 
+/** Nav pane text size: style.css multiplies the outline's font sizes
+ *  by `--nav-text-scale` (single-doc panel and multi-pane rails). */
+function applyNavTextScale(pct: number): void {
+  document.documentElement.style.setProperty('--nav-text-scale', String(pct / 100));
+}
+
 function applyDisplayColors(c: DisplayColors): void {
   // Write to `--pmd-user-color-*`, NOT `--pmd-color-*`. style.css
   // resolves the effective `--pmd-color-*` from this user value plus
@@ -4107,6 +4113,7 @@ settings.subscribe((s) => {
   applyShowDocNameChip(s.showDocNameChip);
   applyIconSet(s.iconSet);
   applyRibbonScale(s.ribbonScale);
+  applyNavTextScale(s.navTextScale);
   applyReduceMotion(s.reduceMotion);
   applyColorVision(s.colorVisionFriendly);
   applyDocumentFrames(s);
@@ -4384,6 +4391,7 @@ applyTheme(settings.get('theme'), settings.get('themeAppliesToDocument'));
 applyShowDocNameChip(settings.get('showDocNameChip'));
 applyIconSet(settings.get('iconSet'));
 applyRibbonScale(settings.get('ribbonScale'));
+applyNavTextScale(settings.get('navTextScale'));
 applyReduceMotion(settings.get('reduceMotion'));
 applyColorVision(settings.get('colorVisionFriendly'));
 applyDocumentFrames(settings.all());
