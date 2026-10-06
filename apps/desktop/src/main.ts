@@ -2700,9 +2700,12 @@ ipcMain.handle(
 
 // ─── Cloud badge + poller ───────────────────────────────────────────
 // Which registered documents live in a cloud-synced folder (provider
-// per canonical path, null = local), and the single stat-only timer
-// that watches those for changes made on another machine. Starts with
-// the first cloud registration; a change is pushed to the OWNING
+// per canonical path, null = local — the badge's label), and the single
+// stat-only timer that watches EVERY open document for changes made
+// elsewhere: another machine through a sync folder, or another program
+// on this one (Word, a second CardMirror). It used to watch cloud
+// folders only, so a local file edited in Word never showed as changed.
+// Starts with the first registration; a change is pushed to the OWNING
 // window as `host:disk-changed`.
 const cloudProviders = new Map<string, CloudProvider | null>();
 async function cloudProviderFor(norm: string): Promise<CloudProvider | null> {
@@ -2715,7 +2718,6 @@ async function cloudProviderFor(norm: string): Promise<CloudProvider | null> {
 const diskWatch = createDiskWatch({
   list: () =>
     ownedBaselines()
-      .filter((b) => !!cloudProviders.get(b.path))
       .map((b) => ({ path: b.path, owner: b.owner, state: { mtimeMs: b.state.mtimeMs, size: b.state.size } })),
   onChanged: (change) => {
     const win = BrowserWindow.fromId(change.owner);
@@ -2759,7 +2761,7 @@ ipcMain.handle(
     }
     const claim = await claimBaseline(norm, win.id, opts?.journaledBase ?? null);
     const provider = await cloudProviderFor(norm);
-    if (provider) diskWatch.start();
+    diskWatch.start();
     return { claim, provider };
   },
 );

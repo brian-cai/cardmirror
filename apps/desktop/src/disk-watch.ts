@@ -1,5 +1,5 @@
 /**
- * Stat-only poller for open documents in cloud-synced folders. One
+ * Stat-only poller for open documents (local and cloud-synced alike). One
  * timer stats every watched path each tick and reports a path whose
  * mtime or size differs from the owner's baseline — once per distinct
  * on-disk state, so a change is never reported twice and a baseline
