@@ -1,5 +1,5 @@
 diff --git a/node_modules/loro-prosemirror/dist/index.cjs b/node_modules/loro-prosemirror/dist/index.cjs
-index 74c4b30..3fc1373 100644
+index 74c4b30..32aff2c 100644
 --- a/node_modules/loro-prosemirror/dist/index.cjs
 +++ b/node_modules/loro-prosemirror/dist/index.cjs
 @@ -15,6 +15,7 @@ const NODE_NAME_KEY = "nodeName";
@@ -10,7 +10,7 @@ index 74c4b30..3fc1373 100644
  function updateLoroToPmState(doc, mapping, editorState, containerId) {
  	const node = editorState.doc;
  	const map = containerId ? doc.getContainerById(containerId) : doc.getMap(ROOT_DOC_KEY);
-@@ -26,7 +27,86 @@ function updateLoroToPmState(doc, mapping, editorState, containerId) {
+@@ -26,12 +27,93 @@ function updateLoroToPmState(doc, mapping, editorState, containerId) {
  	}
  	updateLoroMap(map, node, mapping);
  	if (isInit) doc.commit({ origin: "sys:init" });
@@ -98,7 +98,14 @@ index 74c4b30..3fc1373 100644
  }
  function createNodeFromLoroObj(schema, obj, mapping) {
  	let retval = mapping.get(obj.id) ?? null;
-@@ -40,8 +120,13 @@ function createNodeFromLoroObj(schema, obj, mapping) {
+ 	if (retval != null) return retval;
+ 	if (obj instanceof loro_crdt.LoroMap) {
++		const cmReused = cardmirrorRemoteReuse ? cardmirrorReuseBuild(schema, obj, mapping) : null;
++		if (cmReused) return cmReused;
+ 		const attributes = getLoroMapAttributes(obj);
+ 		const children = getLoroMapChildren(obj);
+ 		const nodeName = obj.get("nodeName");
+@@ -40,8 +122,13 @@ function createNodeFromLoroObj(schema, obj, mapping) {
  		try {
  			retval = schema.node(nodeName, attributes.toJSON(), mappedChildren);
  			WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(retval, obj.id);
@@ -113,7 +120,7 @@ index 74c4b30..3fc1373 100644
  		}
  	} else if (obj instanceof loro_crdt.LoroText) {
  		retval = [];
-@@ -83,23 +168,87 @@ function createLoroText(parentList, pos, nodes, mapping) {
+@@ -83,23 +170,87 @@ function createLoroText(parentList, pos, nodes, mapping) {
  function updateLoroText(obj, nodes, mapping) {
  	mapping.set(obj.id, nodes);
  	let str = obj.toString();
@@ -210,7 +217,7 @@ index 74c4b30..3fc1373 100644
  	return pattrs;
  }
  function valueToAttrs(value) {
-@@ -107,11 +256,52 @@ function valueToAttrs(value) {
+@@ -107,11 +258,52 @@ function valueToAttrs(value) {
  	return null;
  }
  function eqLoroTextNodes(obj, nodes) {
@@ -267,7 +274,7 @@ index 74c4b30..3fc1373 100644
  }
  /**
  * Whether the loro object is equal to the node.
-@@ -125,16 +315,57 @@ function eqLoroObjNode(obj, node) {
+@@ -125,16 +317,57 @@ function eqLoroObjNode(obj, node) {
  	}
  	return obj instanceof loro_crdt.LoroText && Array.isArray(node) && eqLoroTextNodes(obj, node);
  }
@@ -334,7 +341,7 @@ index 74c4b30..3fc1373 100644
  }
  function eqNodeName(obj, node) {
  	return !Array.isArray(node) && obj.get("nodeName") === node.type.name;
-@@ -156,6 +387,11 @@ function eqMappedNode(mapped, node) {
+@@ -156,6 +389,11 @@ function eqMappedNode(mapped, node) {
  	return false;
  }
  function normalizeNodeContent(node) {
@@ -346,7 +353,7 @@ index 74c4b30..3fc1373 100644
  	const res = [];
  	let textNodes = null;
  	node.content.forEach((node, _offset, _i) => {
-@@ -209,12 +445,77 @@ function createLoroMap(parentList, pos, node, mapping) {
+@@ -209,12 +447,77 @@ function createLoroMap(parentList, pos, node, mapping) {
  	mapping.set(obj.id, node);
  	return obj;
  }
@@ -425,7 +432,7 @@ index 74c4b30..3fc1373 100644
  }
  function getLoroMapAttributes(obj) {
  	return obj.getOrCreateContainer(ATTRIBUTES_KEY, new loro_crdt.LoroMap());
-@@ -226,22 +527,576 @@ function updateLoroMapAttributes(obj, node, _mapping) {
+@@ -226,22 +529,576 @@ function updateLoroMapAttributes(obj, node, _mapping) {
  	for (const [key, value] of Object.entries(pAttrs)) {
  		if (value !== null) {
  			if (!(0, lib0_function.equalityDeep)(attrs.get(key), value)) attrs.set(key, value);
@@ -619,7 +626,8 @@ index 74c4b30..3fc1373 100644
  function getLoroMapChildren(obj) {
 -	return obj.getOrCreateContainer(CHILDREN_KEY, new loro_crdt.LoroList());
 +	return obj.getOrCreateContainer(CHILDREN_KEY, cardmirrorChildrenKind(obj) === "movable" ? new loro_crdt.LoroMovableList() : new loro_crdt.LoroList());
-+}
+ }
+-function updateLoroMapChildren(obj, node, mapping) {
 +/**
 + * CardMirror patch: per-ROOM container format. A new children container
 + * inherits the kind of the doc ROOT's children, so a room stays
@@ -644,8 +652,7 @@ index 74c4b30..3fc1373 100644
 +		/* detached/odd shape — fall through to the seed flag */
 +	}
 +	return globalThis.__CM_MOVABLE_LIST__ ? "movable" : "list";
- }
--function updateLoroMapChildren(obj, node, mapping) {
++}
 +/**
 + * CardMirror patch: identity-preserving reconcile for MOVABLE lists when
 + * the span is NOT a pure permutation — a child was inserted or removed
@@ -1007,7 +1014,7 @@ index 74c4b30..3fc1373 100644
  	for (; left < minLength; left++) {
  		const leftLoro = loroChildren.get(left);
  		const leftNode = nodeChildren[left];
-@@ -250,6 +1105,10 @@ function updateLoroMapChildren(obj, node, mapping) {
+@@ -250,6 +1107,10 @@ function updateLoroMapChildren(obj, node, mapping) {
  			if (!Array.isArray(leftNode)) updateLoroMap(leftLoro, leftNode, mapping);
  		} else break;
  	}
@@ -1018,7 +1025,7 @@ index 74c4b30..3fc1373 100644
  	for (; right + left < minLength; right++) {
  		const rightLoro = loroChildren.get(loroChildLength - right - 1);
  		const rightNode = nodeChildren[nodeChildLength - right - 1];
-@@ -258,13 +1117,35 @@ function updateLoroMapChildren(obj, node, mapping) {
+@@ -258,13 +1119,35 @@ function updateLoroMapChildren(obj, node, mapping) {
  			if (!Array.isArray(rightNode)) updateLoroMap(rightLoro, rightNode, mapping);
  		} else break;
  	}
@@ -1055,7 +1062,7 @@ index 74c4b30..3fc1373 100644
  			left += 1;
  		} else {
  			let updateLeft = leftLoro instanceof loro_crdt.LoroMap && eqNodeName(leftLoro, leftNode);
-@@ -422,27 +1303,29 @@ function createDecorations(state, store, _plugin, createSelection, createCursor)
+@@ -422,27 +1305,29 @@ function createDecorations(state, store, _plugin, createSelection, createCursor)
  	for (const [peer, cursor] of Object.entries(all)) {
  		if (peer === thisPeer) continue;
  		if (!cursor.anchor || !cursor.focus) continue;
@@ -1104,16 +1111,83 @@ index 74c4b30..3fc1373 100644
  	}
  	return prosemirror_view.DecorationSet.create(state.doc, d);
  }
-@@ -506,7 +1389,7 @@ function cursorToAbsolutePosition(cursor, doc, mapping) {
+@@ -481,6 +1366,36 @@ function absolutePositionToCursor(pmRootNode, anchor, doc, mapping) {
+ 		}
+ 	}
+ }
++/** CardMirror patch: offset of `targetChildId`'s node within the PM node
++ *  synced to `loroNode` (the sum of the preceding siblings' sizes), or null
++ *  when the PM parent isn't known to match the container index for index. */
++function cardmirrorChildOffset(loroNode, targetChildId, mapping) {
++	if (globalThis.__CM_DISABLE_REMOTE_FASTPATH__) return null;
++	const parent = mapping.get(loroNode.id);
++	const target = mapping.get(targetChildId);
++	if (parent == null || Array.isArray(parent) || !cardmirrorChildrenSynced.has(parent) || target == null) return null;
++	const first = Array.isArray(target) ? target[0] : target;
++	if (first == null) return null;
++	// The flag alone isn't enough here: also require the same child count as
++	// the container and that every preceding block child is the very node
++	// the mapping holds (a schema-fixed or stale parent fails this and falls
++	// back to the Loro walk). JS lookups only, plus one length read.
++	let list;
++	try {
++		list = loroNode.get(CHILDREN_KEY);
++	} catch {
++		return null;
++	}
++	if (!list || typeof list.length !== "number" || list.length !== normalizeNodeContent(parent).length) return null;
++	let found = null;
++	let ok = true;
++	parent.forEach((child, offset) => {
++		if (found != null || !ok) return;
++		if (child === first) found = offset;
++		else if (!child.isText && !cardmirrorIsSyncedNode(child, mapping)) ok = false;
++	});
++	return ok ? found : null;
++}
+ function cursorToAbsolutePosition(cursor, doc, mapping) {
+ 	const containerId = cursor.containerId();
+ 	let index = -1;
+@@ -505,8 +1420,21 @@ function cursorToAbsolutePosition(cursor, doc, mapping) {
+ 		loroNode = loroText.parent()?.parent();
  	}
  	while (loroNode != null) {
++		// CardMirror patch: the preceding siblings' sizes come from the synced
++		// PM parent (offset of the target child), not a Loro toArray — that
++		// fetched every top-level block per call (per partner edit, and per
++		// partner cursor on every repaint). See cardmirrorChildOffset.
++		const cmOffset = cardmirrorChildOffset(loroNode, targetChildId, mapping);
++		if (cmOffset != null && !globalThis.__CM_VERIFY_SYNC_FASTPATH__) {
++			index += cmOffset + 1;
++			targetChildId = loroNode.id;
++			loroNode = loroNode.parent()?.parent();
++			continue;
++		}
  		const children = loroNode.get(CHILDREN_KEY);
 -		if (children instanceof loro_crdt.LoroList) {
 +		if (children instanceof loro_crdt.LoroList || children instanceof loro_crdt.LoroMovableList) {
++			const cmBefore = index;
++			let cmUnmapped = false;
  			const childIds = children.toArray();
  			for (const iter of childIds) {
  				if (iter.id === targetChildId) break;
-@@ -573,7 +1456,17 @@ const LoroSyncPlugin = (props) => {
+@@ -515,8 +1443,14 @@ function cursorToAbsolutePosition(cursor, doc, mapping) {
+ 					index += child.nodeSize;
+ 				});
+ 				else if (mapped != null) index += mapped.nodeSize;
+-				else console.error(childIds, children.toJSON());
++				else {
++					cmUnmapped = true;
++					console.error(childIds, children.toJSON());
++				}
+ 			}
++			// (An unmapped sibling — a display-healed node — counts as 0 in this
++			// walk, which is the walk's own bug; the PM offset counts it.)
++			if (cmOffset != null && !cmUnmapped && index - cmBefore !== cmOffset) throw new Error("[cm-cursor-fastpath] PM offset differs from the Loro walk");
+ 			targetChildId = loroNode.id;
+ 			loroNode = loroNode.parent()?.parent();
+ 			index += 1;
+@@ -573,7 +1507,17 @@ const LoroSyncPlugin = (props) => {
  				else state.changedBy = "local";
  				switch (meta?.type) {
  					case "doc-changed":
@@ -1132,7 +1206,7 @@ index 74c4b30..3fc1373 100644
  						break;
  					case "update-state":
  						state = {
-@@ -587,11 +1480,37 @@ const LoroSyncPlugin = (props) => {
+@@ -587,11 +1531,37 @@ const LoroSyncPlugin = (props) => {
  						break;
  					default: break;
  				}
@@ -1171,7 +1245,7 @@ index 74c4b30..3fc1373 100644
  			return null;
  		},
  		view: (view) => {
-@@ -630,6 +1549,28 @@ function init(view) {
+@@ -630,6 +1600,28 @@ function init(view) {
  	} else {
  		const schema = view.state.schema;
  		const node = createNodeFromLoroObj(schema, innerDoc, mapping);
@@ -1200,7 +1274,7 @@ index 74c4b30..3fc1373 100644
  		const tr = view.state.tr.replace(0, view.state.doc.content.size, new prosemirror_model.Slice(prosemirror_model.Fragment.from(node), 0, 0));
  		tr.setMeta(loroSyncPluginKey, {
  			type: "update-state",
-@@ -642,6 +1583,52 @@ function init(view) {
+@@ -642,22 +1634,245 @@ function init(view) {
  		view.dispatch(tr);
  	}
  }
@@ -1244,21 +1318,125 @@ index 74c4b30..3fc1373 100644
 +	if (id != null) {
 +		if (mapping.get(id) === built) mapping.set(id, actual);
 +		WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(actual, id);
-+		// The rendered twin is verified equal to the built node.
-+		if (cardmirrorChildrenSynced.has(built)) cardmirrorChildrenSynced.add(actual);
++		// The rendered twin inherits "children match the container" only when
++		// it really is equal: a replace the schema had to FIX (a merged table
++		// one cell short gets padded) renders more children than the CRDT
++		// holds, and trusting it put the fast paths' index correspondence off
++		// by the padding. (Identical subtrees short-circuit, so this compares
++		// only along the changed path.)
++		if (cardmirrorChildrenSynced.has(built) && built.childCount === actual.childCount && built.content.eq(actual.content)) cardmirrorChildrenSynced.add(actual);
 +	}
 +	if (built.childCount !== actual.childCount) return;
 +	for (let i = 0; i < built.childCount; i++) cardmirrorRemapRendered(built.child(i), actual.child(i), mapping);
 +}
++/**
++ * CardMirror patch: partial rebuild for a partner's edit (the remote
++ * twin of cardmirrorSkipLeft/Right). A remote batch clears the mapping of
++ * every changed container AND all its ancestors, so createNodeFromLoroObj
++ * rebuilt the root by fetching every top-level block from Loro (a wasm
++ * `toArray` + one id per child — linear in the document) even when one
++ * character changed in one card. Each event's path names exactly which
++ * child of each ancestor it went through, so an ancestor whose own child
++ * list and attributes did NOT change keeps its previous node's children
++ * and rebuilds only the touched indices.
++ *
++ * Reuse requires what the local fast path requires: the previous node is
++ * in cardmirrorChildrenSynced (its children are the container's, index for
++ * index), the child counts agree, every reused child still round-trips
++ * through the mapping, and no child is a text run. Anything else rebuilds
++ * in full. `__CM_VERIFY_SYNC_FASTPATH__` compares the result against a full
++ * rebuild; `__CM_DISABLE_REMOTE_FASTPATH__` turns it off.
++ */
++let cardmirrorRemoteReuse = null;
++function cardmirrorPlanRemoteReuse(doc, event, mapping) {
++	if (globalThis.__CM_DISABLE_REMOTE_FASTPATH__) return null;
++	const plan = new Map();
++	const entry = (id) => {
++		let e = plan.get(id);
++		if (!e) {
++			e = { prev: mapping.get(id), touched: new Set(), full: false };
++			plan.set(id, e);
++		}
++		return e;
++	};
++	try {
++		for (const e of event.events) {
++			const path = e.path;
++			if (!Array.isArray(path) || path.length === 0) return null;
++			let c = doc.getContainerById(e.target);
++			let prefixLen = path.length;
++			while (c) {
++				if (c instanceof loro_crdt.LoroMap) {
++					const info = entry(c.id);
++					if (prefixLen >= path.length) info.full = true;
++					else if (path[prefixLen] === CHILDREN_KEY && prefixLen + 1 < path.length && typeof path[prefixLen + 1] === "number") info.touched.add(path[prefixLen + 1]);
++					else info.full = true;
++				}
++				c = c.parent();
++				prefixLen--;
++			}
++			if (prefixLen !== 0) return null;
++		}
++	} catch {
++		return null;
++	}
++	return plan;
++}
++function cardmirrorReuseBuild(schema, obj, mapping) {
++	const info = cardmirrorRemoteReuse && cardmirrorRemoteReuse.get(obj.id);
++	if (!info || info.full || info.prev == null || Array.isArray(info.prev) || !cardmirrorChildrenSynced.has(info.prev)) return null;
++	const prev = info.prev;
++	const prevKids = normalizeNodeContent(prev);
++	if (prevKids.some(Array.isArray)) return null;
++	const list = getLoroMapChildren(obj);
++	if (list.length !== prevKids.length) return null;
++	const kids = prevKids.slice();
++	for (let i = 0; i < kids.length; i++) {
++		if (info.touched.has(i) || !cardmirrorIsSyncedNode(kids[i], mapping)) {
++			const built = createNodeFromLoroObj(schema, list.get(i), mapping);
++			if (built == null || Array.isArray(built)) return null;
++			kids[i] = built;
++		}
++	}
++	let retval;
++	try {
++		retval = schema.node(prev.type.name, prev.attrs, kids, prev.marks);
++	} catch {
++		return null;
++	}
++	WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(retval, obj.id);
++	cardmirrorChildrenSynced.add(retval);
++	mapping.set(obj.id, retval);
++	return retval;
++}
  function updateNodeOnLoroEvent(view, event) {
  	if (view.isDestroyed) return;
  	const state = loroSyncPluginKey.getState(view.state);
-@@ -650,14 +1637,89 @@ function updateNodeOnLoroEvent(view, event) {
+ 	state.changedBy = event.by;
+ 	if (event.by === "local" && event.origin !== "undo") return;
  	const mapping = state.mapping;
++	// CardMirror patch: plan the partial rebuild BEFORE the mapping is cleared
++	// (it records each ancestor's previous node) — see cardmirrorPlanRemoteReuse.
++	const cmPlan = state.containerId ? null : cardmirrorPlanRemoteReuse(state.doc, event, mapping);
  	clearChangedNodes(state.doc, event, mapping);
- 	const node = createNodeFromLoroObj(view.state.schema, state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY), mapping);
+-	const node = createNodeFromLoroObj(view.state.schema, state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY), mapping);
 -	const { anchor, focus } = convertPmSelectionToCursors(view.state.doc, view.state.selection, state);
 -	let tr = view.state.tr.replace(0, view.state.doc.content.size, new prosemirror_model.Slice(prosemirror_model.Fragment.from(node), 0, 0));
++	const cmRoot = state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY);
++	// Under verification, the baseline is what the ORIGINAL code builds: the
++	// same cached nodes (a live view's local children included), no reuse.
++	const cmBaselineMapping = cmPlan && globalThis.__CM_VERIFY_SYNC_FASTPATH__ ? new Map(mapping) : null;
++	let node;
++	cardmirrorRemoteReuse = cmPlan;
++	try {
++		node = createNodeFromLoroObj(view.state.schema, cmRoot, mapping);
++	} finally {
++		cardmirrorRemoteReuse = null;
++	}
++	if (cmBaselineMapping) {
++		const full = createNodeFromLoroObj(view.state.schema, cmRoot, cmBaselineMapping);
++		if (!full || !full.eq(node)) throw new Error("[cm-remote-fastpath] partial rebuild differs from the full rebuild");
++	}
 +	// PATCHED (cardmirror): restore from the cursors stashed on the
 +	// last LOCAL transaction (PM and loro agreed then) — capturing here,
 +	// after the import, anchors against already-shifted text.
@@ -1349,7 +1527,7 @@ index 74c4b30..3fc1373 100644
  }
  /**
  * Update ProseMirror selection based on the given Loro cursors.
-@@ -848,7 +1910,14 @@ const LoroUndoPlugin = (props) => {
+@@ -848,7 +2063,14 @@ const LoroUndoPlugin = (props) => {
  				if (!undoState || !loroState) return state;
  				const canUndo = undoState.undoManager.canUndo();
  				const canRedo = undoState.undoManager.canRedo();
@@ -1366,7 +1544,7 @@ index 74c4b30..3fc1373 100644
  					lastSelection = {
  						anchor: anchor ?? null,
 diff --git a/node_modules/loro-prosemirror/dist/index.js b/node_modules/loro-prosemirror/dist/index.js
-index e41095d..0e3ebd6 100644
+index e41095d..5c651dd 100644
 --- a/node_modules/loro-prosemirror/dist/index.js
 +++ b/node_modules/loro-prosemirror/dist/index.js
 @@ -1,6 +1,185 @@
@@ -1564,7 +1742,7 @@ index e41095d..0e3ebd6 100644
  function updateLoroToPmState(doc, mapping, editorState, containerId) {
  	const node = editorState.doc;
  	const map = containerId ? doc.getContainerById(containerId) : doc.getMap(ROOT_DOC_KEY);
-@@ -25,7 +205,86 @@ function updateLoroToPmState(doc, mapping, editorState, containerId) {
+@@ -25,12 +205,93 @@ function updateLoroToPmState(doc, mapping, editorState, containerId) {
  	}
  	updateLoroMap(map, node, mapping);
  	if (isInit) doc.commit({ origin: "sys:init" });
@@ -1652,7 +1830,14 @@ index e41095d..0e3ebd6 100644
  }
  function createNodeFromLoroObj(schema, obj, mapping) {
  	let retval = mapping.get(obj.id) ?? null;
-@@ -39,8 +298,13 @@ function createNodeFromLoroObj(schema, obj, mapping) {
+ 	if (retval != null) return retval;
+ 	if (obj instanceof LoroMap) {
++		const cmReused = cardmirrorRemoteReuse ? cardmirrorReuseBuild(schema, obj, mapping) : null;
++		if (cmReused) return cmReused;
+ 		const attributes = getLoroMapAttributes(obj);
+ 		const children = getLoroMapChildren(obj);
+ 		const nodeName = obj.get("nodeName");
+@@ -39,8 +300,13 @@ function createNodeFromLoroObj(schema, obj, mapping) {
  		try {
  			retval = schema.node(nodeName, attributes.toJSON(), mappedChildren);
  			WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(retval, obj.id);
@@ -1667,7 +1852,7 @@ index e41095d..0e3ebd6 100644
  		}
  	} else if (obj instanceof LoroText) {
  		retval = [];
-@@ -82,23 +346,87 @@ function createLoroText(parentList, pos, nodes, mapping) {
+@@ -82,23 +348,87 @@ function createLoroText(parentList, pos, nodes, mapping) {
  function updateLoroText(obj, nodes, mapping) {
  	mapping.set(obj.id, nodes);
  	let str = obj.toString();
@@ -1763,7 +1948,7 @@ index e41095d..0e3ebd6 100644
  	return pattrs;
  }
  function valueToAttrs(value) {
-@@ -106,11 +434,52 @@ function valueToAttrs(value) {
+@@ -106,11 +436,52 @@ function valueToAttrs(value) {
  	return null;
  }
  function eqLoroTextNodes(obj, nodes) {
@@ -1820,7 +2005,7 @@ index e41095d..0e3ebd6 100644
  }
  /**
  * Whether the loro object is equal to the node.
-@@ -124,16 +493,57 @@ function eqLoroObjNode(obj, node) {
+@@ -124,16 +495,57 @@ function eqLoroObjNode(obj, node) {
  	}
  	return obj instanceof LoroText && Array.isArray(node) && eqLoroTextNodes(obj, node);
  }
@@ -1864,8 +2049,7 @@ index e41095d..0e3ebd6 100644
 +		if (av.length !== bv.length) return false;
 +		for (let i = 0; i < av.length; i++) if (!cardmirrorCanonicalAttrsEqual(av[i], bv[i])) return false;
 +		return true;
- 	}
--	return eq;
++	}
 +	const keys = new Set([...Object.keys(av), ...Object.keys(bv)]);
 +	for (const key of keys) {
 +		if (!cardmirrorCanonicalAttrsEqual(av[key] ?? null, bv[key] ?? null)) return false;
@@ -1877,7 +2061,8 @@ index e41095d..0e3ebd6 100644
 +	for (const key of Object.keys(attrs ?? {})) {
 +		const v = attrs[key];
 +		if (v !== null && v !== undefined) out[key] = v;
-+	}
+ 	}
+-	return eq;
 +	return out;
 +}
 +// PATCHED (cardmirror): canonical equality — the old form counted
@@ -1887,7 +2072,7 @@ index e41095d..0e3ebd6 100644
  }
  function eqNodeName(obj, node) {
  	return !Array.isArray(node) && obj.get("nodeName") === node.type.name;
-@@ -155,6 +565,11 @@ function eqMappedNode(mapped, node) {
+@@ -155,6 +567,11 @@ function eqMappedNode(mapped, node) {
  	return false;
  }
  function normalizeNodeContent(node) {
@@ -1899,7 +2084,7 @@ index e41095d..0e3ebd6 100644
  	const res = [];
  	let textNodes = null;
  	node.content.forEach((node, _offset, _i) => {
-@@ -208,12 +623,77 @@ function createLoroMap(parentList, pos, node, mapping) {
+@@ -208,12 +625,77 @@ function createLoroMap(parentList, pos, node, mapping) {
  	mapping.set(obj.id, node);
  	return obj;
  }
@@ -1978,7 +2163,7 @@ index e41095d..0e3ebd6 100644
  }
  function getLoroMapAttributes(obj) {
  	return obj.getOrCreateContainer(ATTRIBUTES_KEY, new LoroMap());
-@@ -225,22 +705,398 @@ function updateLoroMapAttributes(obj, node, _mapping) {
+@@ -225,22 +707,398 @@ function updateLoroMapAttributes(obj, node, _mapping) {
  	for (const [key, value] of Object.entries(pAttrs)) {
  		if (value !== null) {
  			if (!equalityDeep(attrs.get(key), value)) attrs.set(key, value);
@@ -2382,7 +2567,7 @@ index e41095d..0e3ebd6 100644
  	for (; left < minLength; left++) {
  		const leftLoro = loroChildren.get(left);
  		const leftNode = nodeChildren[left];
-@@ -249,6 +1105,10 @@ function updateLoroMapChildren(obj, node, mapping) {
+@@ -249,6 +1107,10 @@ function updateLoroMapChildren(obj, node, mapping) {
  			if (!Array.isArray(leftNode)) updateLoroMap(leftLoro, leftNode, mapping);
  		} else break;
  	}
@@ -2393,7 +2578,7 @@ index e41095d..0e3ebd6 100644
  	for (; right + left < minLength; right++) {
  		const rightLoro = loroChildren.get(loroChildLength - right - 1);
  		const rightNode = nodeChildren[nodeChildLength - right - 1];
-@@ -257,13 +1117,35 @@ function updateLoroMapChildren(obj, node, mapping) {
+@@ -257,13 +1119,35 @@ function updateLoroMapChildren(obj, node, mapping) {
  			if (!Array.isArray(rightNode)) updateLoroMap(rightLoro, rightNode, mapping);
  		} else break;
  	}
@@ -2430,7 +2615,7 @@ index e41095d..0e3ebd6 100644
  			left += 1;
  		} else {
  			let updateLeft = leftLoro instanceof LoroMap && eqNodeName(leftLoro, leftNode);
-@@ -421,27 +1303,29 @@ function createDecorations(state, store, _plugin, createSelection, createCursor)
+@@ -421,27 +1305,29 @@ function createDecorations(state, store, _plugin, createSelection, createCursor)
  	for (const [peer, cursor] of Object.entries(all)) {
  		if (peer === thisPeer) continue;
  		if (!cursor.anchor || !cursor.focus) continue;
@@ -2479,16 +2664,83 @@ index e41095d..0e3ebd6 100644
  	}
  	return DecorationSet.create(state.doc, d);
  }
-@@ -505,7 +1389,7 @@ function cursorToAbsolutePosition(cursor, doc, mapping) {
+@@ -480,6 +1366,36 @@ function absolutePositionToCursor(pmRootNode, anchor, doc, mapping) {
+ 		}
+ 	}
+ }
++/** CardMirror patch: offset of `targetChildId`'s node within the PM node
++ *  synced to `loroNode` (the sum of the preceding siblings' sizes), or null
++ *  when the PM parent isn't known to match the container index for index. */
++function cardmirrorChildOffset(loroNode, targetChildId, mapping) {
++	if (globalThis.__CM_DISABLE_REMOTE_FASTPATH__) return null;
++	const parent = mapping.get(loroNode.id);
++	const target = mapping.get(targetChildId);
++	if (parent == null || Array.isArray(parent) || !cardmirrorChildrenSynced.has(parent) || target == null) return null;
++	const first = Array.isArray(target) ? target[0] : target;
++	if (first == null) return null;
++	// The flag alone isn't enough here: also require the same child count as
++	// the container and that every preceding block child is the very node
++	// the mapping holds (a schema-fixed or stale parent fails this and falls
++	// back to the Loro walk). JS lookups only, plus one length read.
++	let list;
++	try {
++		list = loroNode.get(CHILDREN_KEY);
++	} catch {
++		return null;
++	}
++	if (!list || typeof list.length !== "number" || list.length !== normalizeNodeContent(parent).length) return null;
++	let found = null;
++	let ok = true;
++	parent.forEach((child, offset) => {
++		if (found != null || !ok) return;
++		if (child === first) found = offset;
++		else if (!child.isText && !cardmirrorIsSyncedNode(child, mapping)) ok = false;
++	});
++	return ok ? found : null;
++}
+ function cursorToAbsolutePosition(cursor, doc, mapping) {
+ 	const containerId = cursor.containerId();
+ 	let index = -1;
+@@ -504,8 +1420,21 @@ function cursorToAbsolutePosition(cursor, doc, mapping) {
+ 		loroNode = loroText.parent()?.parent();
  	}
  	while (loroNode != null) {
++		// CardMirror patch: the preceding siblings' sizes come from the synced
++		// PM parent (offset of the target child), not a Loro toArray — that
++		// fetched every top-level block per call (per partner edit, and per
++		// partner cursor on every repaint). See cardmirrorChildOffset.
++		const cmOffset = cardmirrorChildOffset(loroNode, targetChildId, mapping);
++		if (cmOffset != null && !globalThis.__CM_VERIFY_SYNC_FASTPATH__) {
++			index += cmOffset + 1;
++			targetChildId = loroNode.id;
++			loroNode = loroNode.parent()?.parent();
++			continue;
++		}
  		const children = loroNode.get(CHILDREN_KEY);
 -		if (children instanceof LoroList) {
 +		if (children instanceof LoroList || children instanceof LoroMovableList) {
++			const cmBefore = index;
++			let cmUnmapped = false;
  			const childIds = children.toArray();
  			for (const iter of childIds) {
  				if (iter.id === targetChildId) break;
-@@ -572,7 +1456,17 @@ const LoroSyncPlugin = (props) => {
+@@ -514,8 +1443,14 @@ function cursorToAbsolutePosition(cursor, doc, mapping) {
+ 					index += child.nodeSize;
+ 				});
+ 				else if (mapped != null) index += mapped.nodeSize;
+-				else console.error(childIds, children.toJSON());
++				else {
++					cmUnmapped = true;
++					console.error(childIds, children.toJSON());
++				}
+ 			}
++			// (An unmapped sibling — a display-healed node — counts as 0 in this
++			// walk, which is the walk's own bug; the PM offset counts it.)
++			if (cmOffset != null && !cmUnmapped && index - cmBefore !== cmOffset) throw new Error("[cm-cursor-fastpath] PM offset differs from the Loro walk");
+ 			targetChildId = loroNode.id;
+ 			loroNode = loroNode.parent()?.parent();
+ 			index += 1;
+@@ -572,7 +1507,17 @@ const LoroSyncPlugin = (props) => {
  				else state.changedBy = "local";
  				switch (meta?.type) {
  					case "doc-changed":
@@ -2507,7 +2759,7 @@ index e41095d..0e3ebd6 100644
  						break;
  					case "update-state":
  						state = {
-@@ -586,11 +1480,37 @@ const LoroSyncPlugin = (props) => {
+@@ -586,11 +1531,37 @@ const LoroSyncPlugin = (props) => {
  						break;
  					default: break;
  				}
@@ -2546,7 +2798,7 @@ index e41095d..0e3ebd6 100644
  			return null;
  		},
  		view: (view) => {
-@@ -629,6 +1549,28 @@ function init(view) {
+@@ -629,6 +1600,28 @@ function init(view) {
  	} else {
  		const schema = view.state.schema;
  		const node = createNodeFromLoroObj(schema, innerDoc, mapping);
@@ -2575,7 +2827,7 @@ index e41095d..0e3ebd6 100644
  		const tr = view.state.tr.replace(0, view.state.doc.content.size, new Slice(Fragment.from(node), 0, 0));
  		tr.setMeta(loroSyncPluginKey, {
  			type: "update-state",
-@@ -641,6 +1583,52 @@ function init(view) {
+@@ -641,22 +1634,254 @@ function init(view) {
  		view.dispatch(tr);
  	}
  }
@@ -2619,21 +2871,125 @@ index e41095d..0e3ebd6 100644
 +	if (id != null) {
 +		if (mapping.get(id) === built) mapping.set(id, actual);
 +		WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(actual, id);
-+		// The rendered twin is verified equal to the built node.
-+		if (cardmirrorChildrenSynced.has(built)) cardmirrorChildrenSynced.add(actual);
++		// The rendered twin inherits "children match the container" only when
++		// it really is equal: a replace the schema had to FIX (a merged table
++		// one cell short gets padded) renders more children than the CRDT
++		// holds, and trusting it put the fast paths' index correspondence off
++		// by the padding. (Identical subtrees short-circuit, so this compares
++		// only along the changed path.)
++		if (cardmirrorChildrenSynced.has(built) && built.childCount === actual.childCount && built.content.eq(actual.content)) cardmirrorChildrenSynced.add(actual);
 +	}
 +	if (built.childCount !== actual.childCount) return;
 +	for (let i = 0; i < built.childCount; i++) cardmirrorRemapRendered(built.child(i), actual.child(i), mapping);
 +}
++/**
++ * CardMirror patch: partial rebuild for a partner's edit (the remote
++ * twin of cardmirrorSkipLeft/Right). A remote batch clears the mapping of
++ * every changed container AND all its ancestors, so createNodeFromLoroObj
++ * rebuilt the root by fetching every top-level block from Loro (a wasm
++ * `toArray` + one id per child — linear in the document) even when one
++ * character changed in one card. Each event's path names exactly which
++ * child of each ancestor it went through, so an ancestor whose own child
++ * list and attributes did NOT change keeps its previous node's children
++ * and rebuilds only the touched indices.
++ *
++ * Reuse requires what the local fast path requires: the previous node is
++ * in cardmirrorChildrenSynced (its children are the container's, index for
++ * index), the child counts agree, every reused child still round-trips
++ * through the mapping, and no child is a text run. Anything else rebuilds
++ * in full. `__CM_VERIFY_SYNC_FASTPATH__` compares the result against a full
++ * rebuild; `__CM_DISABLE_REMOTE_FASTPATH__` turns it off.
++ */
++let cardmirrorRemoteReuse = null;
++function cardmirrorPlanRemoteReuse(doc, event, mapping) {
++	if (globalThis.__CM_DISABLE_REMOTE_FASTPATH__) return null;
++	const plan = new Map();
++	const entry = (id) => {
++		let e = plan.get(id);
++		if (!e) {
++			e = { prev: mapping.get(id), touched: new Set(), full: false };
++			plan.set(id, e);
++		}
++		return e;
++	};
++	try {
++		for (const e of event.events) {
++			const path = e.path;
++			if (!Array.isArray(path) || path.length === 0) return null;
++			let c = doc.getContainerById(e.target);
++			let prefixLen = path.length;
++			while (c) {
++				if (c instanceof LoroMap) {
++					const info = entry(c.id);
++					if (prefixLen >= path.length) info.full = true;
++					else if (path[prefixLen] === CHILDREN_KEY && prefixLen + 1 < path.length && typeof path[prefixLen + 1] === "number") info.touched.add(path[prefixLen + 1]);
++					else info.full = true;
++				}
++				c = c.parent();
++				prefixLen--;
++			}
++			if (prefixLen !== 0) return null;
++		}
++	} catch {
++		return null;
++	}
++	return plan;
++}
++function cardmirrorReuseBuild(schema, obj, mapping) {
++	const info = cardmirrorRemoteReuse && cardmirrorRemoteReuse.get(obj.id);
++	if (!info || info.full || info.prev == null || Array.isArray(info.prev) || !cardmirrorChildrenSynced.has(info.prev)) return null;
++	const prev = info.prev;
++	const prevKids = normalizeNodeContent(prev);
++	if (prevKids.some(Array.isArray)) return null;
++	const list = getLoroMapChildren(obj);
++	if (list.length !== prevKids.length) return null;
++	const kids = prevKids.slice();
++	for (let i = 0; i < kids.length; i++) {
++		if (info.touched.has(i) || !cardmirrorIsSyncedNode(kids[i], mapping)) {
++			const built = createNodeFromLoroObj(schema, list.get(i), mapping);
++			if (built == null || Array.isArray(built)) return null;
++			kids[i] = built;
++		}
++	}
++	let retval;
++	try {
++		retval = schema.node(prev.type.name, prev.attrs, kids, prev.marks);
++	} catch {
++		return null;
++	}
++	WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(retval, obj.id);
++	cardmirrorChildrenSynced.add(retval);
++	mapping.set(obj.id, retval);
++	return retval;
++}
  function updateNodeOnLoroEvent(view, event) {
  	if (view.isDestroyed) return;
  	const state = loroSyncPluginKey.getState(view.state);
-@@ -649,14 +1637,98 @@ function updateNodeOnLoroEvent(view, event) {
+ 	state.changedBy = event.by;
+ 	if (event.by === "local" && event.origin !== "undo") return;
  	const mapping = state.mapping;
++	// CardMirror patch: plan the partial rebuild BEFORE the mapping is cleared
++	// (it records each ancestor's previous node) — see cardmirrorPlanRemoteReuse.
++	const cmPlan = state.containerId ? null : cardmirrorPlanRemoteReuse(state.doc, event, mapping);
  	clearChangedNodes(state.doc, event, mapping);
- 	const node = createNodeFromLoroObj(view.state.schema, state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY), mapping);
+-	const node = createNodeFromLoroObj(view.state.schema, state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY), mapping);
 -	const { anchor, focus } = convertPmSelectionToCursors(view.state.doc, view.state.selection, state);
 -	let tr = view.state.tr.replace(0, view.state.doc.content.size, new Slice(Fragment.from(node), 0, 0));
++	const cmRoot = state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY);
++	// Under verification, the baseline is what the ORIGINAL code builds: the
++	// same cached nodes (a live view's local children included), no reuse.
++	const cmBaselineMapping = cmPlan && globalThis.__CM_VERIFY_SYNC_FASTPATH__ ? new Map(mapping) : null;
++	let node;
++	cardmirrorRemoteReuse = cmPlan;
++	try {
++		node = createNodeFromLoroObj(view.state.schema, cmRoot, mapping);
++	} finally {
++		cardmirrorRemoteReuse = null;
++	}
++	if (cmBaselineMapping) {
++		const full = createNodeFromLoroObj(view.state.schema, cmRoot, cmBaselineMapping);
++		if (!full || !full.eq(node)) throw new Error("[cm-remote-fastpath] partial rebuild differs from the full rebuild");
++	}
 +	// PATCHED (cardmirror): restore from the cursors stashed on the
 +	// last LOCAL transaction (PM and loro agreed then) — capturing here,
 +	// after the import, anchors against already-shifted text.
@@ -2733,7 +3089,7 @@ index e41095d..0e3ebd6 100644
  }
  /**
  * Update ProseMirror selection based on the given Loro cursors.
-@@ -847,7 +1919,14 @@ const LoroUndoPlugin = (props) => {
+@@ -847,7 +2072,14 @@ const LoroUndoPlugin = (props) => {
  				if (!undoState || !loroState) return state;
  				const canUndo = undoState.undoManager.canUndo();
  				const canRedo = undoState.undoManager.canRedo();

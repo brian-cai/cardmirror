@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { Fragment, type Node as PMNode } from 'prosemirror-model';
+import { TextSelection } from 'prosemirror-state';
 import { createLoroPeers, syncAll, settle, para, docOf, docText } from './_loro-helpers.js';
 
 /** Position of top-level child `i`. */
@@ -72,6 +73,29 @@ describe('sync fast path', () => {
     await settle();
     expect(p1.doc().eq(p0.doc())).toBe(true);
     expect(docText(p0.doc())).toContain('tail');
+    peers.forEach((p) => p.destroy());
+  });
+
+  it('a partner typing elsewhere leaves my caret on the same text (partial rebuild + cursor offsets)', async () => {
+    const blocks = Array.from({ length: 30 }, (_, i) => para(`block ${i} words`));
+    const peers = await createLoroPeers(docOf(...blocks), 2);
+    const [me, partner] = peers as [(typeof peers)[0], (typeof peers)[0]];
+    // My caret: inside block 20, after "block 20 ".
+    const at = posOf(me.view.state.doc, 20) + 1 + 'block 20 '.length;
+    me.view.dispatch(me.view.state.tr.setSelection(TextSelection.create(me.view.state.doc, at)));
+    me.view.dispatch(me.view.state.tr.insertText('|'));
+    await syncAll(peers);
+    // The partner types above me (shifting every position) and below me.
+    for (let i = 0; i < 4; i++) {
+      partner.view.dispatch(partner.view.state.tr.insertText('ab', posOf(partner.view.state.doc, 3) + 2));
+      partner.view.dispatch(partner.view.state.tr.insertText('z', posOf(partner.view.state.doc, 27) + 2));
+      await syncAll(peers);
+      await settle();
+    }
+    const { $from } = me.view.state.selection;
+    expect($from.parent.textContent).toBe('block 20 |words');
+    expect($from.parentOffset).toBe('block 20 |'.length);
+    expect(partner.doc().eq(me.doc())).toBe(true);
     peers.forEach((p) => p.destroy());
   });
 });
