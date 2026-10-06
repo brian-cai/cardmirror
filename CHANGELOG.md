@@ -5,6 +5,43 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.8 — 2026-10-05
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Name your co-editing session.** Start Session asks for a name,
+  pre-filled with "Filename - Your display name" (from Settings →
+  Collaboration). An unsaved document uses the date instead of the
+  filename, so a session is never just "Untitled". It's the name everyone
+  sees in their Sessions list, and partners' copies are named after it.
+- **Sharing is always there.** The Send and Receive buttons no longer
+  disappear when sharing isn't set up. Clicking one offers to set it up:
+  import your team file, or open Collaboration settings.
+- **Know when an open file changes on disk.** If Word, Dropbox or another
+  program changes a file you have open, a "Changed on disk" badge appears
+  within a few seconds (this used to cover only Dropbox and other synced
+  folders). Click it to Reload from disk, Save my version, or Keep both.
+
+### Changed
+
+- **Opening a file that's already open takes you to it.** Its window
+  comes to the front instead of an "already open" message — and if the
+  file changed on disk since, you're asked right away whether to reload it
+  or keep your version.
+- **Clearer choices when closing a shared document**: "Close, but stay in
+  the session" (and where to rejoin) or "Leave the session" / "End the
+  session for everyone", each saying what happens to your copy.
+- Help → User Manual, Privacy and Terms open this build's pages.
+
+### Faster
+
+- **Typing in a shared document no longer slows down as it grows** —
+  especially for whoever started the session (a keystroke in a
+  1,400-block file: about 27 ms → 4 ms).
+
 ## 1.14.7 — 2026-10-05
 
 Brian's (@brian-cai) build of CardMirror, updating from
