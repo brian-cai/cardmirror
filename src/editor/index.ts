@@ -3898,6 +3898,12 @@ function applyIconSet(set: 'modern' | 'classic'): void {
   document.documentElement.dataset['icons'] = set;
 }
 
+/** Ribbon button size: style.css zooms the ribbon's sections by
+ *  `--ribbon-scale` and derives `--ribbon-height` from it. */
+function applyRibbonScale(pct: number): void {
+  document.documentElement.style.setProperty('--ribbon-scale', String(pct / 100));
+}
+
 function applyDisplayColors(c: DisplayColors): void {
   // Write to `--pmd-user-color-*`, NOT `--pmd-color-*`. style.css
   // resolves the effective `--pmd-color-*` from this user value plus
@@ -4100,6 +4106,7 @@ settings.subscribe((s) => {
   applyTheme(s.theme, s.themeAppliesToDocument);
   applyShowDocNameChip(s.showDocNameChip);
   applyIconSet(s.iconSet);
+  applyRibbonScale(s.ribbonScale);
   applyReduceMotion(s.reduceMotion);
   applyColorVision(s.colorVisionFriendly);
   applyDocumentFrames(s);
@@ -4376,6 +4383,7 @@ initRibbonResizer();
 applyTheme(settings.get('theme'), settings.get('themeAppliesToDocument'));
 applyShowDocNameChip(settings.get('showDocNameChip'));
 applyIconSet(settings.get('iconSet'));
+applyRibbonScale(settings.get('ribbonScale'));
 applyReduceMotion(settings.get('reduceMotion'));
 applyColorVision(settings.get('colorVisionFriendly'));
 applyDocumentFrames(settings.all());

@@ -585,7 +585,12 @@ button {
    the rest of the layout reads from them. */
 :root {
   --nav-width: 300px;
-  --ribbon-height: 4rem;
+  /* Ribbon button size (Settings → Appearance → Ribbon button size),
+     set on <html> by applyRibbonScale. The ribbon's sections are
+     CSS-zoomed by it and the ribbon grows to match, so everything
+     positioned below the ribbon follows --ribbon-height as before. */
+  --ribbon-scale: 1;
+  --ribbon-height: calc(4rem * var(--ribbon-scale));
   --status-bar-height: 1.8rem;
   /* Per-pane footer (word count + Σ + open button) in multi-doc mode.
      A shared var so the footer's min-height and anything that has to
@@ -1265,6 +1270,12 @@ html:has(body.pmd-speech-banner-visible) {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+/* `zoom` (not transform) so the scaled panels take their real width
+   and the measured hide-when-it-doesn't-fit cascade sees it. */
+#ribbon > .ribbon-section {
+  zoom: var(--ribbon-scale, 1);
 }
 
 .ribbon-left { flex: 0 0 auto; }
@@ -13835,6 +13846,7 @@ body.pmd-mobile {
   --pmd-mobile-modebar-h: 2.75rem;
   --nav-width: 0px;
   --ribbon-height: var(--pmd-mobile-appbar-h);
+  --ribbon-scale: 1; /* the phone app bar has its own size */
 }
 
 /* Desktop chrome that has no mobile role. */

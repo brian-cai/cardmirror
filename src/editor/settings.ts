@@ -1179,6 +1179,9 @@ export interface Settings {
    *                   their label is already in the menu.
    */
   ribbonTooltipMode: 'none' | 'tooltip' | 'shortcut' | 'both';
+  /** Ribbon button size, percent of normal (one of RIBBON_SCALES). The
+   *  whole ribbon scales; panels that no longer fit hide as usual. */
+  ribbonScale: number;
   /** Whether the cross-window dropzone pill (the floating shelf in
    *  the editor's bottom-left corner) is visible. The shelf state still
    *  works when off (Ctrl+\` sends, content is reachable from the
@@ -1985,6 +1988,7 @@ const DEFAULTS: Settings = {
   bodyFont: 'Times New Roman',
   uiFont: '',
   ribbonTooltipMode: 'both',
+  ribbonScale: 100,
   showDropzonePill: false,
   showQuickCardButtons: false,
   fileSearchRoots: [],
@@ -2270,6 +2274,7 @@ export interface SettingMeta {
     | 'enterAfterStyle'
     | 'wordCountOrder'
     | 'arrangeSpeechSide'
+    | 'ribbonScale'
     | 'password'
     | 'voiceInputDevice'
     | 'voiceDashStyle'
@@ -3306,6 +3311,16 @@ export const SETTING_METADATA: SettingMeta[] = [
     category: 'appearance',
     section: 'Theme & chrome',
     aliases: ['undo button', 'redo button', 'undo redo'],
+  },
+  {
+    key: 'ribbonScale',
+    label: 'Ribbon button size',
+    description:
+      'Makes the ribbon\u2019s buttons, icons and labels bigger \u2014 easier to see and to hit on a large or high-resolution monitor. Bigger buttons take more room, so on a narrow window the least-used panels hide sooner (the same way they do when you shrink the window).',
+    kind: 'ribbonScale',
+    category: 'appearance',
+    section: 'Theme & chrome',
+    aliases: ['bigger buttons', 'larger buttons', 'button size', 'ribbon size', 'toolbar size', 'icon size', 'scale ribbon'],
   },
   {
     key: 'ribbonTooltipMode',
@@ -5096,6 +5111,7 @@ function sanitize(s: Settings): Settings {
     bodyFont: sanitizeBodyFont(s.bodyFont),
     uiFont: sanitizeUiFont(s.uiFont),
     ribbonTooltipMode: sanitizeRibbonTooltipMode(s.ribbonTooltipMode),
+    ribbonScale: sanitizeRibbonScale(s.ribbonScale),
     showDropzonePill: s.showDropzonePill === true,
     showQuickCardButtons: s.showQuickCardButtons === true,
     fileSearchRoots: sanitizeFileSearchRoots(s),
@@ -5935,6 +5951,15 @@ function sanitizeUiFont(raw: unknown): string {
   // quote / comma stripping as `sanitizeBodyFont`.
   if (typeof raw !== 'string') return DEFAULTS.uiFont;
   return raw.replace(/["',]/g, '').trim();
+}
+
+/** The ribbon sizes offered in Settings, percent of normal. */
+export const RIBBON_SCALES = [100, 115, 130, 150] as const;
+
+/** Snap a stored ribbon size to the nearest offered one (100 if junk). */
+export function sanitizeRibbonScale(v: unknown): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return 100;
+  return RIBBON_SCALES.reduce((best, n) => (Math.abs(n - v) < Math.abs(best - v) ? n : best), 100);
 }
 
 function sanitizeRibbonTooltipMode(
