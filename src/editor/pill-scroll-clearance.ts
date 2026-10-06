@@ -43,6 +43,19 @@ const BREATHING_PX = 14;
 /** Cap so an expanded pill panel can't cause huge scroll jumps. */
 const MAX_CLEARANCE_PX = 140;
 
+/** The tray element, remembered: it sits at the END of the body, after
+ *  the whole document, so `querySelector` walked every element of the
+ *  editor to reach it — ~9 ms on a 1,400-block file, several times per
+ *  keystroke (PM reads the scroll margins once per scroll container).
+ *  Re-found only when it's gone (or the document changed). */
+let cachedTray: HTMLElement | null = null;
+
+function findTray(doc: Document): HTMLElement | null {
+  if (cachedTray && cachedTray.isConnected && cachedTray.ownerDocument === doc) return cachedTray;
+  cachedTray = doc.querySelector('.pmd-pill-tray') as HTMLElement | null;
+  return cachedTray;
+}
+
 /** How much of the scroll container's bottom strip the pill tray
  *  obscures for the given editor DOM, in client px. Exported for the
  *  unit tests; measured live per call. */
@@ -52,7 +65,7 @@ export function trayBottomClearance(editorDom: HTMLElement): number {
   // In multi-pane, only the tray-anchored pane is overlapped.
   const pane = editorDom.closest('.pmd-pane');
   if (pane && !pane.classList.contains('pmd-pane-pill-anchored')) return 0;
-  const tray = doc.querySelector('.pmd-pill-tray') as HTMLElement | null;
+  const tray = findTray(doc);
   if (!tray) return 0;
   const h = tray.getBoundingClientRect().height;
   if (h <= 0) return 0;

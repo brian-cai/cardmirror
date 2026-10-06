@@ -181,6 +181,75 @@ export const FIND_MATCH_CAP = 10000;
  *  partial overlaps at the boundary are dropped).
  *  Returns matches in document order (sorting layered on top by
  *  the caller). */
+/** Per-textblock search text, cached by node identity (nodes are
+ *  immutable, so an unchanged paragraph is the same object next time).
+ *  Extracting + lowercasing + normalizing every textblock on every Find
+ *  keystroke dominated typing a query on a big document (a per-character
+ *  offset map rebuilt for millions of characters). `map` is null when
+ *  normalizing didn't change the length (no "..." collapsed) — the map is
+ *  then the identity, and skipping it keeps the cache small. */
+interface PreparedHay {
+  hay: string;
+  map: number[] | null;
+}
+const preparedTexts = new WeakMap<
+  PMNode,
+  { text: string; exact?: PreparedHay; folded?: PreparedHay }
+>();
+
+function preparedText(node: PMNode, caseSensitive: boolean): { text: string; prep: PreparedHay | null } {
+  let entry = preparedTexts.get(node);
+  if (!entry) {
+    entry = { text: node.textBetween(0, node.content.size, undefined, '\u0000') };
+    preparedTexts.set(node, entry);
+  }
+  if (!entry.text) return { text: entry.text, prep: null };
+  const key = caseSensitive ? 'exact' : 'folded';
+  let prep = entry[key];
+  if (!prep) {
+    const src = caseSensitive ? entry.text : entry.text.toLowerCase();
+    const n = normalizeForMatch(src);
+    prep = { hay: n.text, map: n.text.length === src.length ? null : n.map };
+    entry[key] = prep;
+  }
+  return { text: entry.text, prep };
+}
+
+/** Fill the search-text cache for `doc` during idle time, in small slices,
+ *  so the FIRST keystroke of a search is as cheap as the rest (the cold
+ *  fill was the worst Find delay on a big document). Started when the Find
+ *  bar opens; returns a cancel function. */
+export function prewarmFindText(doc: PMNode, caseSensitive: boolean): () => void {
+  let cancelled = false;
+  let i = 0;
+  const fill = (child: PMNode): void => {
+    if (child.isTextblock) {
+      preparedText(child, caseSensitive);
+      return;
+    }
+    child.descendants((n) => {
+      if (n.isTextblock) {
+        preparedText(n, caseSensitive);
+        return false;
+      }
+      return true;
+    });
+  };
+  const ric =
+    typeof requestIdleCallback === 'function'
+      ? (cb: (d: { timeRemaining(): number }) => void) => requestIdleCallback(cb)
+      : (cb: (d: { timeRemaining(): number }) => void) => setTimeout(() => cb({ timeRemaining: () => 8 }), 0);
+  const step = (deadline: { timeRemaining(): number }): void => {
+    if (cancelled) return;
+    while (i < doc.childCount && deadline.timeRemaining() > 2) fill(doc.child(i++));
+    if (i < doc.childCount) ric(step);
+  };
+  ric(step);
+  return () => {
+    cancelled = true;
+  };
+}
+
 function findMatches(
   state: EditorState,
   query: string,
@@ -209,18 +278,18 @@ function findMatches(
     // decorations and Replace eating the wrong range. A one-char leaf
     // placeholder keeps offsets ≡ positions, and U+0000 can never
     // occur in a query, so a match can't span an image.
-    const text = node.textBetween(0, node.content.size, undefined, '\u0000');
-    if (!text) return false;
+    const { text, prep } = preparedText(node, caseSensitive);
+    if (!prep) return false;
     const category = categoryForTextblockType(node.type.name);
-    const { text: hay, map } = normalizeForMatch(caseSensitive ? text : text.toLowerCase());
+    const { hay, map } = prep;
     let searchFrom = 0;
     while (searchFrom <= hay.length - needleNorm.length) {
       const idx = hay.indexOf(needleNorm, searchFrom);
       if (idx < 0) break;
       // `idx` is a NORMALIZED offset; map both ends back to real character
       // offsets (these differ only where a "..." collapsed to one char).
-      const origFrom = map[idx]!;
-      const origTo = map[idx + needleNorm.length]!;
+      const origFrom = map ? map[idx]! : idx;
+      const origTo = map ? map[idx + needleNorm.length]! : idx + needleNorm.length;
       if (wholeWord) {
         const before = origFrom > 0 ? text[origFrom - 1]! : '';
         const after = origTo < text.length ? text[origTo]! : '';

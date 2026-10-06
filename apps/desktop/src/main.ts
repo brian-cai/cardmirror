@@ -566,7 +566,9 @@ function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
 
   if (!app.isPackaged) {
     void win.loadURL(DEV_SERVER_URL);
-    win.webContents.openDevTools({ mode: 'detach' });
+    // CARDMIRROR_DEV_NO_DEVTOOLS=1: skip it — an attached Elements panel
+    // tracks every DOM mutation, which skews performance measurements.
+    if (!process.env['CARDMIRROR_DEV_NO_DEVTOOLS']) win.webContents.openDevTools({ mode: 'detach' });
   } else {
     // electron-builder packages the renderer's vite-build output
     // under `Resources/renderer/` via the `extraResources` block in

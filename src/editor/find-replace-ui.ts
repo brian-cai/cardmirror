@@ -30,6 +30,7 @@ import {
   FIND_MATCH_CAP,
   type FindReplaceState,
   type FindSortMode,
+  prewarmFindText,
 } from './find-replace-plugin.js';
 import { settings } from './settings.js';
 import type { NavigationPanel } from './nav-panel.js';
@@ -158,6 +159,8 @@ export class FindReplaceBar {
    *  user's feet. */
   private anchor = 0;
   private setQueryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Cancels the idle-time search-text prewarm started at open(). */
+  private cancelPrewarm: (() => void) | null = null;
   /** Trailing debounce for the O(matches) panel/nav rebuilds triggered
    *  by edits in the document while the bar is open. */
   private stateChangeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -547,6 +550,12 @@ export class FindReplaceBar {
 
     this.findInput.focus();
     this.findInput.select();
+    // Warm the search-text cache in idle time while the user starts typing.
+    {
+      const view = this.getView();
+      this.cancelPrewarm?.();
+      this.cancelPrewarm = view ? prewarmFindText(view.state.doc, this.caseSensitiveCheckbox.checked) : null;
+    }
     // Apply scope BEFORE the initial query so the rescan that
     // setQuery triggers respects the scope from the start.
     this.applyScopeFromToggle();
