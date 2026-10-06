@@ -5,6 +5,22 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.12 — 2026-10-06
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Security
+
+- **Updated Electron** (the engine CardMirror runs on) to pick up security
+  fixes, and updated the tools that build the installers.
+
+### Added
+
+- **Nav pane text size.** Settings → Appearance → Nav pane text size makes
+  the outline on the left smaller or bigger, without changing the
+  document.
+
 ## 1.14.11 — 2026-10-06
 
 BCai's (@brian-cai) build of CardMirror, updating from
