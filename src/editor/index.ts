@@ -51,7 +51,9 @@ import {
   installIncomingSpeechSliceHandler,
 } from './speech-doc-send.js';
 import { promptForChoice, promptForText, promptForRouteChoice, alertDialog, confirmDialog, installModalKeys, armDialogFocus } from './text-prompt.js';
-import { pushOverlay, popOverlay, isTopOverlay } from './overlay-stack.js';
+import { pushOverlay, popOverlay, isTopOverlay, isAnyOverlayOpen } from './overlay-stack.js';
+import { aiActivitiesInFlight } from './ai/ai-activity.js';
+import { setWindowResting } from './workspace-store.js';
 import { openDocMenu } from './doc-menu-ui.js';
 import { createReference } from './create-reference.js';
 import { showToast } from './toast.js';
@@ -9057,7 +9059,87 @@ function ensureDiskBadge(): void {
   });
   getElectronHost()?.onDiskChanged(({ path }) => noteDiskChanged(path));
   getElectronHost()?.onReopenRequested?.(({ path, changed, fromSelf }) => void onReopenRequested(path, changed, fromSelf));
+  installWindowSleepClient();
   subscribeTimer(() => refreshDiskBadge());
+}
+
+/** Window sleep (apps/desktop/src/window-sleep.ts): answer main's sleep
+ *  requests with a snapshot to wake from — or null when this window has
+ *  to stay awake — and keep main's idle threshold in step with the
+ *  setting. Single-document windows only (the three-pane shell is gone). */
+function installWindowSleepClient(): void {
+  const electron = getElectronHost();
+  if (!electron?.onSleepRequest || !electron.sleepReady) return;
+  const pushMinutes = (): void => void electron.setWindowSleepMinutes?.(settings.get('windowSleepMinutes'));
+  pushMinutes();
+  let lastMinutes = settings.get('windowSleepMinutes');
+  settings.subscribe(() => {
+    const m = settings.get('windowSleepMinutes');
+    if (m !== lastMinutes) {
+      lastMinutes = m;
+      pushMinutes();
+    }
+  });
+  electron.onSleepCancelled?.(() => setWindowResting(false));
+  electron.onSleepRequest(({ requestId }) => {
+    void (async () => {
+      const snapshot = await buildSleepSnapshot().catch((err) => {
+        console.warn('[window-sleep] snapshot failed:', err);
+        return null;
+      });
+      if (snapshot) setWindowResting(true);
+      const accepted = await electron.sleepReady!(requestId, snapshot);
+      if (!accepted) setWindowResting(false);
+    })();
+  });
+}
+
+/** Why this window can't rest right now, or null when it can. */
+function sleepBlocker(): string | null {
+  if (!view || multiDocActive) return 'no single-document editor';
+  if (isPristineStarter || typeof currentDocHandle !== 'string' && !currentDocDirty && !currentDocFilename) return 'nothing open';
+  if (isAnyOverlayOpen()) return 'a dialog is open';
+  if (getTimerStateNow().running) return 'the timer is running';
+  if (aiActivitiesInFlight() > 0) return 'an AI task is running';
+  if (document.body.classList.contains('pmd-voice-listening')) return 'voice control is listening';
+  if (collabCopresenceFor(activeDocIdentity().sessionUid)) return 'a co-editing session is open';
+  if (getSpeechDocResolver().getSpeechUid?.() === currentDocUid) return 'this is the speech doc';
+  return null;
+}
+
+/** The snapshot a resting window wakes from: the document as native bytes
+ *  (comments and doc id included), its file identity, the unsaved flag,
+ *  and where the user was. Unsaved changes are journaled first, so they
+ *  survive even if the app is closed while the window rests. */
+async function buildSleepSnapshot(): Promise<import('./host/types.js').SpawnWindowPayload | null> {
+  const blocker = sleepBlocker();
+  if (blocker) {
+    console.log(`[cardmirror] window-sleep: staying awake (${blocker})`);
+    return null;
+  }
+  const v = view!;
+  console.log(`[cardmirror] window-sleep: resting (unsaved=${currentDocDirty})`);
+  if (currentDocDirty) await runJournalWrite();
+  const bytes = await serializeNativeAsync(v.state.doc, {
+    threads: Array.from(getCommentsState(v.state).threads.values()),
+    ...(currentDocId ? { docId: currentDocId } : {}),
+  });
+  const recoveredFrom = recoveredDraftJournalSavedAt(currentDocUid);
+  const scroller = document.getElementById('app');
+  return {
+    filename: currentDocFilename ?? 'Untitled',
+    bytes,
+    handle: typeof currentDocHandle === 'string' ? currentDocHandle : null,
+    format: currentDocFormat,
+    uid: currentDocUid,
+    markDirty: currentDocDirty,
+    ...(recoveredFrom ? { recoveredFromSavedAt: recoveredFrom } : {}),
+    restoreView: {
+      scrollTop: scroller?.scrollTop ?? 0,
+      anchor: v.state.selection.anchor,
+      head: v.state.selection.head,
+    },
+  };
 }
 
 /** The user asked to open this window's document again (main already
@@ -10761,6 +10843,29 @@ async function mountResumedSession(roomId: string): Promise<void> {
 /** Mount a SpawnWindowPayload into this freshly-spawned window.
  *  Parses the bytes (cmir → parseNative, docx → fromDocxFull, off-thread),
  *  mounts the result, and sets the doc-state module vars. */
+/** Window sleep: put the caret and scroll back where they were when the
+ *  window went to rest, then tell main the window is awake. */
+function restoreSleptView(rv: { scrollTop: number; anchor: number; head: number }): void {
+  const v = view;
+  if (v) {
+    const size = v.state.doc.content.size;
+    const clamp = (n: number): number => Math.max(0, Math.min(size, Math.round(n)));
+    try {
+      v.dispatch(v.state.tr.setSelection(TextSelection.between(v.state.doc.resolve(clamp(rv.anchor)), v.state.doc.resolve(clamp(rv.head)))));
+    } catch {
+      /* the default selection is fine */
+    }
+  }
+  // After layout: the scroll position only means anything once the
+  // document is rendered at full height.
+  requestAnimationFrame(() => {
+    const scroller = document.getElementById('app');
+    if (scroller) scroller.scrollTop = rv.scrollTop;
+    console.log(`[cardmirror] window-sleep: woke (unsaved=${currentDocDirty})`);
+    void getElectronHost()?.sleepWoke?.();
+  });
+}
+
 async function mountFromSpawnPayload(
   payload: Awaited<ReturnType<ReturnType<typeof getHost>['getInitialDoc']>>,
 ): Promise<void> {
@@ -10865,6 +10970,7 @@ async function mountFromSpawnPayload(
     view?.focus();
     markNonPristineStarter();
     updateWindowTitle();
+    if (payload.restoreView) restoreSleptView(payload.restoreView);
     console.log(`Spawned with ${payload.filename}: ${countSummary(docNode)}`);
   } catch (err) {
     if (err instanceof NativeDamagedError) {

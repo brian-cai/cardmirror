@@ -397,4 +397,7 @@ export interface SpawnWindowPayload {
    *  new window. Used so resuming while a real doc is open doesn't overwrite
    *  it. The doc fields above are placeholders in this case. */
   resumeRoomId?: string;
+  /** Window sleep: scroll + caret to restore after mounting a snapshot;
+   *  the window then reports `sleepWoke`. */
+  restoreView?: { scrollTop: number; anchor: number; head: number };
 }

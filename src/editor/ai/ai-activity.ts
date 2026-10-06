@@ -21,6 +21,13 @@ import { AiWorkingBox } from './ai-working-box.js';
  *  ai-working plugin don't overwrite each other. */
 let activityCounter = 0;
 
+/** AI operations in flight in this window (started, not yet stopped) —
+ *  window sleep stays away while any run. */
+let inFlight = 0;
+export function aiActivitiesInFlight(): number {
+  return inFlight;
+}
+
 export class AiActivity {
   private readonly tip = new ThinkingTooltip();
   /** Selection scope draws a single bounding box (overlay); container
@@ -28,6 +35,7 @@ export class AiActivity {
   private readonly box: AiWorkingBox | null;
   private readonly token = `aiw-${++activityCounter}`;
   private range: TooltipRange;
+  private running = false;
 
   /** `scope` controls the purple box: `container` outlines the enclosing
    *  card (card cutting); `selection` draws one box around the exact
@@ -43,6 +51,10 @@ export class AiActivity {
   }
 
   start(): void {
+    if (!this.running) {
+      this.running = true;
+      inFlight++;
+    }
     if (this.box) this.box.show(this.view, this.range);
     else setAiWorking(this.view, this.token, this.range, this.scope);
     this.tip.show(this.view, this.range);
@@ -63,6 +75,10 @@ export class AiActivity {
   }
 
   stop(): void {
+    if (this.running) {
+      this.running = false;
+      inFlight = Math.max(0, inFlight - 1);
+    }
     this.tip.hide();
     if (this.box) this.box.hide();
     else setAiWorking(this.view, this.token, null);

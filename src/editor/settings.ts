@@ -1117,6 +1117,9 @@ export interface Settings {
   /** Arrange Windows: the speech doc's share of the width, in percent
    *  (10–90); the docs side gets the rest. */
   arrangeSpeechPct: number;
+  /** Window sleep: minutes a window can go unused before it rests (frees
+   *  its memory, keeps a picture of itself, reloads when clicked). 0 = never. */
+  windowSleepMinutes: number;
   /** Three-pane: New Speech Document skips the slot picker and opens
    *  in the slot on the Arrange Windows speech side. Off by default. */
   newSpeechDocInSpeechSlot: boolean;
@@ -1968,6 +1971,7 @@ const DEFAULTS: Settings = {
   openMultipleFiles: false,
   arrangeSpeechSide: 'right',
   arrangeSpeechPct: 50,
+  windowSleepMinutes: 15,
   newSpeechDocInSpeechSlot: false,
   autoMarkSpeechSlotDoc: false,
   displaySizes: { ...DEFAULT_DISPLAY_SIZES },
@@ -2384,6 +2388,18 @@ export const SETTING_METADATA: SettingMeta[] = [
     category: 'general',
     section: 'Workspace',
     aliases: ['speech doc width', 'window split', 'arrange ratio'],
+  },
+  {
+    key: 'windowSleepMinutes',
+    label: 'Rest windows you haven\u2019t used for this many minutes',
+    description:
+      'Each open document is its own window, and each one holds a lot of memory — with many files open, that can slow down the whole computer. A window you haven\u2019t clicked into for this long rests: it frees its memory and shows a picture of itself, then reloads in about a second when you click it, right where you left off (unsaved changes included; undo history before it rested is lost). The speech doc and shared documents never rest. Default 15; 0 = never.',
+    kind: 'number',
+    min: 0,
+    category: 'general',
+    section: 'Workspace',
+    electronOnly: true,
+    aliases: ['sleep windows', 'memory', 'idle windows', 'rest windows', 'performance', 'ram'],
   },
   {
     key: 'navMaxLevel',
@@ -5057,6 +5073,10 @@ function sanitize(s: Settings): Settings {
       typeof s.arrangeSpeechPct === 'number' && Number.isFinite(s.arrangeSpeechPct)
         ? Math.min(90, Math.max(10, Math.round(s.arrangeSpeechPct)))
         : 50,
+    windowSleepMinutes:
+      typeof s.windowSleepMinutes === 'number' && Number.isFinite(s.windowSleepMinutes)
+        ? Math.min(1440, Math.max(0, Math.round(s.windowSleepMinutes)))
+        : 15,
     newSpeechDocInSpeechSlot: s.newSpeechDocInSpeechSlot === true,
     autoMarkSpeechSlotDoc: s.autoMarkSpeechSlotDoc === true,
     displaySizes: sanitizeDisplaySizes(s.displaySizes),

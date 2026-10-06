@@ -444,6 +444,11 @@ interface ElectronAPI {
   cloudProvider(path: string): Promise<CloudProvider | null>;
   onDiskChanged(handler: (payload: { path: string; mtimeMs: number; size: number }) => void): () => void;
   onReopenRequested?(handler: (payload: { path: string; changed: boolean; fromSelf: boolean }) => void): () => void;
+  onSleepRequest?(handler: (payload: { requestId: number }) => void): () => void;
+  onSleepCancelled?(handler: () => void): () => void;
+  sleepReady?(requestId: number, payload: unknown): Promise<boolean>;
+  sleepWoke?(): Promise<void>;
+  setWindowSleepMinutes?(minutes: number): Promise<void>;
   reopenSelf?(path: string): Promise<void>;
   saveConflictedCopy(handle: string, bytes: Uint8Array, userName: string | null): Promise<{ name: string; handle: string }>;
   /** "Show in context": if another window owns `path`, focus it and send
@@ -1362,6 +1367,32 @@ export class ElectronHost implements Host {
   onReopenRequested(handler: (payload: { path: string; changed: boolean; fromSelf: boolean }) => void): () => void {
     const fn = api().onReopenRequested;
     return typeof fn === 'function' ? fn(handler) : () => {};
+  }
+
+  /** Window sleep (apps/desktop/src/window-sleep.ts). */
+  onSleepRequest(handler: (payload: { requestId: number }) => void): () => void {
+    const fn = api().onSleepRequest;
+    return typeof fn === 'function' ? fn(handler) : () => {};
+  }
+
+  onSleepCancelled(handler: () => void): () => void {
+    const fn = api().onSleepCancelled;
+    return typeof fn === 'function' ? fn(handler) : () => {};
+  }
+
+  sleepReady(requestId: number, payload: unknown): Promise<boolean> {
+    const fn = api().sleepReady;
+    return typeof fn === 'function' ? fn(requestId, payload) : Promise.resolve(false);
+  }
+
+  sleepWoke(): Promise<void> {
+    const fn = api().sleepWoke;
+    return typeof fn === 'function' ? fn() : Promise.resolve();
+  }
+
+  setWindowSleepMinutes(minutes: number): Promise<void> {
+    const fn = api().setWindowSleepMinutes;
+    return typeof fn === 'function' ? fn(minutes) : Promise.resolve();
   }
 
   reopenSelf(path: string): Promise<void> {

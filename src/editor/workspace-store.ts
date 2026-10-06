@@ -95,10 +95,32 @@ interface LiveEntry {
  *  Deliberately NOT persisted: a reloaded window is a new window as
  *  far as the map is concerned, and its old entry is swept by the
  *  next rollover. */
-const WINDOW_ID =
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `w${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+/** This window's key in the live workspace map. Kept in sessionStorage
+ *  (per window, survives the window's own reloads and navigations) so a
+ *  window that rests and wakes (window sleep) — or simply reloads — keeps
+ *  ONE entry instead of leaving its old one behind. */
+const WINDOW_ID = (() => {
+  const fresh =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `w${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+  try {
+    const kept = sessionStorage.getItem('pmd-workspace-window-id');
+    if (kept) return kept;
+    sessionStorage.setItem('pmd-workspace-window-id', fresh);
+  } catch {
+    /* no sessionStorage: a fresh id per load, as before */
+  }
+  return fresh;
+})();
+
+/** Window sleep: this window is about to rest (its page unloads, but the
+ *  window — and its document — stay). The close-forget below must not
+ *  drop it from the workspace. */
+let resting = false;
+export function setWindowResting(on: boolean): void {
+  resting = on;
+}
 
 type Listener = (snapshot: WorkspaceSnapshot | null) => void;
 const listeners = new Set<Listener>();
@@ -236,6 +258,7 @@ export function forgetWindowWorkspace(): void {
  *  cannot tell), the entry stays, which is the whole feature. */
 export function installWindowCloseForget(isAppQuitting: () => boolean): () => void {
   const onHide = (): void => {
+    if (resting) return; // resting, not closing — the entry stays
     let quitting = true;
     try {
       quitting = isAppQuitting();

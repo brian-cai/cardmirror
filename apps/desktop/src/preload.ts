@@ -89,7 +89,11 @@ interface PairingInboxItemIpc {
   read: boolean;
 }
 
-contextBridge.exposeInMainWorld('electronAPI', {
+// A resting window's placeholder (window sleep, apps/desktop/src/window-sleep.ts)
+// is a static data: page with no scripts — it gets no API at all.
+((globalThis as { location?: { protocol?: string } }).location?.protocol === 'data:'
+  ? (_api: object): void => {}
+  : (api: object): void => contextBridge.exposeInMainWorld('electronAPI', api))({
   /** Absolute filesystem path of a dropped/selected `File`. Electron 32+
    *  removed the `File.path` property, so drag-to-open resolves it through
    *  `webUtils.getPathForFile` here in the preload. Returns '' if the file has
@@ -570,6 +574,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('host:reopen-requested', listener);
     return () => ipcRenderer.removeListener('host:reopen-requested', listener);
   },
+  /** Window sleep: main asks this window to sleep; answer with
+   *  `sleepReady(requestId, snapshot | null)`. */
+  onSleepRequest: (handler: (payload: { requestId: number }) => void): (() => void) => {
+    const listener = (_evt: unknown, payload: { requestId: number }): void => handler(payload);
+    ipcRenderer.on('host:sleep-request', listener);
+    return () => ipcRenderer.removeListener('host:sleep-request', listener);
+  },
+  /** Window sleep: main called off a sleep this window had agreed to. */
+  onSleepCancelled: (handler: () => void): (() => void) => {
+    const listener = (): void => handler();
+    ipcRenderer.on('host:sleep-cancelled', listener);
+    return () => ipcRenderer.removeListener('host:sleep-cancelled', listener);
+  },
+  sleepReady: (requestId: number, payload: unknown) =>
+    ipcRenderer.invoke('host:sleep-ready', requestId, payload) as Promise<boolean>,
+  /** Window sleep: the woken window mounted its snapshot. */
+  sleepWoke: () => ipcRenderer.invoke('host:sleep-woke') as Promise<void>,
+  /** Window sleep: minutes idle before sleeping (0 = off). */
+  setWindowSleepMinutes: (minutes: number) => ipcRenderer.invoke('host:set-window-sleep-minutes', minutes) as Promise<void>,
   /** This window already has `path` open: run the reopen check on it. */
   reopenSelf: (path: string) => ipcRenderer.invoke('host:reopen-self', path) as Promise<void>,
   /** Keep both: write bytes as a conflicted copy beside `handle`. */

@@ -114,6 +114,15 @@ import {
 import { promises as fs } from 'node:fs';
 import { createHash } from 'node:crypto';
 import {
+  pickWindowsToSleep,
+  sanitizeSleepMinutes,
+  sleepPageHtml,
+  SLEEP_CHECK_MS,
+  SLEEP_REPLY_TIMEOUT_MS,
+  WAKE_TIMEOUT_MS,
+  type SleepPhase,
+} from './window-sleep.js';
+import {
   parseHistoryEnvelope,
   readHistoryHeader,
   type HistoryEnvelopeIpc,
@@ -273,6 +282,10 @@ interface InitialDocPayload {
   /** Resume a persisted collaboration session instead of mounting a doc.
    *  Passed through opaquely, like joinShareCode. */
   resumeRoomId?: string;
+  /** Window sleep (window-sleep.ts): where the window was when it went to
+   *  sleep — the renderer restores the scroll and caret after mounting and
+   *  reports `host:sleep-woke`. Passed through opaquely. */
+  restoreView?: { scrollTop: number; anchor: number; head: number };
 }
 const pendingInitialDocs = new Map<number, InitialDocPayload>();
 
@@ -456,6 +469,135 @@ const skipCloseConfirm = new Set<number>();
  *  the app running the way macOS expects. */
 let quitInitiated = false;
 
+/** Load the editor app into `win` (dev server, or the packaged renderer). */
+function loadAppPage(win: BrowserWindow): void {
+  if (!app.isPackaged) {
+    void win.loadURL(DEV_SERVER_URL);
+  } else {
+    // electron-builder packages the renderer's vite-build output
+    // under `Resources/renderer/` via the `extraResources` block in
+    // apps/desktop/package.json. `process.resourcesPath` resolves
+    // to that Resources dir on every platform (Contents/Resources on
+    // macOS, resources/ on Windows / Linux). Same code path for all
+    // packaged builds.
+    void win.loadFile(path.join(process.resourcesPath, 'renderer', 'index.html'));
+  }
+}
+
+// ─── Window sleep (window-sleep.ts) ─────────────────────────────────
+interface SleepEntry {
+  phase: SleepPhase;
+  lastActiveAt: number;
+  requestId: number;
+  payload: InitialDocPayload | null;
+  /** Closing (not quitting) a sleeping window wakes it, then closes it. */
+  closeAfterWake: boolean;
+  timer: NodeJS.Timeout | null;
+}
+const sleepState = new Map<number, SleepEntry>();
+/** Windows that have been woken at least once — never "the first window"
+ *  again (that boot runs the session-start work: workspace roll-over,
+ *  startup recovery, migrations, the launch update check). */
+const wokeFromSleep = new Set<number>();
+let windowSleepMinutes = 15;
+let sleepRequestSeq = 0;
+
+function newSleepEntry(): SleepEntry {
+  return { phase: 'awake', lastActiveAt: Date.now(), requestId: 0, payload: null, closeAfterWake: false, timer: null };
+}
+
+function clearSleepTimer(entry: SleepEntry): void {
+  if (entry.timer) clearTimeout(entry.timer);
+  entry.timer = null;
+}
+
+function sleepCheck(): void {
+  const now = Date.now();
+  const focused = BrowserWindow.getFocusedWindow();
+  const cands = BrowserWindow.getAllWindows()
+    .filter((w) => !w.isDestroyed() && sleepState.has(w.id))
+    .map((w) => {
+      const entry = sleepState.get(w.id)!;
+      return {
+        id: w.id,
+        phase: entry.phase,
+        focused: w === focused,
+        lastActiveAt: entry.lastActiveAt,
+        exempt:
+          // The window used last stays awake even while CardMirror is in
+          // the background, so coming back to the app never waits on it.
+          windowFocusOrder[0] === w.id ||
+          isTimerWindow(w) ||
+          speechRegistration?.windowId === w.id ||
+          sharedWindows.has(w.id) ||
+          multiPaneWindows.has(w.id) ||
+          w.webContents.isLoading(),
+      };
+    });
+  for (const id of pickWindowsToSleep(cands, now, devSleepSeconds ? devSleepSeconds / 60 : windowSleepMinutes)) {
+    const win = BrowserWindow.fromId(id);
+    const entry = sleepState.get(id);
+    if (!win || !entry) continue;
+    entry.phase = 'requesting';
+    entry.requestId = ++sleepRequestSeq;
+    win.webContents.send('host:sleep-request', { requestId: entry.requestId });
+    clearSleepTimer(entry);
+    entry.timer = setTimeout(() => {
+      // No answer: stay awake, try again after another idle period.
+      if (entry.phase === 'requesting') {
+        entry.phase = 'awake';
+        entry.lastActiveAt = Date.now();
+      }
+    }, SLEEP_REPLY_TIMEOUT_MS);
+  }
+}
+/** Dev only (unpackaged): CARDMIRROR_DEV_SLEEP_SECONDS=10 rests windows
+ *  after 10 s idle and checks every 2 s, to exercise sleep by hand. */
+const devSleepSeconds =
+  !app.isPackaged && Number(process.env['CARDMIRROR_DEV_SLEEP_SECONDS']) > 0
+    ? Number(process.env['CARDMIRROR_DEV_SLEEP_SECONDS'])
+    : 0;
+setInterval(sleepCheck, devSleepSeconds ? 2000 : SLEEP_CHECK_MS).unref?.();
+
+/** Swap the editor for the resting page (see sleepPageHtml: a data: URL so
+ *  the editor's renderer process is released, not reused). */
+async function showSleepPage(win: BrowserWindow, image: string, title: string): Promise<void> {
+  const html = sleepPageHtml(title, image);
+  await win.loadURL(`data:text/html;charset=utf-8;base64,${Buffer.from(html, 'utf8').toString('base64')}`);
+  if (win.isDestroyed()) return;
+  // Nothing may keep the editor page alive for a "back" navigation.
+  try {
+    win.webContents.navigationHistory.clear();
+  } catch {
+    /* older Electron: no navigationHistory — the process swap still frees it */
+  }
+}
+
+function wakeWindow(win: BrowserWindow, entry: SleepEntry): void {
+  if (entry.phase !== 'asleep' || !entry.payload) return;
+  entry.phase = 'waking';
+  wokeFromSleep.add(win.id);
+  pendingInitialDocs.set(win.id, entry.payload);
+  loadAppPage(win);
+  clearSleepTimer(entry);
+  entry.timer = setTimeout(() => {
+    if (entry.phase === 'waking') finishWake(win, entry);
+  }, WAKE_TIMEOUT_MS);
+}
+
+function finishWake(win: BrowserWindow, entry: SleepEntry): void {
+  clearSleepTimer(entry);
+  entry.phase = 'awake';
+  entry.payload = null;
+  entry.lastActiveAt = Date.now();
+  if (entry.closeAfterWake && !win.isDestroyed()) {
+    entry.closeAfterWake = false;
+    setTimeout(() => {
+      if (!win.isDestroyed()) win.close();
+    }, 0);
+  }
+}
+
 function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
   // Open filling the usable area (minus menu bar / Dock / taskbar) of the
   // display the pointer is on, rather than a fixed 1400×900 that leaves
@@ -577,27 +719,25 @@ function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
     firstWindowId = win.id;
   }
 
-  if (!app.isPackaged) {
-    void win.loadURL(DEV_SERVER_URL);
-    // CARDMIRROR_DEV_NO_DEVTOOLS=1: skip it — an attached Elements panel
-    // tracks every DOM mutation, which skews performance measurements.
-    if (!process.env['CARDMIRROR_DEV_NO_DEVTOOLS']) win.webContents.openDevTools({ mode: 'detach' });
-  } else {
-    // electron-builder packages the renderer's vite-build output
-    // under `Resources/renderer/` via the `extraResources` block in
-    // apps/desktop/package.json. `process.resourcesPath` resolves
-    // to that Resources dir on every platform (Contents/Resources on
-    // macOS, resources/ on Windows / Linux). Same code path for all
-    // packaged builds.
-    void win.loadFile(
-      path.join(process.resourcesPath, 'renderer', 'index.html'),
-    );
-  }
+  loadAppPage(win);
+  // CARDMIRROR_DEV_NO_DEVTOOLS=1: skip it — an attached Elements panel
+  // tracks every DOM mutation, which skews performance measurements.
+  if (!app.isPackaged && !process.env['CARDMIRROR_DEV_NO_DEVTOOLS']) win.webContents.openDevTools({ mode: 'detach' });
 
+  sleepState.set(win.id, newSleepEntry());
   // Track the focused window so menu commands fire at the right
   // place when multiple windows exist.
   win.on('focus', () => {
     mainWindow = win;
+    const entry = sleepState.get(win.id);
+    if (entry) {
+      entry.lastActiveAt = Date.now();
+      if (entry.phase === 'asleep') wakeWindow(win, entry);
+    }
+  });
+  win.on('blur', () => {
+    const entry = sleepState.get(win.id);
+    if (entry) entry.lastActiveAt = Date.now();
   });
   // Intercept user-initiated close (X button, Cmd-W, etc.) so the
   // renderer can prompt for unsaved-doc handling. The renderer
@@ -611,6 +751,21 @@ function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
       skipCloseConfirm.delete(win.id);
       return;
     }
+    // A sleeping window has no editor to ask. Quitting: let it go — its
+    // unsaved changes are in the crash journal and its workspace entry
+    // stays, so it reopens next launch exactly as left. Closing just this
+    // window: wake it first, then run the normal close (save prompt,
+    // journal cleanup, workspace forget).
+    {
+      const entry = sleepState.get(win.id);
+      if (entry && (entry.phase === 'asleep' || entry.phase === 'waking')) {
+        if (quitInitiated) return;
+        e.preventDefault();
+        entry.closeAfterWake = true;
+        if (entry.phase === 'asleep') wakeWindow(win, entry);
+        return;
+      }
+    }
     if (win.webContents.isDestroyed()) {
       // Renderer is gone — nothing to ask. Let the close proceed.
       return;
@@ -621,6 +776,7 @@ function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null;
     pendingInitialDocs.delete(win.id);
+    sleepState.delete(win.id);
     skipCloseConfirm.delete(win.id);
     multiPaneWindows.delete(win.id);
     // A lone floating timer must not outlive the last document
@@ -2130,7 +2286,61 @@ ipcMain.handle('host:register-multipane', async (event, isMultiPane: boolean) =>
 ipcMain.handle('host:is-first-window', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return false;
-  return win.id === firstWindowId;
+  // A window woken from sleep reloads the editor, but it's not the start
+  // of the session (see wokeFromSleep).
+  return win.id === firstWindowId && !wokeFromSleep.has(win.id);
+});
+
+// Window sleep: the renderer's setting (minutes idle before sleeping; 0 = off).
+ipcMain.handle('host:set-window-sleep-minutes', async (_event, minutes: unknown) => {
+  windowSleepMinutes = sanitizeSleepMinutes(minutes);
+});
+
+// Window sleep: the renderer's answer to a sleep request — a snapshot to
+// wake from, or null (it can't sleep right now: a dialog, a running AI
+// task, voice, the timer…).
+ipcMain.handle('host:sleep-ready', async (event, requestId: unknown, payload: InitialDocPayload | null) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const entry = win ? sleepState.get(win.id) : undefined;
+  if (!win || !entry || entry.phase !== 'requesting' || entry.requestId !== requestId) return false;
+  clearSleepTimer(entry);
+  if (!payload || BrowserWindow.getFocusedWindow() === win) {
+    entry.phase = 'awake';
+    entry.lastActiveAt = Date.now();
+    if (payload) win.webContents.send('host:sleep-cancelled');
+    return false;
+  }
+  // The on-disk baseline the woken editor compares against, so a change
+  // made while it slept still shows as "changed on disk".
+  if (typeof payload.handle === 'string' && payload.handle && !payload.diskBase) {
+    const base = baselineFor(payload.handle);
+    if (base) payload.diskBase = base.state;
+  }
+  let image = '';
+  try {
+    const shot = await win.webContents.capturePage();
+    image = `data:image/jpeg;base64,${shot.toJPEG(72).toString('base64')}`;
+  } catch {
+    /* no screenshot — the placeholder shows its background */
+  }
+  const title = win.getTitle();
+  entry.payload = payload;
+  entry.phase = 'asleep';
+  try {
+    await showSleepPage(win, image, title);
+  } catch (err) {
+    console.warn('[window-sleep] could not show the sleep page:', err);
+  }
+  // Focused while the page loaded: wake straight back up.
+  if (!win.isDestroyed() && BrowserWindow.getFocusedWindow() === win) wakeWindow(win, entry);
+  return true;
+});
+
+// Window sleep: a woken renderer mounted its snapshot.
+ipcMain.handle('host:sleep-woke', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const entry = win ? sleepState.get(win.id) : undefined;
+  if (win && entry && entry.phase === 'waking') finishWake(win, entry);
 });
 
 /** Synchronous on purpose: a renderer asks this from `pagehide`, where
@@ -2707,6 +2917,13 @@ ipcMain.handle(
       return { delivered: false };
     }
     if (ownerWin.isMinimized()) ownerWin.restore();
+    const sleeping = sleepState.get(ownerWin.id);
+    if (sleeping && sleeping.phase === 'asleep' && sleeping.payload) {
+      // Asleep: the anchor rides along in the wake snapshot.
+      sleeping.payload.focusAnchor = descriptor as InitialDocPayload['focusAnchor'];
+      ownerWin.focus();
+      return { delivered: true };
+    }
     ownerWin.focus();
     ownerWin.webContents.send('host:focus-anchor', { descriptor });
     return { delivered: true };
