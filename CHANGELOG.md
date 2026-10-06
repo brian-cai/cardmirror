@@ -5,6 +5,29 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.9 — 2026-10-06
+
+Brian's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Security
+
+- **Fixed a paste vulnerability** in the editor engine (ProseMirror):
+  pasting specially crafted content could run code. Updated to the fixed
+  version.
+
+### Faster
+
+- **Find is much faster on big files** — typing a search no longer
+  stutters (up to a second per letter before on very large files).
+- **Typing in big files is snappier** — fixes a per-keystroke slowdown
+  introduced in 1.14.8.
+- **A partner's edits appear faster** in shared big documents (about 3×).
+
+### Fixed
+
+- **On Windows, CardMirror now opens maximized**, filling large monitors.
+
 ## 1.14.8 — 2026-10-05
 
 Brian's (@brian-cai) build of CardMirror, updating from
