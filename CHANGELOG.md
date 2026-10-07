@@ -5,6 +5,23 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.1 — 2026-10-07
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+Brings in everything from CardMirror 1.15.0 (below):
+
+- **Highlight underlined text only**: a new Settings → Editing toggle,
+  off by default.
+- **⌘, (Ctrl+, on Windows and Linux) opens Settings.** On macOS,
+  Settings… moves to the CardMirror menu, and the Window menu lists your
+  open windows.
+- **Ctrl/Alt-Shift-Down selects to the end of the paragraph**, and
+  deleting whole selected paragraphs removes them instead of leaving an
+  empty one behind.
+- **Highlighting fixes** around punctuation at the edge of a selection.
+
 ## 1.14.13 — 2026-10-07
 
 BCai's (@brian-cai) build of CardMirror, updating from
