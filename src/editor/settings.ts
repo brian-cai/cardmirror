@@ -2352,7 +2352,16 @@ export interface SettingMeta {
   aliases?: readonly string[];
 }
 
-export const SETTING_METADATA: SettingMeta[] = [
+const ALL_SETTING_METADATA: SettingMeta[] = [
+  {
+    key: 'multiDocWorkspace',
+    label: 'Three-pane workspace',
+    descriptionFn: workspaceLayoutDescription,
+    kind: 'toggle',
+    category: 'general',
+    section: 'Workspace',
+    aliases: ['split view', 'split screen', 'multi pane', 'multi-doc'],
+  },
   {
     key: 'lastWorkspaceEnabled',
     label: 'Remember my last workspace',
@@ -2407,6 +2416,60 @@ export const SETTING_METADATA: SettingMeta[] = [
     category: 'general',
     section: 'Workspace',
     aliases: ['speech doc width', 'window split', 'arrange ratio'],
+  },
+  {
+    key: 'newSpeechDocInSpeechSlot',
+    label: 'New speech documents open on the speech doc side',
+    description:
+      'Off by default, so New Speech Document asks which slot to use. On, it skips that question and opens the new speech doc in the slot on the Arrange Windows speech doc side (Slot 3 for right, Slot 1 for left), stacked on whatever is there.',
+    kind: 'toggle',
+    category: 'general',
+    section: 'Workspace',
+    dependsOn: 'multiDocWorkspace',
+    aliases: ['speech doc slot', 'new speech slot', 'speech side slot'],
+  },
+  {
+    key: 'autoMarkSpeechSlotDoc',
+    label: 'Mark the first document in the speech doc slot as the speech doc',
+    description:
+      "Off by default. On, when no speech doc is marked, the first document you open (or create with New) in the slot on the Arrange Windows speech doc side (Slot 3 for right, Slot 1 for left) is marked as the speech doc. Nothing changes once a speech doc is marked, and moving a doc between slots never marks it.",
+    kind: 'toggle',
+    category: 'general',
+    section: 'Workspace',
+    dependsOn: 'multiDocWorkspace',
+    aliases: ['auto mark speech doc', 'mark speech doc automatically', 'speech slot'],
+  },
+  {
+    key: 'multiDocLayoutMode',
+    label: 'Multi-doc layout',
+    description:
+      'When three docs are open, choose compact (all three visible at once, narrow) or wide-scroll (two full panes + edge of third; click the peek to snap). With 1 or 2 docs open, both modes render identically.',
+    kind: 'multiDocLayoutMode',
+    category: 'general',
+    section: 'Workspace',
+    dependsOn: 'multiDocWorkspace',
+  },
+  {
+    key: 'openReplacesUntitled',
+    label: 'Opening a file replaces an untouched Untitled doc',
+    description:
+      "Off by default. On, opening a file into a slot that's showing a blank Untitled document you haven't typed in or saved closes that document, so the file takes its place instead of stacking on top of it. An Untitled doc you've typed in (even if you deleted it again), the speech doc, and co-edited docs are always kept.",
+    kind: 'toggle',
+    category: 'general',
+    section: 'Workspace',
+    dependsOn: 'multiDocWorkspace',
+    aliases: ['replace untitled', 'replace empty document', 'close blank document'],
+  },
+  {
+    key: 'showHideSlotButton',
+    label: 'Show a Hide button on each slot',
+    description:
+      "Off by default. On, each slot's title bar gets a Hide button that takes the slot out of the layout so the other slots share its width; its documents stay open. Reveal All Slots (a command) brings hidden slots back, and so do Mod-1/2/3 or opening a document into the slot. Hide Slot and Reveal All Slots are commands either way (unbound by default).",
+    kind: 'toggle',
+    category: 'general',
+    section: 'Workspace',
+    dependsOn: 'multiDocWorkspace',
+    aliases: ['hide slot', 'hide pane', 'reveal slots', 'minimize slot'],
   },
   {
     key: 'windowSleepMinutes',
@@ -4434,6 +4497,30 @@ export const SETTING_METADATA: SettingMeta[] = [
   },
 ];
 
+/** The three-pane workspace is retired in this build (one window per
+ *  document; `multiDocWorkspace` always reads false in sanitize). Its rows
+ *  stay in ALL_SETTING_METADATA exactly as upstream writes them, so merges
+ *  stay clean, and are filtered here: the toggle itself, every row that
+ *  depends on it, and its layout cycle. */
+const RETIRED_SETTING_KEYS: ReadonlySet<keyof Settings> = new Set<keyof Settings>([
+  'multiDocWorkspace',
+  'multiDocLayoutMode',
+]);
+
+function isRetiredSetting(key: keyof Settings, meta?: SettingMeta): boolean {
+  if (RETIRED_SETTING_KEYS.has(key)) return true;
+  const deps = meta?.dependsOn;
+  if (deps === undefined) return false;
+  const list = Array.isArray(deps) ? deps : [deps];
+  return list.some((d: SettingCondition) =>
+    RETIRED_SETTING_KEYS.has(typeof d === 'string' ? d : d.key),
+  );
+}
+
+export const SETTING_METADATA: SettingMeta[] = ALL_SETTING_METADATA.filter(
+  (m) => !isRetiredSetting(m.key, m),
+);
+
 /** Host / state lookups needed to decide which toggles are actionable right
  *  now — passed in (rather than read from a live host module) so the
  *  derivation stays pure and unit-testable. */
@@ -4505,7 +4592,7 @@ export interface CyclableSetting {
   values: readonly { value: string; label: string }[];
 }
 
-export const CYCLABLE_SETTINGS: readonly CyclableSetting[] = [
+const ALL_CYCLABLE_SETTINGS: readonly CyclableSetting[] = [
   {
     key: 'pasteCursor',
     values: [
@@ -4562,6 +4649,13 @@ export const CYCLABLE_SETTINGS: readonly CyclableSetting[] = [
     ],
   },
   {
+    key: 'multiDocLayoutMode',
+    values: [
+      { value: 'compact', label: 'Compact' },
+      { value: 'wide', label: 'Wide-scroll' },
+    ],
+  },
+  {
     key: 'fileSearchTiebreak',
     values: [
       { value: 'recency', label: 'Recency' },
@@ -4569,6 +4663,12 @@ export const CYCLABLE_SETTINGS: readonly CyclableSetting[] = [
     ],
   },
 ];
+
+/** Cyclable settings this build exposes: the retired three-pane
+ *  workspace's layout cycle is dropped (see isRetiredSetting). */
+export const CYCLABLE_SETTINGS: readonly CyclableSetting[] = ALL_CYCLABLE_SETTINGS.filter(
+  (c) => !isRetiredSetting(c.key),
+);
 
 /** The cyclable settings actionable right now (same host/dependency gating as
  *  toggles). Each result pairs the cycle table entry with its live metadata. */
