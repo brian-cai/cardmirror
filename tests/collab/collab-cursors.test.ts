@@ -265,28 +265,37 @@ describe('remote caret widgets are stable across rebuilds (2026-09-01 review, PH
     await sleep(300);
     (aView as unknown as { hasFocus: () => boolean }).hasFocus = () => true;
 
-    const caretNodes = (): Node[] => {
+    const carets = (): Array<{ from: number; type: { toDOM?: Node } }> => {
       const plugin = bView.state.plugins.find((p) =>
         String((p as unknown as { key: string }).key).startsWith('loro-ephemeral-cursor'),
       )!;
-      const set = plugin.getState(bView.state) as { find: () => Array<{ type: { toDOM?: Node } }> };
-      return set.find().map((d) => d.type.toDOM).filter((n): n is Node => !!n);
+      const set = plugin.getState(bView.state) as {
+        find: () => Array<{ from: number; type: { toDOM?: Node } }>;
+      };
+      return set.find();
     };
+    const caretNodes = (): Node[] => carets().map((d) => d.type.toDOM).filter((n): n is Node => !!n);
     const pumpFrames = async (): Promise<void> => {
       for (const f of bPresence.splice(0)) bCursors.applyRemote(f);
       await sleep(250); // past the receive drain
     };
+    // Poll rather than sleep a fixed time: a busy CI runner (macOS,
+    // 2026-10-07) hadn't delivered A's first frame after 400ms.
+    const pumpUntil = async (ok: () => boolean): Promise<void> => {
+      const deadline = Date.now() + 5000;
+      do await pumpFrames();
+      while (!ok() && Date.now() < deadline);
+    };
 
     aView.dispatch(aView.state.tr.setSelection(TextSelection.create(aView.state.doc, 2, 6)));
-    await sleep(400);
-    await pumpFrames();
+    await pumpUntil(() => caretNodes().length > 0);
     const first = caretNodes();
     expect(first.length, 'A\u2019s caret renders in B').toBeGreaterThan(0);
+    const firstAt = carets().map((d) => d.from).join();
 
     // A moves its cursor → new frame → B rebuilds decorations.
     aView.dispatch(aView.state.tr.setSelection(TextSelection.create(aView.state.doc, 8, 12)));
-    await sleep(400);
-    await pumpFrames();
+    await pumpUntil(() => carets().map((d) => d.from).join() !== firstAt);
     const second = caretNodes();
     expect(second.length).toBe(first.length);
     expect(second[0], 'same peer, same name/color → the SAME element').toBe(first[0]);

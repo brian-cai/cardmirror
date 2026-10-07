@@ -43,7 +43,10 @@ describe('office encryption detection', () => {
   });
 });
 
-describe('decryptOfficeDocument', () => {
+// Each decrypt runs Word's deliberately slow password hash (100k SHA-512
+// rounds); a test doing two of them overran the default 5s on a busy CI
+// runner (2026-10-07).
+describe('decryptOfficeDocument', { timeout: 30_000 }, () => {
   it('decrypts with the correct password to a valid .docx the importer reads', async () => {
     const pkg = decryptOfficeDocument(fixture, 'password');
     // Inner package is a real zip (.docx).
