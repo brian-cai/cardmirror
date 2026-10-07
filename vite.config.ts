@@ -1,14 +1,12 @@
 import { defineConfig } from 'vite';
-import { VitePWA } from 'vite-plugin-pwa';
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 // The dev server (`npm run dev`) serves from `/`, and production builds
-// now default to `/` too — the web app lives at the domain root
-// (`https://cardmirror.app`, Cloudflare Workers static assets; the old
-// GitHub Pages `/cardmirror/` subpath serves only a redirect stub, see
-// web-redirect/). Override with `VITE_BASE=/foo/` if deploying under a
-// subpath somewhere else.
+// default to `/` too. BCai's build ships only the desktop app (built with
+// `--base=./`); the web edition and its offline (PWA) service worker were
+// dropped 2026-10-07. Override with `VITE_BASE=/foo/` to deploy under a
+// subpath.
 //
 // `@cardcutter/browser` resolves to the separately-versioned, NOT-
 // shipped card-cutter package when it's checked out alongside this
@@ -39,11 +37,6 @@ export default defineConfig(({ command }) => {
     return i >= 0 ? process.argv[i + 1] : undefined;
   })();
   const isElectronRenderer = cliBase === './';
-  // `NO_PWA=1` builds without the service worker — use it for local in-place
-  // iteration so a stale precache doesn't keep serving old bundles.
-  const enablePWA =
-    command === 'build' && !isElectronRenderer && !process.env['NO_PWA'];
-
   // CardMirror Lite (VITE_LITE=1): the no-AI / no-internet build
   // variant (src/editor/lite.ts). The web deployment for it ships a
   // Content-Security-Policy that makes "no outbound requests" a
@@ -121,52 +114,6 @@ export default defineConfig(({ command }) => {
                 return null;
               },
             },
-          ]
-        : []),
-      ...(enablePWA
-        ? [
-          VitePWA({
-            // `prompt` (not `autoUpdate`): never force-reload a running editor
-            // session — a new version activates on the next launch, so unsaved
-            // work is never interrupted. `injectRegister: 'auto'` injects the
-            // registration into the built HTML (web only); nothing lands in the
-            // Electron renderer, which never sees this plugin.
-            registerType: 'prompt',
-            injectRegister: 'auto',
-            includeAssets: ['favicon.png', 'apple-touch-icon.png'],
-            manifest: {
-              name: 'CardMirror',
-              short_name: 'CardMirror',
-              description:
-                'A debate-card editor that interoperates with Advanced Verbatim — cut, format, and organize evidence offline.',
-              theme_color: '#2563eb',
-              background_color: '#ffffff',
-              display: 'standalone',
-              categories: ['productivity', 'education'],
-              icons: [
-                { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
-                { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
-                {
-                  src: 'pwa-maskable-512.png',
-                  sizes: '512x512',
-                  type: 'image/png',
-                  purpose: 'maskable',
-                },
-              ],
-            },
-            workbox: {
-              // The editor bundle is large; raise the precache cap so the main
-              // chunk is cached (else the app won't open offline).
-              // `wasm` = the Loro CRDT engine (~3MB): precached so a
-              // persisted collab session can RESUME offline — without it,
-              // a guest reopening the app on dead tournament wifi has a
-              // session record they can't load (web-collab decision,
-              // 2026-08-18). Collab JS chunks ride the js glob already.
-              globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2,ttf,json,wasm}'],
-              maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
-              cleanupOutdatedCaches: true,
-            },
-          }),
           ]
         : []),
     ],

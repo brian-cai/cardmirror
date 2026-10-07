@@ -91,6 +91,10 @@ export function isRibbonCommandAvailable(id: RibbonCommandId): boolean {
   // The dev console is Chromium DevTools via the Electron host; on the
   // web the browser's own DevTools exist and we can't open them anyway.
   if (id === 'openDevConsole') return getElectronHost() !== null;
+  // Invite links point at the web edition (cardmirror.app), which BCai's
+  // build doesn't ship and which doesn't use this build's relay — share
+  // the plain session code instead. Pasting an old link into Join still works.
+  if (id === 'collabCopyInviteLink') return false;
   // Reads the clipboard — Electron host IPC OR the browser's async Clipboard
   // API (Chromium). The command self-guards and falls through where no read is
   // available (e.g. Firefox/Safari), so hide it only where neither exists.
