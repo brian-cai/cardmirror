@@ -5,6 +5,24 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.14.13 — 2026-10-07
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Security
+
+- **Updated the build and test tools** to clear every open security alert
+  on the repository. None of them ship inside the app.
+
+### Removed
+
+- **Web edition and Lite installers.** This build is desktop-only, so
+  releases no longer include the Lite downloads.
+- **Copy Session Invite Link.** It made links that opened the original
+  project's web app instead of this build. Share sessions by code as
+  before; pasting an old invite link into Join still works.
+
 ## 1.14.12 — 2026-10-06
 
 BCai's (@brian-cai) build of CardMirror, updating from
