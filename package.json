@@ -57,9 +57,9 @@
     "fake-indexeddb": "6.2.5",
     "jsdom": "29.1.1",
     "patch-package": "8.0.1",
-    "tsx": "4.21.0",
+    "tsx": "4.23.15",
     "typescript": "5.9.3",
     "vite": "6.4.3",
-    "vitest": "2.1.9"
+    "vitest": "4.1.11"
   }
 }

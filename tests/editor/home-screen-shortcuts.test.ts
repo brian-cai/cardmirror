@@ -6,12 +6,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Mock } from 'vitest';
 import { homeScreen, type HomeScreenCallbacks } from '../../src/editor/home-screen.js';
 import { pushOverlay, popOverlay } from '../../src/editor/overlay-stack.js';
 
-function makeCallbacks(): HomeScreenCallbacks & { newDoc: ReturnType<typeof vi.fn> } {
+function makeCallbacks(): HomeScreenCallbacks & { newDoc: Mock<NonNullable<HomeScreenCallbacks['newDoc']>> } {
   return {
-    newDoc: vi.fn(),
+    newDoc: vi.fn<NonNullable<HomeScreenCallbacks['newDoc']>>(),
     newSpeechDoc: vi.fn(),
     open: vi.fn(),
     openRecent: vi.fn(),
