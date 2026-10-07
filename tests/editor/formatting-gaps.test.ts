@@ -259,6 +259,73 @@ describe('withGapFix — selected edge punctuation is formatted, not gap-strippe
     const next = run(doc, '(government', applyUnderline(() => false));
     expect(mask(next.doc, 'underline_mark')).toBe('    ___________     '); // "(government"
   });
+
+  it('a selection starting with ": " keeps the space styled too, so F11 twice toggles off', () => {
+    // Field report 2026-10-07: ": the plan fails" + F11 used to highlight the
+    // colon and the words but strip the selected space between them — and
+    // because the colon (highlighted) was the scan edge, the second F11 saw the
+    // bare space and repainted forever instead of toggling off.
+    const doc = docOf(['Resolved: the plan fails now']);
+    const once = run(doc, ': the plan fails', applyHighlight(() => 'yellow'));
+    expect(mask(once.doc, 'highlight')).toBe('        ________________    ');
+    const twice = apply(select(once, ': the plan fails'), applyHighlight(() => 'yellow'));
+    expect(mask(twice.doc, 'highlight')).toBe(' '.repeat(28));
+  });
+
+  it('the same for every leading gap punctuation mark (, . ; ? ! ))', () => {
+    for (const p of [',', '.', ';', '?', '!', ')']) {
+      const doc = docOf([`Resolved${p} the plan fails now`]);
+      const once = run(doc, `${p} the plan`, applyHighlight(() => 'yellow'));
+      expect(mask(once.doc, 'highlight'), p).toBe('        __________          ');
+    }
+  });
+
+  it('a trailing selected ". " is unchanged: period styled, the space still trimmed', () => {
+    const doc = docOf(['the plan fails. Even so']);
+    const next = run(doc, 'fails. ', applyHighlight(() => 'yellow'));
+    expect(mask(next.doc, 'highlight')).toBe('         ______        '); // "fails."
+  });
+});
+
+describe('withGapFix — punctuation belongs to the word it touches', () => {
+  it('a period highlighted on its own survives highlighting the word after it', () => {
+    // The period belongs to "word1" (outside the selection) → left alone even
+    // though the bookends disagree; the space between is still stripped.
+    const doc = docOf(['word1'], ['.', [HL()]], [' word2 more']);
+    const next = run(doc, 'word2', applyHighlight(() => 'yellow'));
+    expect(mask(next.doc, 'highlight')).toBe('     _ _____     ');
+  });
+
+  it('un-highlighting the word the period is attached to still clears the dangling period', () => {
+    const doc = docOf(['word1. word2', [HL()]]);
+    const next = run(doc, 'word1', applyHighlight(() => 'yellow'));
+    expect(mask(next.doc, 'highlight')).toBe('       _____');
+  });
+
+  it('un-highlighting the word AFTER the period leaves "word1." highlighted', () => {
+    const doc = docOf(['word1. word2', [HL()]]);
+    const next = run(doc, 'word2', applyHighlight(() => 'yellow'));
+    expect(mask(next.doc, 'highlight')).toBe('______      ');
+  });
+
+  it('an open paren belongs to the word on its right', () => {
+    // Un-highlight "word1" in "word1 (word2": the paren follows word2 and stays.
+    const doc = docOf(['word1 (word2', [HL()]]);
+    const next = run(doc, 'word1', applyHighlight(() => 'yellow'));
+    expect(mask(next.doc, 'highlight')).toBe('      ______');
+  });
+
+  it('bridging is not narrowed: both words styled fills the whole gap, period included', () => {
+    const doc = docOf(['word1', [HL()]], ['. word2']);
+    const next = run(doc, 'word2', applyHighlight(() => 'yellow'));
+    expect(mask(next.doc, 'highlight')).toBe('____________');
+  });
+
+  it('the same ownership rule applies to underline', () => {
+    const doc = docOf(['word1'], ['.', [U()]], [' word2 more']);
+    const next = run(doc, 'word2', applyUnderline(() => false));
+    expect(mask(next.doc, 'underline_mark')).toBe('     _ _____     ');
+  });
 });
 
 // ---- cite / emphasis ----

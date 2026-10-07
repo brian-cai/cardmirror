@@ -304,6 +304,7 @@ import {
 } from './tag-keymap.js';
 import { enterWithConfiguredStyle } from './enter-style.js';
 import { keepCursorInLeadingBlockOnBlockedMerge, blockBackspaceNodeSelect, blockDeleteNodeSelect } from './boundary-cursor-keymap.js';
+import { deleteWholeParagraphSelection, wholeParagraphCutPlugin } from './whole-paragraph-delete.js';
 import {
   journalPredatesFile,
   journalStalenessBaseline,
@@ -5826,6 +5827,9 @@ export function buildEditorPlugins(targetUid?: string | null): Plugin[] {
         // cross-container shape) gets the merge-up rebuild instead of
         // an uncaught TransformError (field crash 2026-08-29).
         crossContainerDeleteSelection(state, dispatch, view) ||
+        // A selection covering whole paragraphs takes them out, break
+        // included — no empty paragraph left behind (whole-paragraph-delete.ts).
+        deleteWholeParagraphSelection(state, dispatch, view) ||
         backspaceAtTagStart(state, dispatch, view) ||
         backspaceAtFirstBodyStart(state, dispatch, view) ||
         keepCursorInLeadingBlockOnBlockedMerge(state, dispatch, view) ||
@@ -5835,6 +5839,7 @@ export function buildEditorPlugins(targetUid?: string | null): Plugin[] {
         neverThrow(blockBackspaceNodeSelect)(state, dispatch, view),
       Delete: (state, dispatch, view) =>
         crossContainerDeleteSelection(state, dispatch, view) ||
+        deleteWholeParagraphSelection(state, dispatch, view) ||
         deleteAtTagEnd(state, dispatch, view) ||
         deleteAtContainerEnd(state, dispatch, view) ||
         keepCursorInLeadingBlockOnBlockedMerge(state, dispatch, view) ||
@@ -5929,6 +5934,8 @@ export function buildEditorPlugins(targetUid?: string | null): Plugin[] {
     makeSelfRefPlugin(),
     frozenSelectionPlugin,
     pilcrowSelectionPlugin,
+    // Cut on a whole-paragraph selection drops the emptied paragraph too.
+    wholeParagraphCutPlugin,
     // Backstop for schema-invalid containers a paste fitter can leave
     // behind (Issue #34) — REGISTERED BEFORE absorb: PM restarts the
     // appendTransaction loop after each appended tr, so healing first

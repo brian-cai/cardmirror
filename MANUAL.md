@@ -655,6 +655,16 @@ paint, until you pick a color again.
 - **Font color** — applies a text color; the "Automatic" swatch removes
   it.
 
+**Highlight underlined text only** (Settings → Editing → Highlighting, off
+by default) makes every highlight and background-color paint — F11,
+Mod-F11, the paintbrush, and the color pickers — land only on text that
+is underlined or emphasized, so you can sweep across a whole paragraph
+and have just the underlined parts light up. In a word that mixes
+emphasis and plain underline, only the emphasized part is painted. The
+spaces between two painted words fill in when "Bridge formatting across
+gaps automatically" is on. Toggling a highlight off and the "no color"
+pen still clear the whole selection.
+
 **Paintbrush mode** (the way Word's highlighter works): click a main
 color button with *nothing* selected to arm it. The cursor changes, and
 every drag-select you make applies that color until you press **Esc** or
@@ -737,7 +747,10 @@ CardMirror automatically bridges the small gap between them so the styling reads
 as continuous. Two Settings → Editing controls govern this: a toggle to turn the
 automatic bridging on or off (the manual **Fix Formatting Gaps** command above is
 unaffected), and a choice of which gaps it bridges — **whitespace and
-punctuation** (the default) or **whitespace only**. Bridging happens only in body
+punctuation** (the default) or **whitespace only**. Punctuation belongs to the
+word it touches: a period you highlighted on its own survives highlighting the
+word after it, and un-highlighting the word before it clears the period with
+it. Bridging happens only in body
 text, never inside structural lines (tags, analytics, headings, undertags) — so a
 selection spanning both bridges its body paragraphs and leaves its structure
 alone.
@@ -812,8 +825,21 @@ everywhere:
 Hold **Shift** with any of these to **extend the selection** instead of
 just moving the cursor, exactly as in Word. So **Shift-Ctrl/Alt-Right**
 selects to the end of the next word, **Shift-Ctrl/Alt-Down** selects to
-the next paragraph, and **Shift-PageDown** selects to the next heading.
+the end of the current paragraph (then the end of the next one, a
+paragraph per press), and **Shift-PageDown** selects to the next heading.
 The selection grows or shrinks from a fixed anchor as you keep going.
+
+A keyboard paragraph selection stops at the paragraph's end, like a
+triple-click: it never takes the paragraph break with it, so a Tag,
+indent or other paragraph command applies only to the paragraphs you can
+see selected. To grab the break as well, press **Shift-Right** from the
+paragraph's end; a blue **¶** at the end of the paragraph shows the
+break is inside the selection, and deleting or typing over it merges the
+two paragraphs. A selection that covers whole paragraphs, however you made
+it, deletes them outright: **Backspace**, **Delete** or **Cut** removes
+the paragraphs rather than leaving an empty one behind. (A paragraph that
+has to stay, such as a card's tag or the only paragraph in the document,
+is emptied instead.)
 
 ### Selecting text with the mouse
 
@@ -2100,7 +2126,7 @@ Keyboard shortcuts**. They appear only on Windows.
 
 ## 15. Voice control
 
-> **Experimental — and, as of 1.14.0, commands are still unreliable.** Dictation works
+> **Experimental — and, as of 1.15.0, commands are still unreliable.** Dictation works
 > well. The single-word commands do not yet: the recognizer decodes an open
 > vocabulary, so a one-word utterance often comes back as some other word
 > and nothing fires. Calibration helps only a little. A keyword-spotting pass
@@ -2999,6 +3025,15 @@ Typing helpers and the behavior of the cutting and condense commands
   highlights, or removed.
 - **Use Gray-50% body text** — render the excerpt's body text in gray;
   the heading line stays black.
+
+**Highlighting**
+
+- **Highlight underlined text only** — when on, highlight and background
+  color paints (F11, Mod-F11, the paintbrush, and the color pickers) only
+  land on text that is underlined or emphasized; in a word that mixes
+  emphasis and plain underline, only the emphasized part is painted.
+  Toggling off and the "no color" pen still clear the whole selection.
+  Composes with the automatic gap bridging. Off by default.
 
 **Standardize exceptions**
 

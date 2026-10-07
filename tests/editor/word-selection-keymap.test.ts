@@ -239,17 +239,72 @@ describe('Ctrl+Up / Ctrl+Down with a non-empty selection', () => {
     expect(sel.from).toBe(b2);
   });
 
-  it('Ctrl+Shift+Down with selection still extends as before (not collapsed)', () => {
+  it('Ctrl+Shift+Down with selection still extends (not collapsed) — to the paragraph END', () => {
     const doc = buildDoc();
     const b1 = findTextStart(doc, 'first body text');
-    const b2 = findTextStart(doc, 'second body text');
     const state = stateWith(doc, b1 + 2, b1 + 6);
     const next = press(state, 'ArrowDown', { ctrl: true, shift: true });
     expect(next).not.toBeNull();
     const sel = next!.selection;
     expect(sel.empty).toBe(false);
     expect(sel.anchor).toBe(b1 + 2);
-    expect(sel.head).toBe(b2);
+    expect(sel.head).toBe(b1 + 'first body text'.length);
+  });
+});
+
+describe('Ctrl/Alt+Shift+Down stops at paragraph ends (never grabs the break by itself)', () => {
+  function buildDoc() {
+    return makeDoc([
+      cardWith(tag('TAG'), cardBody('first body text'), cardBody('second body text'), cardBody('third')),
+    ]);
+  }
+
+  it('from mid-paragraph → the end of that paragraph; the next paragraph is not touched', () => {
+    const doc = buildDoc();
+    const b1 = findTextStart(doc, 'first body text');
+    const b2 = findTextStart(doc, 'second body text');
+    const next = press(stateWith(doc, b1 + 3), 'ArrowDown', { alt: true, shift: true });
+    expect(next!.selection.head).toBe(b1 + 'first body text'.length);
+    expect(next!.selection.to).toBeLessThan(b2 - 1); // before body 2's opening token
+    // Block commands see only body 1: no textblock after it overlaps the range.
+    let touched = 0;
+    next!.doc.nodesBetween(next!.selection.from, next!.selection.to, (n) => {
+      if (n.isTextblock) touched++;
+      return true;
+    });
+    expect(touched).toBe(1);
+  });
+
+  it('from a paragraph END → the end of the NEXT paragraph (one press per paragraph)', () => {
+    const doc = buildDoc();
+    const b1 = findTextStart(doc, 'first body text');
+    const b2 = findTextStart(doc, 'second body text');
+    const end1 = b1 + 'first body text'.length;
+    const next = press(stateWith(doc, b1 + 3, end1), 'ArrowDown', { ctrl: true, shift: true });
+    expect(next!.selection.anchor).toBe(b1 + 3);
+    expect(next!.selection.head).toBe(b2 + 'second body text'.length);
+  });
+
+  it('from the start of a paragraph selects exactly that paragraph (a keyboard triple-click)', () => {
+    const doc = buildDoc();
+    const b2 = findTextStart(doc, 'second body text');
+    const next = press(stateWith(doc, b2), 'ArrowDown', { alt: true, shift: true });
+    expect(next!.selection.from).toBe(b2);
+    expect(next!.selection.to).toBe(b2 + 'second body text'.length);
+  });
+
+  it('at the end of the LAST paragraph → no-op', () => {
+    const doc = buildDoc();
+    const b3 = findTextStart(doc, 'third');
+    expect(press(stateWith(doc, b3, b3 + 5), 'ArrowDown', { alt: true, shift: true })).toBeNull();
+  });
+
+  it('plain Alt+Down still moves to the NEXT paragraph start', () => {
+    const doc = buildDoc();
+    const b1 = findTextStart(doc, 'first body text');
+    const b2 = findTextStart(doc, 'second body text');
+    const next = press(stateWith(doc, b1 + 3), 'ArrowDown', { alt: true });
+    expect(next!.selection.from).toBe(b2);
   });
 });
 

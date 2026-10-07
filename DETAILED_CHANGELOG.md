@@ -5,6 +5,81 @@ behavior, rationale, and (where useful) the implementation context
 behind a change. For a shorter, jargon-free summary of what's new
 in each release, see `CHANGELOG.md`.
 
+## 1.15.0 — 2026-10-07
+
+### Added: Highlight underlined text only
+
+`highlightUnderlinedOnly` (Settings → Editing → Highlighting, off).
+`restrictToUnderlinedText(doc, ranges)` in ribbon-commands.ts narrows the
+operating ranges of `applyHighlight`, `applyShading`, `setHighlightColor`
+and `setShadingColor` to characters carrying `underline_mark`,
+`underline_direct` or `emphasis_mark` (cite is bold-only and doesn't
+count). Per whitespace-delimited word: any emphasis in the word → only
+its emphasized characters; else its underlined ones. The whole word
+decides, including the part outside the selection. Whitespace is never
+kept by the filter; the painted pieces are reported to `withGapFix` via
+the `pmd-painted-ranges` transaction meta, where each piece is its own
+operating range, so the gaps between painted neighbors are edge gaps and
+bridge normally (and stay clean with bridging off). The toggle-off test
+runs over the narrowed ranges; a strip (toggle off, null pen) still
+clears the full operating ranges, so painting the same swath twice leaves
+it clean. Nothing underlined in the selection → the command is a no-op.
+Tests: `tests/editor/highlight-underlined-only.test.ts`.
+
+### Added: macOS Window list; Settings… in the app menu; Mod-, default
+
+`role: 'window'` on the Window menu item (#103): macOS appends the open
+windows itself (check = front, diamond = minimized) below our Minimize /
+Bring All to Front; window titles already carry the document name.
+`openSettings` defaults to `Mod-,`; the Settings… item moved from Help
+to the application menu under About (only macOS has a native bar, so no
+second placement elsewhere).
+
+### Changed: paragraph selection and whole-paragraph deletion
+
+`destParaEndExtend` in word-selection-keymap.ts: Ctrl/Alt-Shift-Down now
+extends to the head's paragraph END (or the next paragraph's end when
+already there) instead of the next paragraph's START. The selection
+always ends on text, so the next paragraph is never overlapped and block
+commands (setBlockType / indent / tag) leave it alone; the deliberate
+break-grab shape (Shift-Right from the end) keeps the `¶` cue, the
+type-over trim and the merge-on-delete. The plain move (`destNextParaStart`)
+and Shift-Up are unchanged; `verticalCommandPair` takes an optional
+separate extend destination.
+
+New `whole-paragraph-delete.ts`: `coversWholeParagraphs` (TextSelection
+from a textblock's offset 0 to another's content end);
+`deleteWholeParagraphSelection` runs after `crossContainerDeleteSelection`
+in the Backspace/Delete chains, does `deleteSelection` then
+`dropEmptiedParagraph` (removes the now-empty textblock when its parent
+has more than one child and `canReplace` allows; caret via
+`Selection.near(before, 1)`); defers when the paragraph can't go so the
+rest of the chain applies. `wholeParagraphCutPlugin` appends the same
+drop to ProseMirror's `uiEvent: 'cut'` transaction (one undo step).
+Tests: `tests/editor/whole-paragraph-delete.test.ts`, additions in
+`word-selection-keymap.test.ts`.
+
+### Fixed: gap bridging — leading punctuation, punctuation ownership
+
+`gapModRange`: when the selection starts with punctuation inside a gap
+and runs on through the gap to the next word (": the plan"), the
+selected whitespace after that punctuation is protected too, not just
+the punctuation. Before, the strip left a styled colon beside a bare
+space, and since the colon was the toggle scan's edge, F11 could never
+reach "everything already highlighted → toggle off". The trailing side is
+deliberately asymmetric (the one trailing space a double-click absorbs is
+still normalized away). Only the "both" gap class was affected.
+
+`gapStripRange` + a `strip` range on `applyFullGapTarget`: families with
+no bridge now strip only within a range that excludes punctuation
+attached (no whitespace between) to the bookend OUTSIDE the operating
+range. Removes that complete a bridge still cover the whole writable
+range. So a period highlighted on its own survives highlighting the word
+after it; un-highlighting "word2" in "word1. word2" leaves "word1."
+highlighted; un-highlighting "word1" still clears the dangling period.
+The manual Fix Formatting Gaps command is unchanged. Tests in
+`formatting-gaps.test.ts`.
+
 ## 1.14.0 — 2026-10-03
 
 ### Added: nav pane search, as a results view

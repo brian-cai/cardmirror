@@ -1506,9 +1506,52 @@ function gapModRange(
     classifyChar(doc.textBetween(pos, pos + 1)) === 'punct';
   let from = gapFrom;
   while (from < gapTo && inSel(from) && isPunct(from)) from++;
+  // A selection that STARTS with punctuation and runs on through the gap to
+  // the word after it (": the plan") asked for the whole ": " — protect the
+  // selected whitespace after that punctuation too. Otherwise the strip
+  // would leave a styled colon beside a bare space, and F11 could never
+  // reach its "everything already highlighted → toggle off" state. The
+  // trailing side is deliberately NOT symmetric: the one trailing space a
+  // double-click absorbs is still normalized away.
+  if (from > gapFrom && from < gapTo && gapTo <= r.to) from = gapTo;
   let to = gapTo;
   while (to > from && inSel(to - 1) && isPunct(to - 1)) to--;
   return { from, to };
+}
+
+/** The part of a gap the gap-fix may STRIP, within `[modFrom, modTo)`:
+ *  punctuation attached (no whitespace between) to the bookend OUTSIDE the
+ *  operating range `r` belongs to that word, which the user didn't act on,
+ *  so it keeps whatever style it has — a period highlighted on purpose
+ *  survives highlighting the word after it. Punctuation attached to the
+ *  bookend inside `r` follows that word as before (un-highlighting "word1"
+ *  in "word1. word2" still clears the dangling period). Bridging is not
+ *  narrowed: when both bookends agree the whole gap fills. */
+function gapStripRange(
+  doc: PMNode,
+  gapFrom: number,
+  gapTo: number,
+  modFrom: number,
+  modTo: number,
+  r: { from: number; to: number },
+): { from: number; to: number } {
+  const isPunct = (pos: number): boolean =>
+    classifyChar(doc.textBetween(pos, pos + 1)) === 'punct';
+  let from = modFrom;
+  let to = modTo;
+  const leftOutside = gapFrom - 1 < r.from;
+  const rightOutside = gapTo >= r.to;
+  if (leftOutside) {
+    let p = gapFrom;
+    while (p < gapTo && isPunct(p)) p++;
+    from = Math.max(from, p);
+  }
+  if (rightOutside) {
+    let p = gapTo;
+    while (p > gapFrom && isPunct(p - 1)) p--;
+    to = Math.min(to, p);
+  }
+  return from < to ? { from, to } : { from: modFrom, to: modFrom };
 }
 
 /** Whether EVERY text node in `[from, to)` carries `type`. Unlike PM's
@@ -1562,6 +1605,9 @@ function applyFullGapTarget(
   modTo: number,
   appliesNamedStyle: boolean,
   effectivePt?: (node: PMNode | null, parent: PMNode) => number,
+  /** Where a family with NO bridge may strip (see `gapStripRange`);
+   *  defaults to the whole writable range. */
+  strip: { from: number; to: number } = { from: modFrom, to: modTo },
 ): void {
   if (modFrom >= modTo) return;
   const { firstNode, lastNode, parent } = hit;
@@ -1578,7 +1624,11 @@ function applyFullGapTarget(
     marks.some((mk) => mk.type === t);
 
   const marksToAdd: Mark[] = [];
+  // Removes that complete a bridge (the family's other marks, cleared where
+  // the bridged mark goes) cover the whole writable range; a family with
+  // no bridge strips only within `strip`.
   const marksToRemove: MarkType[] = [];
+  const marksToStrip: MarkType[] = [];
 
   // Named-style family (underline / emphasis / cite). ONLY normalized
   // when the command that ran actually toggles this family
@@ -1622,7 +1672,7 @@ function applyFullGapTarget(
       marksToAdd.push(citeType.create());
       marksToRemove.push(ud);
     } else {
-      marksToRemove.push(um, ud, emphasisType, citeType);
+      marksToStrip.push(um, ud, emphasisType, citeType);
     }
   }
 
@@ -1630,11 +1680,11 @@ function applyFullGapTarget(
   const fmHl = fm.find((mk) => mk.type === highlightType);
   const lmHl = lm.find((mk) => mk.type === highlightType);
   if (fmHl && lmHl) marksToAdd.push(highlightType.create(fmHl.attrs));
-  else marksToRemove.push(highlightType);
+  else marksToStrip.push(highlightType);
   const fmSh = fm.find((mk) => mk.type === shadingType);
   const lmSh = lm.find((mk) => mk.type === shadingType);
   if (fmSh && lmSh) marksToAdd.push(shadingType.create(fmSh.attrs));
-  else marksToRemove.push(shadingType);
+  else marksToStrip.push(shadingType);
 
   // font_size: bridge the smaller-effective-pt bookend's explicit mark.
   if (effectivePt) {
@@ -1651,10 +1701,13 @@ function applyFullGapTarget(
       targetFs = fmFs;
     }
     if (targetFs) marksToAdd.push(fontSizeType.create(targetFs.attrs));
-    else marksToRemove.push(fontSizeType);
+    else marksToStrip.push(fontSizeType);
   }
 
   for (const mt of marksToRemove) tr.removeMark(modFrom, modTo, mt);
+  if (strip.from < strip.to) {
+    for (const mt of marksToStrip) tr.removeMark(strip.from, strip.to, mt);
+  }
   for (const mk of marksToAdd) tr.addMark(modFrom, modTo, mk);
 }
 
@@ -1688,11 +1741,7 @@ function withGapFix(
     // those seams. The operating range spans the whole selection, so its only
     // edges are the true outer ones. (Mark steps don't move positions, so
     // ranges from the pre-command state stay valid in the resulting doc.)
-    let opRanges = getOperatingRangesForFormatting(state).ranges;
-    if (opRanges.length === 0) {
-      const word = wordRangeAtCursor(state);
-      if (word) opRanges = [word];
-    }
+    const opRanges = gapFixRanges(state);
     let captured: Transaction | null = null;
     const result = command(state, (tr) => { captured = tr; }, view);
     const tr = captured as Transaction | null;
@@ -1703,7 +1752,15 @@ function withGapFix(
       dispatch(tr);
       return result;
     }
-    for (const r of opRanges) {
+    // A command that painted only PART of the selection (highlight /
+    // shading under "Highlight underlined text only") reports the pieces it
+    // actually touched. Each piece is then its own operating range, so the
+    // gaps between two painted words are edge gaps and get bridged the
+    // normal way; gaps next to text the filter skipped stay as they were.
+    const painted = tr.getMeta(META_PAINTED_RANGES) as
+      | { from: number; to: number }[]
+      | undefined;
+    for (const r of painted ?? opRanges) {
       // When the user formatted ONLY gap content — whitespace, punctuation,
       // or a punctuation/whitespace mix, i.e. no actual word character —
       // that's a deliberate choice; honor it. Don't let the gap-fix strip or
@@ -1726,13 +1783,126 @@ function withGapFix(
         // writable span: the user picked it on purpose, so the command's mark
         // stands there. The bookends (hence bridge-vs-strip) are unchanged.
         const mod = gapModRange(tr.doc, hit.gapFrom, hit.gapTo, r);
-        applyFullGapTarget(tr, hit, mod.from, mod.to, appliesNamedStyle, effectivePt);
+        // Punctuation that belongs to the word OUTSIDE the selection keeps
+        // its style when the bookends disagree (see `gapStripRange`).
+        const strip = gapStripRange(tr.doc, hit.gapFrom, hit.gapTo, mod.from, mod.to, r);
+        applyFullGapTarget(tr, hit, mod.from, mod.to, appliesNamedStyle, effectivePt, strip);
       });
     }
     dispatch(tr);
     return result;
   };
 }
+
+/** The ranges `withGapFix` normalizes around: the user's operating ranges,
+ *  or the word at the cursor when there are none. */
+function gapFixRanges(state: EditorState): { from: number; to: number }[] {
+  const ranges = getOperatingRangesForFormatting(state).ranges;
+  if (ranges.length > 0) return ranges;
+  const word = wordRangeAtCursor(state);
+  return word ? [word] : [];
+}
+
+/** Transaction meta a `withGapFix`-wrapped command sets to the sub-ranges it
+ *  actually painted, when that is less than its operating ranges. */
+const META_PAINTED_RANGES = 'pmd-painted-ranges';
+
+/** The marks that count as "underlined" for "Highlight underlined text
+ *  only": the body underline style, its structural-block twin, and
+ *  emphasis (underline + bold). Cite is bold-only, so it doesn't count. */
+const UNDERLINED_MARKS = new Set(['underline_mark', 'underline_direct', 'emphasis_mark']);
+
+/**
+ * "Highlight underlined text only" (Settings → Editing): narrow the ranges a
+ * highlight / shading paint touches to the text that is underlined or
+ * emphasized. Two rules, per word (a maximal run of non-whitespace in one
+ * textblock):
+ *
+ *   1. A word with no emphasis keeps its underlined characters.
+ *   2. A word with ANY emphasis keeps only its emphasized characters — so
+ *      with "nuc…s" emphasized inside an otherwise-underlined "nuclear
+ *      weapons", painting the words highlights just the emphasized part.
+ *      The whole word decides, even the part outside the selection.
+ *
+ * Whitespace and other non-word gap characters are never kept: the gap
+ * bridger (when on) fills the gaps between two painted neighbors, which is
+ * how the setting composes with "Bridge formatting across gaps". Returns
+ * the kept pieces clipped to the input ranges, merged where contiguous; an
+ * empty list when nothing in the selection qualifies.
+ */
+export function restrictToUnderlinedText(
+  doc: PMNode,
+  ranges: { from: number; to: number }[],
+): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
+  const push = (from: number, to: number) => {
+    const last = out[out.length - 1];
+    if (last && last.to === from) last.to = to;
+    else out.push({ from, to });
+  };
+  for (const { from, to } of ranges) {
+    doc.nodesBetween(from, to, (node, pos) => {
+      if (!node.isTextblock) return !node.isLeaf;
+      const base = pos + 1;
+      const size = node.content.size;
+      // Per-position character and style maps for the textblock; inline
+      // leaves read as whitespace so they end a word.
+      const ch = new Array<string>(size).fill(' ');
+      const underlined = new Array<boolean>(size).fill(false);
+      const emphasized = new Array<boolean>(size).fill(false);
+      let p = 0;
+      node.forEach((child) => {
+        if (child.isText) {
+          const t = child.text ?? '';
+          const u = child.marks.some((m) => UNDERLINED_MARKS.has(m.type.name));
+          const e = child.marks.some((m) => m.type.name === 'emphasis_mark');
+          for (let i = 0; i < t.length; i++) {
+            ch[p + i] = t[i]!;
+            underlined[p + i] = u;
+            emphasized[p + i] = e;
+          }
+        }
+        p += child.nodeSize;
+      });
+      const lo = Math.max(0, from - base);
+      const hi = Math.min(size, to - base);
+      let i = 0;
+      while (i < size) {
+        if (/\s/.test(ch[i]!)) { i++; continue; }
+        let j = i;
+        while (j < size && !/\s/.test(ch[j]!)) j++;
+        // Word is [i, j). Only words touching the range matter.
+        if (j > lo && i < hi) {
+          const useEmphasis = emphasized.slice(i, j).some(Boolean);
+          const keep = useEmphasis ? emphasized : underlined;
+          for (let k = Math.max(i, lo); k < Math.min(j, hi); k++) {
+            if (keep[k]) push(base + k, base + k + 1);
+          }
+        }
+        i = j;
+      }
+      return false;
+    });
+  }
+  return out;
+}
+
+/** Under "Highlight underlined text only", the pieces of `ranges` a paint
+ *  command should touch; the ranges unchanged when the setting is off. */
+function paintRanges(
+  doc: PMNode,
+  ranges: { from: number; to: number }[],
+): { ranges: { from: number; to: number }[]; narrowed: boolean } {
+  if (!settings.get('highlightUnderlinedOnly')) return { ranges, narrowed: false };
+  return { ranges: restrictToUnderlinedText(doc, ranges), narrowed: true };
+}
+
+/** Pre-dispatch bookkeeping for a paint that was narrowed by
+ *  `paintRanges`: tell `withGapFix` which pieces were painted. */
+function notePainted(tr: Transaction, paint: ReturnType<typeof paintRanges>): void {
+  if (paint.narrowed) tr.setMeta(META_PAINTED_RANGES, paint.ranges);
+}
+
 
 /**
  * F9 / Mod-U — toggle Verbatim's "Underline" style on the selection.
@@ -1977,9 +2147,15 @@ export function applyHighlight(activeColor: () => string | null): Command {
     if (op.ranges.length === 0) return false;
 
     const color = activeColor();
+    // "Highlight underlined text only": the paint (and the already-painted
+    // test behind the toggle) covers just the underlined / emphasized
+    // pieces; a strip still clears the whole selection, so painting the
+    // same swath twice leaves it clean.
+    const paint = paintRanges(state.doc, op.ranges);
+    if (paint.ranges.length === 0) return false;
     let allInActiveColor = true;
     let anyText = false;
-    for (const { from, to } of op.ranges) {
+    for (const { from, to } of paint.ranges) {
       const scan = toggleScanRange(state.doc, from, to);
       const r = scanTextMarkPresence(
         state.doc,
@@ -2005,10 +2181,11 @@ export function applyHighlight(activeColor: () => string | null): Command {
       // Replace any existing highlight color with the active one
       // across each range. removeMark + addMark guarantees the new
       // color wins even where a different highlight already exists.
-      for (const { from, to } of op.ranges) {
+      for (const { from, to } of paint.ranges) {
         tr.removeMark(from, to, highlightType);
         tr.addMark(from, to, highlightType.create({ color }));
       }
+      notePainted(tr, paint);
     }
     if (op.fromShadow) tr.setMeta(META_OPERATING_ON_SHADOW, true);
     dispatch(tr);
@@ -2034,9 +2211,12 @@ export function applyShading(activeColor: () => string | null): Command {
     if (op.ranges.length === 0) return false;
 
     const color = activeColor();
+    // Same underlined-only narrowing as highlight (see applyHighlight).
+    const paint = paintRanges(state.doc, op.ranges);
+    if (paint.ranges.length === 0) return false;
     let allInActiveColor = true;
     let anyText = false;
-    for (const { from, to } of op.ranges) {
+    for (const { from, to } of paint.ranges) {
       const scan = toggleScanRange(state.doc, from, to);
       const r = scanTextMarkPresence(
         state.doc,
@@ -2058,10 +2238,11 @@ export function applyShading(activeColor: () => string | null): Command {
     if (allInActiveColor || color === null) {
       for (const { from, to } of op.ranges) tr.removeMark(from, to, shadingType);
     } else {
-      for (const { from, to } of op.ranges) {
+      for (const { from, to } of paint.ranges) {
         tr.removeMark(from, to, shadingType);
         tr.addMark(from, to, shadingType.create({ color }));
       }
+      notePainted(tr, paint);
     }
     if (op.fromShadow) tr.setMeta(META_OPERATING_ON_SHADOW, true);
     dispatch(tr);
@@ -2086,12 +2267,16 @@ export function setHighlightColor(color: string): Command {
     if (!type) return false;
     const op = getOperatingRangesForFormatting(state);
     if (op.ranges.length === 0) return false;
+    // A swatch pick paints, so "Highlight underlined text only" applies.
+    const paint = paintRanges(state.doc, op.ranges);
+    if (paint.ranges.length === 0) return false;
     if (!dispatch) return true;
     const tr = state.tr;
-    for (const { from, to } of op.ranges) {
+    for (const { from, to } of paint.ranges) {
       tr.removeMark(from, to, type);
       tr.addMark(from, to, type.create({ color }));
     }
+    notePainted(tr, paint);
     if (op.fromShadow) tr.setMeta(META_OPERATING_ON_SHADOW, true);
     dispatch(tr);
     return true;
@@ -2104,12 +2289,15 @@ export function setShadingColor(rgb: string): Command {
     if (!type) return false;
     const op = getOperatingRangesForFormatting(state);
     if (op.ranges.length === 0) return false;
+    const paint = paintRanges(state.doc, op.ranges);
+    if (paint.ranges.length === 0) return false;
     if (!dispatch) return true;
     const tr = state.tr;
-    for (const { from, to } of op.ranges) {
+    for (const { from, to } of paint.ranges) {
       tr.removeMark(from, to, type);
       tr.addMark(from, to, type.create({ color: rgb.toUpperCase() }));
     }
+    notePainted(tr, paint);
     if (op.fromShadow) tr.setMeta(META_OPERATING_ON_SHADOW, true);
     dispatch(tr);
     return true;
@@ -5462,7 +5650,8 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   adjustFontSizeUp: '',
   adjustFontSizeDown: '',
   applyFontColor: '',
-  openSettings: '',
+  // The platform-wide preferences chord (⌘, on macOS; Ctrl+, elsewhere).
+  openSettings: 'Mod-,',
   checkForUpdates: '',
   // Stock macOS chord; also works on Win/Linux. Rebindable like all.
   minimizeWindow: 'Mod-m',

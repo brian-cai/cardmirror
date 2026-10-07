@@ -3302,14 +3302,18 @@ function buildMenu(): Menu {
     ],
   };
 
+  // Settings… sits in the application menu (the macOS home of ⌘,), not
+  // under Help. Only macOS gets a native menu bar, so no other platform
+  // needs a second placement.
+  const settingsItem: MenuItemConstructorOptions = {
+    label: 'Settings…',
+    accelerator: menuAccelerator('openSettings'),
+    click: () => dispatchMenuCommand('openSettings'),
+  };
+
   const helpMenu: MenuItemConstructorOptions = {
     label: 'Help',
     submenu: [
-      {
-        label: 'Settings…',
-        accelerator: menuAccelerator('openSettings'),
-        click: () => dispatchMenuCommand('openSettings'),
-      },
       {
         label: 'Keyboard Shortcuts…',
         accelerator: menuAccelerator('openShortcutsReference'),
@@ -3361,6 +3365,8 @@ function buildMenu(): Menu {
             submenu: [
               { role: 'about' as const },
               { type: 'separator' as const },
+              settingsItem,
+              { type: 'separator' as const },
               { role: 'services' as const },
               { type: 'separator' as const },
               { role: 'hide' as const },
@@ -3401,11 +3407,14 @@ function buildMenu(): Menu {
     // Zoom is deliberately absent — the OS meaning (toggle window
     // frame size) collides with the app's own text-zoom commands and
     // would read as a broken duplicate. Bring All to Front is the
-    // native role: standard, no accelerator.
+    // native role: standard, no accelerator. `role: 'window'` marks this
+    // as the app's Windows menu, so macOS itself appends the list of open
+    // windows (check = front, diamond = minimized) below our items (#103).
     ...(isMac
       ? [
           {
             label: 'Window',
+            role: 'window' as const,
             submenu: [
               {
                 label: 'Minimize',

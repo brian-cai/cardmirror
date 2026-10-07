@@ -334,6 +334,65 @@ under Update source.
 - **High School timer by default** (3/5/8, 8 minutes prep); installs on
   the untouched College default switch once.
 - **Settings search** also matches buttons ("export", "import", "backup").
+## 1.15.0 — 2026-10-07
+
+### Added
+
+- **Highlight underlined text only.** A new Settings → Editing toggle
+  (off by default) makes every highlight and background-color paint —
+  F11, Mod-F11, the paintbrush and the color pickers — land only on text
+  that is underlined or emphasized. Sweep across a paragraph that mixes
+  underlined and plain text and just the underlined parts light up. In a
+  word that mixes emphasis and plain underline, only the emphasized part
+  is painted. The spaces between two painted words fill in when gap
+  bridging is on. Toggling a highlight off and the "no color" pen still
+  clear the whole selection.
+
+- **The Window menu lists your open windows** on macOS, with a check on
+  the front window and a diamond on minimized ones, below Minimize and
+  Bring All to Front.
+
+- **⌘, (Ctrl+, on Windows and Linux) opens Settings.** Rebindable like
+  every other shortcut; a key you had already assigned is kept. On
+  macOS, Settings… now lives in the CardMirror application menu under
+  About, rather than under Help.
+
+### Changed
+
+- **Keyboard paragraph selection stops at the paragraph's end.**
+  Ctrl/Alt-Shift-Down now extends the selection to the end of the
+  current paragraph, then the end of the next, a paragraph per press,
+  the way a triple-click selects. It no longer takes the paragraph break
+  with it, so a Tag, indent or other paragraph command applies only to
+  the paragraphs you can see selected instead of also catching the one
+  after. To grab the break, press Shift-Right from the paragraph's end;
+  the blue ¶ shows it is inside the selection, as before.
+
+- **Deleting a whole-paragraph selection removes the paragraph.** When
+  the selection covers whole paragraphs — from a triple-click or the
+  keyboard — Backspace, Delete and Cut now take the paragraphs out,
+  break included, instead of leaving an empty paragraph behind. Typing
+  over the selection still replaces in place. A paragraph that has to
+  stay, such as a card's tag or the only paragraph in the document, is
+  emptied as before.
+
+### Fixed
+
+- **Highlighting a selection that starts with punctuation now covers the
+  space after it.** Selecting ": the plan fails" and pressing F11 used to
+  highlight the colon and the words but skip the space between them, and
+  because of that gap a second F11 repainted instead of toggling the
+  highlight off. The whole selection is now highlighted, and F11 twice
+  clears it. The same applies to a leading comma, period, semicolon,
+  question mark, exclamation point or close paren.
+
+- **A punctuation mark you highlighted on purpose is no longer
+  un-highlighted by formatting the word after it.** Gap bridging now
+  treats punctuation as part of the word it touches: a period after an
+  unhighlighted word keeps its highlight when you highlight the next
+  word, and un-highlighting the word before it clears the period with
+  it. This applies to underline, emphasis, background color and font size
+  as well.
 
 ## 1.14.0 — 2026-10-03
 

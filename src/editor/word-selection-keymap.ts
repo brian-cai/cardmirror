@@ -276,6 +276,23 @@ function destNextParaStart(state: EditorState): number | null {
   return next ? next.start : null;
 }
 
+/** Shift-extend destination for Ctrl/Alt+Shift+Down: the END of the
+ *  head's paragraph, or — already there — the end of the next one. The
+ *  selection always ends ON text, never at the next paragraph's start,
+ *  so it never swallows the paragraph break by itself: block commands
+ *  (tag, indent, …) then act only on the paragraphs you can see
+ *  selected, matching a triple-click. Grabbing the break is a deliberate
+ *  Shift+Right from the paragraph end (the `¶` cue shows it). Word's
+ *  Ctrl+Shift+Down lands at the next paragraph's start instead; macOS's
+ *  own Option+Shift+Down stops at the paragraph end, as this does. */
+function destParaEndExtend(state: EditorState): number | null {
+  const $head = state.selection.$head;
+  if (!$head.parent.isTextblock) return null;
+  if ($head.pos < $head.end()) return $head.end();
+  const next = nextTextblock(state.doc, $head.end());
+  return next ? next.end : null;
+}
+
 function destPrevHeading(state: EditorState): number | null {
   const headings = collectHeadingPositions(state.doc);
   if (headings.length === 0) return null;
@@ -480,8 +497,12 @@ function isInsideWordOrPunctUnit(map: ClassMap, offset: number): boolean {
 function verticalCommandPair(
   computeDest: (state: EditorState) => number | null,
   paraEdge: 'from-start' | 'to-end',
+  /** A different destination for the Shift-extend variant (Down
+   *  extends to paragraph ENDS while the plain move goes to starts). */
+  extendDest: (state: EditorState) => number | null = computeDest,
 ): { move: Command; extend: Command } {
   const base = commandPair(computeDest);
+  const extend = extendDest === computeDest ? base.extend : commandPair(extendDest).extend;
   const move: Command = (state, dispatch) => {
     if (!state.selection.empty) {
       const corner =
@@ -510,7 +531,7 @@ function verticalCommandPair(
     }
     return base.move(state, dispatch);
   };
-  return { move, extend: base.extend };
+  return { move, extend };
 }
 
 const { move: moveCaretToPrevUnit, extend: extendSelectionToPrevUnit } =
@@ -519,8 +540,8 @@ const { move: moveCaretToNextUnit, extend: extendSelectionToNextUnit } =
   horizontalCommandPair(destNextUnit, 'to');
 const { move: moveCaretToPrevParaStart, extend: extendSelectionToPrevParaStart } =
   verticalCommandPair(destPrevParaStart, 'from-start');
-const { move: moveCaretToNextParaStart, extend: extendSelectionToNextParaStart } =
-  verticalCommandPair(destNextParaStart, 'to-end');
+const { move: moveCaretToNextParaStart, extend: extendSelectionToNextParaEnd } =
+  verticalCommandPair(destNextParaStart, 'to-end', destParaEndExtend);
 const { move: moveCaretToPrevHeading, extend: extendSelectionToPrevHeading } =
   commandPair(destPrevHeading);
 const { move: moveCaretToNextHeading, extend: extendSelectionToNextHeading } =
@@ -576,8 +597,8 @@ export const wordSelectionKeymap = keymap({
   'Alt-ArrowDown': moveCaretToNextParaStart,
   'Ctrl-Shift-ArrowUp': extendSelectionToPrevParaStart,
   'Alt-Shift-ArrowUp': extendSelectionToPrevParaStart,
-  'Ctrl-Shift-ArrowDown': extendSelectionToNextParaStart,
-  'Alt-Shift-ArrowDown': extendSelectionToNextParaStart,
+  'Ctrl-Shift-ArrowDown': extendSelectionToNextParaEnd,
+  'Alt-Shift-ArrowDown': extendSelectionToNextParaEnd,
 
   PageUp: moveCaretToPrevHeading,
   PageDown: moveCaretToNextHeading,
