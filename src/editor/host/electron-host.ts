@@ -449,6 +449,11 @@ interface ElectronAPI {
   sleepReady?(requestId: number, payload: unknown): Promise<boolean>;
   sleepWoke?(): Promise<void>;
   setWindowSleepMinutes?(minutes: number): Promise<void>;
+  /** Word open cache (apps/desktop/src/doc-cache.ts). */
+  setDocCacheEnabled?(on: boolean): Promise<void>;
+  docCacheGet?(hash: string): Promise<Uint8Array | null>;
+  docCachePut?(hash: string, json: Uint8Array): Promise<void>;
+  docCacheNoteOpen?(path: string): Promise<void>;
   reopenSelf?(path: string): Promise<void>;
   saveConflictedCopy(handle: string, bytes: Uint8Array, userName: string | null): Promise<{ name: string; handle: string }>;
   /** "Show in context": if another window owns `path`, focus it and send
@@ -1393,6 +1398,26 @@ export class ElectronHost implements Host {
   setWindowSleepMinutes(minutes: number): Promise<void> {
     const fn = api().setWindowSleepMinutes;
     return typeof fn === 'function' ? fn(minutes) : Promise.resolve();
+  }
+
+  setDocCacheEnabled(on: boolean): Promise<void> {
+    const fn = api().setDocCacheEnabled;
+    return typeof fn === 'function' ? fn(on) : Promise.resolve();
+  }
+
+  docCacheGet(hash: string): Promise<Uint8Array | null> {
+    const fn = api().docCacheGet;
+    return typeof fn === 'function' ? fn(hash) : Promise.resolve(null);
+  }
+
+  docCachePut(hash: string, json: Uint8Array): Promise<void> {
+    const fn = api().docCachePut;
+    return typeof fn === 'function' ? fn(hash, json) : Promise.resolve();
+  }
+
+  docCacheNoteOpen(path: string): Promise<void> {
+    const fn = api().docCacheNoteOpen;
+    return typeof fn === 'function' ? fn(path) : Promise.resolve();
   }
 
   reopenSelf(path: string): Promise<void> {

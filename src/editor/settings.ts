@@ -1120,6 +1120,10 @@ export interface Settings {
   /** Window sleep: minutes a window can go unused before it rests (frees
    *  its memory, keeps a picture of itself, reloads when clicked). 0 = never. */
   windowSleepMinutes: number;
+  /** Open cache: keep each opened Word file's converted document (keyed by
+   *  the file's bytes) and re-convert the most-opened files in the
+   *  background when they change. On by default; off deletes the cache. */
+  docOpenCache: boolean;
   /** Three-pane: New Speech Document skips the slot picker and opens
    *  in the slot on the Arrange Windows speech side. Off by default. */
   newSpeechDocInSpeechSlot: boolean;
@@ -1986,6 +1990,7 @@ const DEFAULTS: Settings = {
   arrangeSpeechSide: 'right',
   arrangeSpeechPct: 50,
   windowSleepMinutes: 15,
+  docOpenCache: true,
   newSpeechDocInSpeechSlot: false,
   autoMarkSpeechSlotDoc: false,
   displaySizes: { ...DEFAULT_DISPLAY_SIZES },
@@ -2482,6 +2487,17 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     section: 'Workspace',
     electronOnly: true,
     aliases: ['sleep windows', 'memory', 'idle windows', 'rest windows', 'performance', 'ram'],
+  },
+  {
+    key: 'docOpenCache',
+    label: 'Open big Word files faster',
+    description:
+      'On by default. CardMirror keeps a converted copy of each Word file you open, so opening it again skips converting it (about a second for a big file). The copy is tied to the file\u2019s exact contents: when a teammate changes the file, it\u2019s converted again. Your most-opened files are also refreshed in the background after they change, which also downloads them if Dropbox or OneDrive keeps them online-only. Password-protected files are never kept. Uses up to 500 MB; turning this off deletes the copies.',
+    kind: 'toggle',
+    category: 'general',
+    section: 'Workspace',
+    electronOnly: true,
+    aliases: ['cache', 'open cache', 'faster open', 'preindex', 'pre-index', 'performance', 'speed'],
   },
   {
     key: 'navMaxLevel',
@@ -5226,6 +5242,7 @@ function sanitize(s: Settings): Settings {
       typeof s.windowSleepMinutes === 'number' && Number.isFinite(s.windowSleepMinutes)
         ? Math.min(1440, Math.max(0, Math.round(s.windowSleepMinutes)))
         : 15,
+    docOpenCache: s.docOpenCache !== false,
     newSpeechDocInSpeechSlot: s.newSpeechDocInSpeechSlot === true,
     autoMarkSpeechSlotDoc: s.autoMarkSpeechSlotDoc === true,
     displaySizes: sanitizeDisplaySizes(s.displaySizes),

@@ -20,5 +20,5 @@
   // The file-index service imports src/editor (outside rootDir): esbuild
   // bundles it (build:service) and the ROOT typecheck covers it via the
   // desktop test imports.
-  "exclude": ["src/file-index-core.ts", "src/file-index-service.ts", "src/learn-store-owner.ts", "src/voice/service.ts", "src/voice/worker.ts"]
+  "exclude": ["src/file-index-core.ts", "src/file-index-service.ts", "src/doc-cache-service.ts", "src/learn-store-owner.ts", "src/voice/service.ts", "src/voice/worker.ts"]
 }

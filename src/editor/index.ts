@@ -6644,6 +6644,11 @@ function adoptDocId(docId: string | null, name: string, handle: unknown, format:
     learnStore.registerDoc({ docId, path: typeof handle === 'string' ? handle : null, name, format });
   }
   void checkSessionRejoinForOpenedDoc(docId);
+  // The open cache ranks files by how often they're opened, to keep the
+  // most-used ones converted in the background (doc-cache-ipc.ts).
+  if (format === 'docx' && typeof handle === 'string' && settings.get('docOpenCache')) {
+    void getElectronHost()?.docCacheNoteOpen(handle);
+  }
 }
 
 /** RoomIds currently mid-prompt — a re-open while the dialog is up
@@ -9137,7 +9142,24 @@ function ensureDiskBadge(): void {
   getElectronHost()?.onDiskChanged(({ path }) => noteDiskChanged(path));
   getElectronHost()?.onReopenRequested?.(({ path, changed, fromSelf }) => void onReopenRequested(path, changed, fromSelf));
   installWindowSleepClient();
+  installDocCacheClient();
   subscribeTimer(() => refreshDiskBadge());
+}
+
+/** Open cache (apps/desktop/src/doc-cache-ipc.ts): keep main in step with
+ *  the setting; main pre-converts nothing until a window says it's on. */
+function installDocCacheClient(): void {
+  const electron = getElectronHost();
+  if (!electron) return;
+  let last = settings.get('docOpenCache');
+  void electron.setDocCacheEnabled(last);
+  settings.subscribe(() => {
+    const on = settings.get('docOpenCache');
+    if (on !== last) {
+      last = on;
+      void electron.setDocCacheEnabled(on);
+    }
+  });
 }
 
 /** Window sleep (apps/desktop/src/window-sleep.ts): answer main's sleep

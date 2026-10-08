@@ -593,6 +593,10 @@ interface PairingInboxItemIpc {
   sleepWoke: () => ipcRenderer.invoke('host:sleep-woke') as Promise<void>,
   /** Window sleep: minutes idle before sleeping (0 = off). */
   setWindowSleepMinutes: (minutes: number) => ipcRenderer.invoke('host:set-window-sleep-minutes', minutes) as Promise<void>,
+  setDocCacheEnabled: (on: boolean) => ipcRenderer.invoke('host:set-doc-cache-enabled', on) as Promise<void>,
+  docCacheGet: (hash: string) => ipcRenderer.invoke('host:doc-cache-get', hash) as Promise<Uint8Array | null>,
+  docCachePut: (hash: string, json: Uint8Array) => ipcRenderer.invoke('host:doc-cache-put', hash, json) as Promise<void>,
+  docCacheNoteOpen: (path: string) => ipcRenderer.invoke('host:doc-cache-note-open', path) as Promise<void>,
   /** This window already has `path` open: run the reopen check on it. */
   reopenSelf: (path: string) => ipcRenderer.invoke('host:reopen-self', path) as Promise<void>,
   /** Keep both: write bytes as a conflicted copy beside `handle`. */

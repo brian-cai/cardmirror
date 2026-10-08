@@ -24,6 +24,17 @@ buildSync({
   logLevel: 'warning',
 });
 
+// The open cache's background pre-converter: imports the Word importer
+// from src/import.
+buildSync({
+  entryPoints: [path.join(__dirname, '..', 'src', 'doc-cache-service.ts')],
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  outfile: path.join(__dirname, '..', 'dist', 'doc-cache-service.cjs'),
+  logLevel: 'warning',
+});
+
 // The learn-store owner (main-process side of the flashcard store) is
 // bundled for the same reason: it imports the shared LearnStore from
 // src/editor. main.ts `require`s the bundle at runtime.

@@ -45,6 +45,16 @@ function paintGap(): Promise<void> {
  * dismisses the prompt, and {@link UnsupportedEncryptionError} for a
  * CFB we can't decrypt (legacy binary, Standard encryption).
  */
+/** Bytes that came out of a password prompt. The open cache never keeps
+ *  these: its copies sit unencrypted on disk. */
+const decrypted = new WeakSet<Uint8Array>();
+export function wasDecrypted(bytes: Uint8Array): boolean {
+  return decrypted.has(bytes);
+}
+export function __markDecryptedForTests(bytes: Uint8Array): void {
+  decrypted.add(bytes);
+}
+
 export async function maybeDecryptForOpen(bytes: Uint8Array, filename: string): Promise<Uint8Array> {
   const enc = officeEncryption(bytes);
   if (enc === null) return bytes; // not a compound file — normal path
@@ -67,7 +77,9 @@ export async function maybeDecryptForOpen(bytes: Uint8Array, filename: string): 
     showToast('Decrypting…');
     await paintGap();
     try {
-      return decryptOfficeDocument(bytes, pw);
+      const plain = decryptOfficeDocument(bytes, pw);
+      decrypted.add(plain);
+      return plain;
     } catch (err) {
       if (err instanceof WrongPasswordError) {
         detail = 'Incorrect password — try again.';
