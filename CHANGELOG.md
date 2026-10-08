@@ -5,6 +5,24 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.2 — 2026-10-07
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Big Word files open faster the second time.** CardMirror keeps a
+  converted copy of each Word file you open, so reopening it skips the
+  conversion: a 4.5 MB 2AC file opens in about a second instead of two.
+  The copy is tied to the file's exact contents, so when a teammate
+  changes the file it's converted again. Your most-opened files are also
+  refreshed in the background after they change, which downloads them
+  ahead of time if Dropbox or OneDrive keeps them online-only.
+  Password-protected files are never kept. Settings → Workspace → "Open
+  big Word files faster" (on by default; turning it off deletes the
+  copies, up to 500 MB).
+
 ## 1.15.1 — 2026-10-07
 
 BCai's (@brian-cai) build of CardMirror, updating from
