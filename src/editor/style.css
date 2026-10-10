@@ -2457,7 +2457,10 @@ body:not(.pmd-multi-doc) #app {
    reflows text rather than just scaling pixels, so wrapping behaves
    like Word's view-zoom. Set via JS based on the persisted setting. */
 #editor {
-  zoom: var(--editor-zoom, 1);
+  /* Divided by the interface size (--ui-scale, the window zoom set by
+     applyChromeScale) so the document keeps its own zoom when the
+     ribbon, nav and menus are scaled. */
+  zoom: calc(var(--editor-zoom, 1) / var(--ui-scale, 1));
 }
 
 code {
@@ -3703,6 +3706,25 @@ body.pmd-override-shading [data-shading] {
 
 /* Theme selector (light / dark / system) — small segmented
    control. The "pressed" button reads as the current selection. */
+/* Percent size slider (nav pane text, interface size). */
+.pmd-percent-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.pmd-percent-slider input[type='range'] {
+  width: 10rem;
+}
+.pmd-percent-slider-value {
+  min-width: 3.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pmd-percent-slider .pmd-theme-editor-btn {
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 4px;
+}
+
 .pmd-theme-editor {
   display: inline-flex;
   gap: 0;
@@ -12087,8 +12109,9 @@ body.pmd-multi-nav-empty.pmd-multi-doc #status-bar {
   min-height: 100%;
   /* Match the single-doc editor's zoom binding so the shared zoom
    * controls scale per-pane content, and the editor drag surface's
-   * zoom-aware math lands drop indicators at the right Y position. */
-  zoom: var(--editor-zoom, 1);
+   * zoom-aware math lands drop indicators at the right Y position.
+   * Divided by the interface size, as for #editor. */
+  zoom: calc(var(--editor-zoom, 1) / var(--ui-scale, 1));
   /* Single-doc `#editor` sets these directly on itself so every
    * descendant inherits the body size + line-height. Multi-pane's
    * editor surface isn't a descendant of `#editor`, so it has to

@@ -171,8 +171,8 @@ import {
   type FormattingPanelMode,
   ZOOM_MIN_PCT,
   ZOOM_MAX_PCT,
-  CHROME_SCALE_MIN_PCT,
-  CHROME_SCALE_MAX_PCT,
+  sanitizeChromeScale,
+  sanitizeNavTextScale,
   migrateAutoUpdateOptOut, migrateDistinguishShadingDefault, migrateHighSchoolTimerDefault, migrateWorkspaceOnByDefault, effectiveDocTypeFormat } from './settings.js';
 import { openSaveAs, type SaveAsResult } from './save-as-ui.js';
 import { buildPrintHtml, printHtmlInBrowser } from './pdf-export.js';
@@ -381,6 +381,13 @@ import { wireWebEditionHeaderButtons } from './web-download.js';
 import { computeSelectionChrome, type SelectionChrome } from './selection-chrome.js';
 import { formatSpeechFilename } from './speech-filename.js';
 import { isBackdropClick } from './backdrop-click.js';
+import {
+  trackNavHover,
+  isPointerOverNav,
+  stepNavTextScale,
+  resetNavTextScale,
+  handleNavWheel,
+} from './nav-text-size.js';
 
 // Install the last-resort error hooks before ANY app wiring — an exception
 // during boot or in a fire-and-forget flow must never be invisible again.
@@ -2281,12 +2288,17 @@ const ribbonContext: RibbonContext = {
     if (!view) return;
     openImagePicker(view);
   },
-  zoomIn: () => zoomActiveBy(10),
-  zoomOut: () => zoomActiveBy(-10),
-  zoomReset: () => zoomActiveReset(),
+  // With the pointer over the nav pane, the zoom chords resize the nav
+  // text instead of the document (xtgg).
+  zoomIn: () => (isPointerOverNav() ? stepNavTextScale(1) : zoomActiveBy(10)),
+  zoomOut: () => (isPointerOverNav() ? stepNavTextScale(-1) : zoomActiveBy(-10)),
+  zoomReset: () => (isPointerOverNav() ? resetNavTextScale() : zoomActiveReset()),
   chromeScaleUp: () => setChromeScale(settings.get('chromeScalePct') + 10),
   chromeScaleDown: () => setChromeScale(settings.get('chromeScalePct') - 10),
   chromeScaleReset: () => setChromeScale(100),
+  navTextBigger: () => stepNavTextScale(1),
+  navTextSmaller: () => stepNavTextScale(-1),
+  navTextReset: () => resetNavTextScale(),
   togglePaintbrushHighlight: () => {
     if (!view) return;
     colorPanel?.togglePaintbrush('highlight');
@@ -3206,6 +3218,8 @@ const GESTURE_ZOOM_THRESHOLD = 40; // delta units per 10% step
 window.addEventListener(
   'wheel',
   (e: WheelEvent) => {
+    // ⌘/Ctrl+scroll over the nav pane resizes its text, not the document.
+    if (handleNavWheel(e)) return;
     if (!e.ctrlKey || !settings.get('gestureZoom')) return;
     e.preventDefault();
     gestureZoomAccum += e.deltaY;
@@ -3444,7 +3458,8 @@ function updateZoomStatus(pct: number): void {
 /** Apply body zoom to a SPECIFIC editor surface — multi-pane uses this per pane
  *  so panes don't share the window-level `--editor-zoom` var. */
 export function applyZoomToTarget(editorEl: HTMLElement, pct: number): void {
-  editorEl.style.zoom = String(pct / 100);
+  // Divided by the interface size, like the stylesheet's #editor rule.
+  editorEl.style.zoom = `calc(${pct / 100} / var(--ui-scale, 1))`;
 }
 
 /** Replace the resolver behind the status-bar zoom readout. The multi-pane shell
@@ -3604,18 +3619,18 @@ function zoomActiveReset(): void {
  *  Ctrl-+ does (chrome + doc reflow uniformly). No-op on the web
  *  edition; the user has the browser's own zoom for that. */
 function setChromeScale(pct: number): void {
-  const clamped = Math.max(
-    CHROME_SCALE_MIN_PCT,
-    Math.min(CHROME_SCALE_MAX_PCT, Math.round(pct / 10) * 10),
-  );
-  settings.set('chromeScalePct', clamped);
+  settings.set('chromeScalePct', sanitizeChromeScale(pct));
 }
 
+/** Interface size: zoom the whole window, then divide the document's zoom
+ *  by the same factor (`--ui-scale`, read by the editor `zoom` rules and
+ *  `applyZoomToTarget`) so only the chrome changes size (xtgg). */
 function applyChromeScale(pct: number): void {
   const host = getElectronHost();
   if (!host) return;
   try {
     host.setZoomFactor(pct / 100);
+    document.documentElement.style.setProperty('--ui-scale', String(pct / 100));
   } catch (err) {
     console.warn('setZoomFactor failed:', err);
   }
@@ -4525,6 +4540,7 @@ applyReadMode(settings.get('readMode'));
 liveZoomPct = clampZoom(settings.get('defaultZoomPct'));
 applyZoom(liveZoomPct);
 applyChromeScale(settings.get('chromeScalePct'));
+trackNavHover();
 applyDisplaySizes(settings.get('displaySizes'));
 applyDisplayTypography(settings.get('displayTypography'));
 applyUnderlineFollowsFontColor(settings.get('underlineFollowsFontColor'));
@@ -4639,6 +4655,13 @@ const VIEWLESS_RIBBON_COMMANDS = new Set<AnyCommandId>([
   'zoomIn',
   'zoomOut',
   'zoomReset',
+  // Interface size and nav text size are settings too.
+  'chromeScaleUp',
+  'chromeScaleDown',
+  'chromeScaleReset',
+  'navTextBigger',
+  'navTextSmaller',
+  'navTextReset',
   // Toggling the nav-pane visibility only flips a transient
   // setting + body class; works without an active doc.
   'toggleNavPane',
@@ -4703,6 +4726,12 @@ function runViewlessRibbon(id: AnyCommandId): void {
     case 'zoomIn': ribbonContext.zoomIn(); return;
     case 'zoomOut': ribbonContext.zoomOut(); return;
     case 'zoomReset': ribbonContext.zoomReset(); return;
+    case 'chromeScaleUp': ribbonContext.chromeScaleUp(); return;
+    case 'chromeScaleDown': ribbonContext.chromeScaleDown(); return;
+    case 'chromeScaleReset': ribbonContext.chromeScaleReset(); return;
+    case 'navTextBigger': ribbonContext.navTextBigger(); return;
+    case 'navTextSmaller': ribbonContext.navTextSmaller(); return;
+    case 'navTextReset': ribbonContext.navTextReset(); return;
     case 'resetDefaultColors': ribbonContext.resetDefaultColors(); return;
     case 'toggleNavPane': ribbonContext.toggleNavPane(); return;
     case 'searchNavPane': ribbonContext.searchNavPane(); return;
@@ -9818,6 +9847,9 @@ const NATIVE_MENU_COMMANDS: RibbonCommandId[] = [
   'chromeScaleReset',
   'chromeScaleUp',
   'chromeScaleDown',
+  'navTextBigger',
+  'navTextSmaller',
+  'navTextReset',
   // Window
   'minimizeWindow',
   // Help

@@ -1037,15 +1037,14 @@ export interface Settings {
    *  resets to this default on reload, so different documents can sit at
    *  different zooms. Only this default persists and syncs. */
   defaultZoomPct: number;
-  /** Chrome (page) zoom for the whole window, as a percentage
-   *  (50–300, step 10). Wired to Chromium's `webFrame.setZoom-
-   *  Factor` on Electron, which reflows the page exactly the
-   *  way the browser's built-in Ctrl-+ chord does — chrome AND
-   *  doc content both scale uniformly. Stacks multiplicatively
-   *  with the body zoom: if the doc looks too big at a higher
-   *  chromeScalePct, dial the body zoom down to compensate. Unlike
-   *  body zoom, chrome scale stays linked across windows. No-op
-   *  on the web edition (use the browser's own page-zoom). */
+  /** Interface size: zoom for everything but the document, as a
+   *  percentage (50–300, step 5). Wired to Chromium's `webFrame.set-
+   *  ZoomFactor` on Electron, which reflows the page the way the
+   *  browser's built-in Ctrl-+ chord does; the document's own zoom is
+   *  divided by the same factor (`--ui-scale`), so the ribbon, nav,
+   *  menus, dialogs and status bar change size while the document
+   *  keeps its body zoom (xtgg). Stays linked across windows. No-op on
+   *  the web edition (use the browser's own page-zoom). */
   chromeScalePct: number;
   /** Zoom the editor with a trackpad pinch or Ctrl+mouse-wheel. Off by
    *  default. Both gestures arrive as the same event (Chromium delivers a
@@ -1186,7 +1185,7 @@ export interface Settings {
   /** Ribbon button size, percent of normal (one of RIBBON_SCALES). The
    *  whole ribbon scales; panels that no longer fit hide as usual. */
   ribbonScale: number;
-  /** Nav pane (outline) text size, percent of normal (one of NAV_TEXT_SCALES). */
+  /** Nav pane (outline) text size, percent of normal (NAV_TEXT_SCALE_MIN–MAX, step 5). */
   navTextScale: number;
   /** Whether the cross-window dropzone pill (the floating shelf in
    *  the editor's bottom-left corner) is visible. The shelf state still
@@ -2294,6 +2293,7 @@ export interface SettingMeta {
     | 'arrangeSpeechSide'
     | 'ribbonScale'
     | 'navTextScale'
+    | 'chromeScale'
     | 'password'
     | 'voiceInputDevice'
     | 'voiceDashStyle'
@@ -3416,10 +3416,20 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     aliases: ['bigger buttons', 'larger buttons', 'button size', 'ribbon size', 'toolbar size', 'icon size', 'scale ribbon'],
   },
   {
+    key: 'chromeScalePct',
+    label: 'Interface size',
+    description:
+      'Makes everything except the document bigger or smaller: the ribbon, nav pane, menus, dialogs and status bar. The document keeps its own zoom (the status bar zoom). Also \u2318/Ctrl+Alt + / \u2212 / 0 (rebindable in Shortcuts). Desktop app only; on the web use the browser\u2019s zoom.',
+    kind: 'chromeScale',
+    category: 'appearance',
+    section: 'Theme & chrome',
+    aliases: ['interface size', 'ui size', 'ui scale', 'app text size', 'menu text size', 'chrome scale', 'bigger interface', 'text size', 'font size interface'],
+  },
+  {
     key: 'navTextScale',
     label: 'Nav pane text size',
     description:
-      'Makes the headings in the navigation pane (the outline on the left) smaller or bigger. The document itself isn\u2019t affected \u2014 use the zoom in the status bar for that.',
+      'Makes the headings in the navigation pane (the outline on the left) smaller or bigger, on top of the interface size. Quicker ways: hold \u2318/Ctrl and scroll over the nav pane, press \u2318/Ctrl + or \u2212 with the pointer over it (0 resets), or right-click the nav pane \u2192 Text size. The document itself isn\u2019t affected.',
     kind: 'navTextScale',
     category: 'appearance',
     section: 'Theme & chrome',
@@ -5219,7 +5229,7 @@ function sanitize(s: Settings): Settings {
     // A legacy persisted `zoomPct` is deliberately ignored — live body
     // zoom is transient; documents open at this default.
     defaultZoomPct: clamp(Math.round(s.defaultZoomPct / 10) * 10, ZOOM_MIN_PCT, ZOOM_MAX_PCT),
-    chromeScalePct: clamp(Math.round(s.chromeScalePct / 10) * 10, CHROME_SCALE_MIN_PCT, CHROME_SCALE_MAX_PCT),
+    chromeScalePct: sanitizeChromeScale(s.chromeScalePct),
     gestureZoom: !!s.gestureZoom,
     readers: sanitizeReaders(s.readers),
     liveSelectionWordCount: s.liveSelectionWordCount === true,
@@ -6109,13 +6119,26 @@ function sanitizeUiFont(raw: unknown): string {
   return raw.replace(/["',]/g, '').trim();
 }
 
-/** The nav pane text sizes offered in Settings, percent of normal. */
-export const NAV_TEXT_SCALES = [85, 100, 115, 130, 150] as const;
+/** Nav pane text size range, percent of normal, in NAV_TEXT_SCALE_STEP steps. */
+export const NAV_TEXT_SCALE_MIN = 70;
+export const NAV_TEXT_SCALE_MAX = 200;
+export const NAV_TEXT_SCALE_STEP = 5;
 
-/** Snap a stored nav text size to the nearest offered one (100 if junk). */
+/** Clamp a stored nav text size to the range, on a 5% step (100 if junk). */
 export function sanitizeNavTextScale(v: unknown): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) return 100;
-  return NAV_TEXT_SCALES.reduce((best, n) => (Math.abs(n - v) < Math.abs(best - v) ? n : best), 100);
+  const stepped = Math.round(v / NAV_TEXT_SCALE_STEP) * NAV_TEXT_SCALE_STEP;
+  return Math.max(NAV_TEXT_SCALE_MIN, Math.min(NAV_TEXT_SCALE_MAX, stepped));
+}
+
+/** Interface size steps on a 5% grid (the keyboard chord moves 10%). */
+export const CHROME_SCALE_STEP = 5;
+
+/** Clamp a stored interface size to the range, on a 5% step (100 if junk). */
+export function sanitizeChromeScale(v: unknown): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return 100;
+  const stepped = Math.round(v / CHROME_SCALE_STEP) * CHROME_SCALE_STEP;
+  return Math.max(CHROME_SCALE_MIN_PCT, Math.min(CHROME_SCALE_MAX_PCT, stepped));
 }
 
 /** The ribbon sizes offered in Settings, percent of normal. */

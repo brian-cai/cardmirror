@@ -45,7 +45,12 @@ import {
   type RibbonCustomButton,
   MAX_RIBBON_CUSTOM_BUTTONS,
   RIBBON_SCALES,
-  NAV_TEXT_SCALES,
+  NAV_TEXT_SCALE_MIN,
+  NAV_TEXT_SCALE_MAX,
+  NAV_TEXT_SCALE_STEP,
+  CHROME_SCALE_MIN_PCT,
+  CHROME_SCALE_MAX_PCT,
+  CHROME_SCALE_STEP,
   condenseWarningCloseFor,
   NUMBERING_SEPARATORS,
   type NumberingSeparator,
@@ -1268,7 +1273,13 @@ class SettingsModal {
     } else if (meta.kind === 'navTextScale') {
       row.appendChild(text);
       row.appendChild(
-        buildScaleEditor('navTextScale', NAV_TEXT_SCALES, { 85: 'Smaller', 100: 'Normal', 115: 'Large', 130: 'Larger', 150: 'Largest' }),
+        buildPercentSlider('navTextScale', NAV_TEXT_SCALE_MIN, NAV_TEXT_SCALE_MAX, NAV_TEXT_SCALE_STEP, 'Nav pane text size'),
+      );
+      return row;
+    } else if (meta.kind === 'chromeScale') {
+      row.appendChild(text);
+      row.appendChild(
+        buildPercentSlider('chromeScalePct', CHROME_SCALE_MIN_PCT, CHROME_SCALE_MAX_PCT, CHROME_SCALE_STEP, 'Interface size'),
       );
       return row;
     } else if (meta.kind === 'colorOverrides') {
@@ -5596,7 +5607,7 @@ function buildArrangeSpeechSideEditor(): HTMLElement {
 /** Segmented control for a percent size setting (ribbon buttons, nav
  *  pane text): one button per offered size. */
 function buildScaleEditor(
-  key: 'ribbonScale' | 'navTextScale',
+  key: 'ribbonScale',
   values: readonly number[],
   labels: Record<number, string>,
 ): HTMLElement {
@@ -5617,6 +5628,46 @@ function buildScaleEditor(
     for (const btn of wrap.querySelectorAll<HTMLButtonElement>('.pmd-theme-editor-btn')) {
       btn.setAttribute('aria-pressed', btn.dataset['value'] === cur ? 'true' : 'false');
     }
+  }
+  refresh();
+  const unsub = settings.subscribe(refresh);
+  registerRowCleanup(wrap, () => unsub());
+  return wrap;
+}
+
+/** Slider for a percent size setting (nav pane text, interface size), with
+ *  the current value and a reset to 100%. Dragging previews live; the value
+ *  is saved on every step, like the other appearance controls. */
+function buildPercentSlider(
+  key: 'navTextScale' | 'chromeScalePct',
+  min: number,
+  max: number,
+  step: number,
+  label: string,
+): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'pmd-percent-slider';
+  const range = document.createElement('input');
+  range.type = 'range';
+  range.min = String(min);
+  range.max = String(max);
+  range.step = String(step);
+  range.setAttribute('aria-label', label);
+  const value = document.createElement('span');
+  value.className = 'pmd-percent-slider-value';
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'pmd-theme-editor-btn';
+  reset.textContent = 'Reset';
+  reset.title = 'Back to 100%';
+  range.addEventListener('input', () => settings.set(key, Number(range.value)));
+  reset.addEventListener('click', () => settings.set(key, 100));
+  wrap.append(range, value, reset);
+  function refresh(): void {
+    const cur = settings.get(key);
+    range.value = String(cur);
+    value.textContent = `${cur}%`;
+    reset.disabled = cur === 100;
   }
   refresh();
   const unsub = settings.subscribe(refresh);

@@ -16,6 +16,7 @@ import { type Node as PMNode } from 'prosemirror-model';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { type Mappable } from 'prosemirror-transform';
 import { settings, SETTINGS_DEFAULTS } from './settings.js';
+import { stepNavTextScale, resetNavTextScale } from './nav-text-size.js';
 import { CLIPBOARD_BUSY_MESSAGE, writeClipboardHtml } from './clipboard-write.js';
 import { isCutInPlaceDoc, markCutInPlace } from './cut-in-place.js';
 import { showToast } from './toast.js';
@@ -578,6 +579,7 @@ export class NavigationPanel {
     this.emptyEl.className = 'pmd-nav-empty';
     this.emptyEl.textContent = 'No headings.';
     this.root.appendChild(this.emptyEl);
+    this.root.addEventListener('contextmenu', (e) => this.onPaneContextMenu(e));
 
 
     this.installResizeHandle();
@@ -2719,41 +2721,22 @@ export class NavigationPanel {
         action: () => this.setMaxLevel(lvl),
       })),
     ];
+    // Search results keep their short menu: nothing but Select and Copy.
+    if (!this.searchResultsShown()) items.push({ kind: 'separator' }, ...navTextSizeItems());
+    showNavContextMenu(menu, x, y, items);
+  }
 
-    for (const item of items) {
-      if (item.kind === 'separator') {
-        const sep = document.createElement('div');
-        sep.className = 'pmd-nav-context-separator';
-        menu.appendChild(sep);
-        continue;
-      }
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'pmd-nav-context-item';
-      if (item.checked) btn.classList.add('pmd-nav-context-item-checked');
-      btn.textContent = item.label;
-      btn.addEventListener('click', () => {
-        item.action();
-        closeAnyOpenContextMenu();
-      });
-      menu.appendChild(btn);
-    }
-
-    document.body.appendChild(menu);
-
-    // Position the menu, clamping to viewport.
-    const rect = menu.getBoundingClientRect();
-    const maxX = window.innerWidth - rect.width - 4;
-    const maxY = window.innerHeight - rect.height - 4;
-    menu.style.left = `${Math.min(x, Math.max(0, maxX))}px`;
-    menu.style.top = `${Math.min(y, Math.max(0, maxY))}px`;
-
-    openContextMenuEl = menu;
-    registerOpenContextMenu(closeAnyOpenContextMenu);
-    setTimeout(() => {
-      window.addEventListener('mousedown', maybeCloseContextMenu, { capture: true });
-      window.addEventListener('keydown', maybeCloseContextMenu, { capture: true });
-    });
+  /** Right-click on the nav pane outside a heading row (the header, the
+   *  blank space under the rows): just the pane's text size. */
+  private onPaneContextMenu(e: MouseEvent): void {
+    if (e.defaultPrevented) return; // a heading row opened its own menu
+    if ((e.target as Element | null)?.closest?.('input, textarea')) return;
+    e.preventDefault();
+    if (!isRightClickContextMenu(e) || isMobileShellActive()) return;
+    closeAnyOpenContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'pmd-nav-context-menu';
+    showNavContextMenu(menu, e.clientX, e.clientY, navTextSizeItems());
   }
 
   /**
@@ -3149,6 +3132,61 @@ interface ContextMenuItemBase {
 }
 interface ContextMenuSeparator { kind: 'separator' }
 type ContextMenuItem = ContextMenuItemBase | ContextMenuSeparator;
+
+/** The nav right-click menu's Text size section (xtgg). */
+function navTextSizeItems(): ContextMenuItem[] {
+  const pct = settings.get('navTextScale');
+  const items: ContextMenuItem[] = [
+    { kind: 'item', label: `Text size: bigger (now ${pct}%)`, action: () => stepNavTextScale(1) },
+    { kind: 'item', label: 'Text size: smaller', action: () => stepNavTextScale(-1) },
+  ];
+  if (pct !== 100) items.push({ kind: 'item', label: 'Text size: reset to 100%', action: () => resetNavTextScale() });
+  items.push({
+    kind: 'item',
+    label: 'Text size settings\u2026',
+    action: () => void import('./settings-ui.js').then((m) => m.openSettings({ settingKey: 'navTextScale' })),
+  });
+  return items;
+}
+
+/** Fill `menu` with `items`, place it at (x, y) clamped to the viewport,
+ *  and arm the close-on-outside-click / key handlers. */
+function showNavContextMenu(menu: HTMLElement, x: number, y: number, items: ContextMenuItem[]): void {
+  for (const item of items) {
+    if (item.kind === 'separator') {
+      const sep = document.createElement('div');
+      sep.className = 'pmd-nav-context-separator';
+      menu.appendChild(sep);
+      continue;
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pmd-nav-context-item';
+    if (item.checked) btn.classList.add('pmd-nav-context-item-checked');
+    btn.textContent = item.label;
+    btn.addEventListener('click', () => {
+      item.action();
+      closeAnyOpenContextMenu();
+    });
+    menu.appendChild(btn);
+  }
+
+  document.body.appendChild(menu);
+
+  // Position the menu, clamping to viewport.
+  const rect = menu.getBoundingClientRect();
+  const maxX = window.innerWidth - rect.width - 4;
+  const maxY = window.innerHeight - rect.height - 4;
+  menu.style.left = `${Math.min(x, Math.max(0, maxX))}px`;
+  menu.style.top = `${Math.min(y, Math.max(0, maxY))}px`;
+
+  openContextMenuEl = menu;
+  registerOpenContextMenu(closeAnyOpenContextMenu);
+  setTimeout(() => {
+    window.addEventListener('mousedown', maybeCloseContextMenu, { capture: true });
+    window.addEventListener('keydown', maybeCloseContextMenu, { capture: true });
+  });
+}
 
 let openContextMenuEl: HTMLElement | null = null;
 

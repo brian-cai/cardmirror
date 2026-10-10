@@ -221,6 +221,9 @@ export const RIBBON_GROUPS: RibbonGroup[] = [
       'chromeScaleUp',
       'chromeScaleDown',
       'chromeScaleReset',
+      'navTextBigger',
+      'navTextSmaller',
+      'navTextReset',
     ],
   },
   {

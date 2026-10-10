@@ -4702,6 +4702,9 @@ export type RibbonCommandId =
   | 'chromeScaleUp'
   | 'chromeScaleDown'
   | 'chromeScaleReset'
+  | 'navTextBigger'
+  | 'navTextSmaller'
+  | 'navTextReset'
   | 'togglePaintbrushHighlight'
   | 'togglePaintbrushShading'
   | 'openFind'
@@ -4966,6 +4969,9 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'chromeScaleUp',
   'chromeScaleDown',
   'chromeScaleReset',
+  'navTextBigger',
+  'navTextSmaller',
+  'navTextReset',
   'togglePaintbrushHighlight',
   'togglePaintbrushShading',
   'openFind',
@@ -5179,9 +5185,12 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   zoomIn: 'Zoom In',
   zoomOut: 'Zoom Out',
   zoomReset: 'Reset Zoom to 100%',
-  chromeScaleUp: 'Chrome Scale Up',
-  chromeScaleDown: 'Chrome Scale Down',
-  chromeScaleReset: 'Reset Chrome Scale to 100%',
+  chromeScaleUp: 'Interface Size Up',
+  chromeScaleDown: 'Interface Size Down',
+  chromeScaleReset: 'Reset Interface Size to 100%',
+  navTextBigger: 'Nav Pane Text Bigger',
+  navTextSmaller: 'Nav Pane Text Smaller',
+  navTextReset: 'Reset Nav Pane Text Size to 100%',
   togglePaintbrushHighlight: 'Toggle Highlight Paint Mode',
   togglePaintbrushShading: 'Toggle Background-Color Paint Mode',
   openFind: 'Find',
@@ -5619,6 +5628,10 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   chromeScaleUp: 'Mod-Alt-=',
   chromeScaleDown: 'Mod-Alt--',
   chromeScaleReset: 'Mod-Alt-0',
+  // Unbound: the zoom chords resize the nav while the pointer is over it.
+  navTextBigger: '',
+  navTextSmaller: '',
+  navTextReset: '',
   // Paintbrush toggles — no obvious convention here, so register
   // them in the keybinding registry without a default. Users who
   // want a hotkey for sticky highlight / shading can bind one in
@@ -5897,14 +5910,18 @@ export interface RibbonContext {
   zoomIn: () => void;
   zoomOut: () => void;
   zoomReset: () => void;
-  /** Chrome scale — page-zoom analog of the editor zoom above.
-   *  Bumps the persisted `chromeScalePct` setting (50–300, step
-   *  10); on Electron this propagates to Chromium's
-   *  `webFrame.setZoomFactor` so the whole page (chrome + doc)
-   *  reflows at the new factor. No-op on the web edition. */
+  /** Interface size — bumps the persisted `chromeScalePct` setting
+   *  (50–300); on Electron this sets Chromium's `webFrame.setZoomFactor`
+   *  and divides the document zoom by the same factor, so everything but
+   *  the document reflows at the new size. No-op on the web edition. */
   chromeScaleUp: () => void;
   chromeScaleDown: () => void;
   chromeScaleReset: () => void;
+  /** Nav pane text size (`navTextScale`), 5% a step. Unbound by default:
+   *  the zoom chords already resize the nav while the pointer is over it. */
+  navTextBigger: () => void;
+  navTextSmaller: () => void;
+  navTextReset: () => void;
   /** Paint-mode toggles for highlight / background-color. Mirror
    *  what clicking the ribbon's main color button does when the
    *  selection is empty (arming sticky paint until the next click
@@ -6072,6 +6089,9 @@ const DEFAULT_RIBBON_CONTEXT: RibbonContext = {
   chromeScaleUp: () => {},
   chromeScaleDown: () => {},
   chromeScaleReset: () => {},
+  navTextBigger: () => {},
+  navTextSmaller: () => {},
+  navTextReset: () => {},
   togglePaintbrushHighlight: () => {},
   togglePaintbrushShading: () => {},
   openFind: () => {},
@@ -6885,6 +6905,24 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
       return (_state, dispatch) => {
         if (!dispatch) return true;
         ctx.chromeScaleReset();
+        return true;
+      };
+    case 'navTextBigger':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.navTextBigger();
+        return true;
+      };
+    case 'navTextSmaller':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.navTextSmaller();
+        return true;
+      };
+    case 'navTextReset':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.navTextReset();
         return true;
       };
     case 'togglePaintbrushHighlight':
