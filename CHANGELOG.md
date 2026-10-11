@@ -5,6 +5,29 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.3 — 2026-10-11
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Interface size.** Settings → Theme & chrome → "Interface size"
+  (50–300%) makes the ribbon, nav pane, menus, dialogs and status bar
+  bigger or smaller without changing the document's zoom. ⌘⌥ + / − / 0
+  (Ctrl+Alt on Windows) also change it; they no longer enlarge the
+  document along with it. Desktop app only.
+- **Easier nav pane text size.** Hold ⌘/Ctrl and scroll over the nav
+  pane, or press ⌘/Ctrl + / − with the pointer over it (0 resets).
+  Right-click a nav heading or empty nav space for a Text size section.
+  The setting is now a slider (70–200%, 5% steps) with a Reset button,
+  and the size you pick anywhere is kept. Nav Pane Text Bigger / Smaller
+  / Reset can be given keys under Shortcuts → Zoom & scale.
+- **Turn off scroll resizing.** Settings → Editor behavior →
+  "⌘/Ctrl+Scroll over the nav pane resizes its text" (on by default).
+  The document scroll-zoom toggle is renamed "Pinch / Ctrl+Scroll to
+  zoom the document".
+
 ## 1.15.2 — 2026-10-07
 
 BCai's (@brian-cai) build of CardMirror, updating from
