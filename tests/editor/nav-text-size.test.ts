@@ -23,6 +23,7 @@ describe('⌘/Ctrl+wheel over the nav pane', () => {
     editor = document.createElement('div');
     document.body.append(nav, editor);
     settings.set('navTextScale', 100);
+    settings.set('navScrollResize', true);
   });
 
   it('resizes the nav text, one 5% step per notch, and claims the event', () => {
@@ -40,5 +41,13 @@ describe('⌘/Ctrl+wheel over the nav pane', () => {
     expect(settings.get('navTextScale')).toBe(100);
     expect(isInNav(row)).toBe(true);
     expect(isInNav(editor)).toBe(false);
+  });
+
+  it('resizes nothing when turned off in Settings', () => {
+    settings.set('navScrollResize', false);
+    const e = wheel(row, -80, { metaKey: true });
+    expect(handleNavWheel(e)).toBe(true); // still kept from zooming the document
+    expect(e.defaultPrevented).toBe(false);
+    expect(settings.get('navTextScale')).toBe(100);
   });
 });

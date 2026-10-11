@@ -1052,6 +1052,10 @@ export interface Settings {
    *  governs both. Adjusts the live body zoom, in 10% steps, and
    *  suppresses Chromium's own native page-zoom on the gesture. */
   gestureZoom: boolean;
+  /** ⌘/Ctrl+scroll (or a pinch) over the nav pane resizes its text (xtgg).
+   *  On by default; off leaves the nav text size to Settings, the nav
+   *  right-click menu and the keys. */
+  navScrollResize: boolean;
   /**
    * Readers used for read-time estimates. The full list shows up in the
    * Word Count Selection function (Ctrl+F11). The first two readers are
@@ -1973,6 +1977,7 @@ const DEFAULTS: Settings = {
   defaultZoomPct: 100,
   chromeScalePct: 100,
   gestureZoom: false,
+  navScrollResize: true,
   readers: [
     { name: 'Reader 1', wpm: 200 },
     { name: 'Reader 2', wpm: 250 },
@@ -2560,13 +2565,23 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
   },
   {
     key: 'gestureZoom',
-    label: 'Pinch / Ctrl+Scroll to zoom',
+    label: 'Pinch / Ctrl+Scroll to zoom the document',
     description:
       'Zoom the document with a trackpad pinch or Ctrl + mouse-wheel (in 10% steps, same as the zoom buttons and Ctrl-= / Ctrl-- chords). Off by default; enable for pinch / Ctrl-scroll zooming.',
     kind: 'toggle',
     category: 'general',
     section: 'Editor behavior',
     aliases: ['gesture zoom', 'pinch zoom', 'ctrl scroll', 'wheel zoom', 'trackpad zoom'],
+  },
+  {
+    key: 'navScrollResize',
+    label: '\u2318/Ctrl+Scroll over the nav pane resizes its text',
+    description:
+      'Hold \u2318/Ctrl and scroll (or pinch) over the navigation pane to make its text bigger or smaller. Turn off if it changes size by accident; Settings \u2192 Nav pane text size, the nav right-click menu and \u2318/Ctrl \u00b1 still work.',
+    kind: 'toggle',
+    category: 'general',
+    section: 'Editor behavior',
+    aliases: ['nav scroll', 'scroll resize', 'ctrl scroll', 'cmd scroll', 'scroll zoom', 'nav text size', 'disable scroll zoom'],
   },
   {
     key: 'jumpToDocTopOnReadModeToggle',
@@ -3429,7 +3444,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'navTextScale',
     label: 'Nav pane text size',
     description:
-      'Makes the headings in the navigation pane (the outline on the left) smaller or bigger, on top of the interface size. Quicker ways: hold \u2318/Ctrl and scroll over the nav pane, press \u2318/Ctrl + or \u2212 with the pointer over it (0 resets), or right-click the nav pane \u2192 Text size. The document itself isn\u2019t affected.',
+      'Makes the headings in the navigation pane (the outline on the left) smaller or bigger, on top of the interface size. Quicker ways: hold \u2318/Ctrl and scroll over the nav pane (can be turned off under Editor behavior), press \u2318/Ctrl + or \u2212 with the pointer over it (0 resets), or right-click the nav pane \u2192 Text size. The document itself isn\u2019t affected.',
     kind: 'navTextScale',
     category: 'appearance',
     section: 'Theme & chrome',
@@ -5231,6 +5246,7 @@ function sanitize(s: Settings): Settings {
     defaultZoomPct: clamp(Math.round(s.defaultZoomPct / 10) * 10, ZOOM_MIN_PCT, ZOOM_MAX_PCT),
     chromeScalePct: sanitizeChromeScale(s.chromeScalePct),
     gestureZoom: !!s.gestureZoom,
+    navScrollResize: s.navScrollResize !== false,
     readers: sanitizeReaders(s.readers),
     liveSelectionWordCount: s.liveSelectionWordCount === true,
     liveDocWordCount: s.liveDocWordCount === false ? false : true,

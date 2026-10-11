@@ -54,9 +54,13 @@ const WHEEL_THRESHOLD = 40;
 let wheelAccum = 0;
 
 /** Handle a ⌘/Ctrl+wheel (or trackpad pinch) over the nav pane. Returns
- *  whether it was one — the caller then skips the document zoom. */
+ *  whether it was one — the caller then skips the document zoom. Off
+ *  (`navScrollResize`), it resizes nothing. */
 export function handleNavWheel(e: WheelEvent): boolean {
   if (!(e.ctrlKey || e.metaKey) || !isInNav(e.target)) return false;
+  // Turned off: still claim it so the document doesn't zoom from the nav,
+  // but let it scroll the nav as a plain wheel.
+  if (!settings.get('navScrollResize')) return true;
   e.preventDefault();
   wheelAccum += e.deltaY;
   let steps = 0;
