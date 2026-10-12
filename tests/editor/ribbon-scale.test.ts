@@ -25,11 +25,12 @@ describe('ribbon button size setting', () => {
 });
 
 describe('nav pane text size setting', () => {
-  it('defaults to normal and clamps to 70–200% on a 5% step', async () => {
+  it('defaults to normal and clamps to 70–200% as a whole percent', async () => {
     const { sanitizeNavTextScale } = await import('../../src/editor/settings.js');
     expect(settings.get('navTextScale')).toBe(100);
     expect(sanitizeNavTextScale(85)).toBe(85);
-    expect(sanitizeNavTextScale(137)).toBe(135);
+    expect(sanitizeNavTextScale(137)).toBe(137);
+    expect(sanitizeNavTextScale(92.6)).toBe(93);
     expect(sanitizeNavTextScale(10)).toBe(70);
     expect(sanitizeNavTextScale(500)).toBe(200);
     expect(sanitizeNavTextScale(null)).toBe(100);
@@ -38,9 +39,11 @@ describe('nav pane text size setting', () => {
 });
 
 describe('interface size setting', () => {
-  it('is an Appearance row that clamps to 50–300% on a 5% step', async () => {
+  it('is an Appearance row that clamps to 50–300% as a whole percent', async () => {
     const { sanitizeChromeScale } = await import('../../src/editor/settings.js');
-    expect(sanitizeChromeScale(112)).toBe(110);
+    expect(sanitizeChromeScale(112)).toBe(112);
+    expect(sanitizeChromeScale(112.4)).toBe(112);
+    expect(sanitizeChromeScale(20)).toBe(50);
     expect(sanitizeChromeScale(1000)).toBe(300);
     expect(sanitizeChromeScale('x')).toBe(100);
     expect(SETTING_METADATA.find((m) => m.key === 'chromeScalePct')?.category).toBe('appearance');

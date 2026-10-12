@@ -1038,7 +1038,7 @@ export interface Settings {
    *  different zooms. Only this default persists and syncs. */
   defaultZoomPct: number;
   /** Interface size: zoom for everything but the document, as a
-   *  percentage (50–300, step 5). Wired to Chromium's `webFrame.set-
+   *  percentage (50–300). Wired to Chromium's `webFrame.set-
    *  ZoomFactor` on Electron, which reflows the page the way the
    *  browser's built-in Ctrl-+ chord does; the document's own zoom is
    *  divided by the same factor (`--ui-scale`), so the ribbon, nav,
@@ -1189,7 +1189,7 @@ export interface Settings {
   /** Ribbon button size, percent of normal (one of RIBBON_SCALES). The
    *  whole ribbon scales; panels that no longer fit hide as usual. */
   ribbonScale: number;
-  /** Nav pane (outline) text size, percent of normal (NAV_TEXT_SCALE_MIN–MAX, step 5). */
+  /** Nav pane (outline) text size, percent of normal (NAV_TEXT_SCALE_MIN–MAX). */
   navTextScale: number;
   /** Whether the cross-window dropzone pill (the floating shelf in
    *  the editor's bottom-left corner) is visible. The shelf state still
@@ -6135,26 +6135,26 @@ function sanitizeUiFont(raw: unknown): string {
   return raw.replace(/["',]/g, '').trim();
 }
 
-/** Nav pane text size range, percent of normal, in NAV_TEXT_SCALE_STEP steps. */
+/** Nav pane text size range, percent of normal; the slider and chords move NAV_TEXT_SCALE_STEP. */
 export const NAV_TEXT_SCALE_MIN = 70;
 export const NAV_TEXT_SCALE_MAX = 200;
 export const NAV_TEXT_SCALE_STEP = 5;
 
-/** Clamp a stored nav text size to the range, on a 5% step (100 if junk). */
+/** Clamp a stored nav text size to the range, as a whole percent (100 if
+ *  junk). The slider and chords move 5%; a typed value can be any percent. */
 export function sanitizeNavTextScale(v: unknown): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) return 100;
-  const stepped = Math.round(v / NAV_TEXT_SCALE_STEP) * NAV_TEXT_SCALE_STEP;
-  return Math.max(NAV_TEXT_SCALE_MIN, Math.min(NAV_TEXT_SCALE_MAX, stepped));
+  return Math.max(NAV_TEXT_SCALE_MIN, Math.min(NAV_TEXT_SCALE_MAX, Math.round(v)));
 }
 
-/** Interface size steps on a 5% grid (the keyboard chord moves 10%). */
+/** The interface size slider moves 5% (the keyboard chord moves 10%). */
 export const CHROME_SCALE_STEP = 5;
 
-/** Clamp a stored interface size to the range, on a 5% step (100 if junk). */
+/** Clamp a stored interface size to the range, as a whole percent (100 if
+ *  junk). A typed value can be any percent. */
 export function sanitizeChromeScale(v: unknown): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) return 100;
-  const stepped = Math.round(v / CHROME_SCALE_STEP) * CHROME_SCALE_STEP;
-  return Math.max(CHROME_SCALE_MIN_PCT, Math.min(CHROME_SCALE_MAX_PCT, stepped));
+  return Math.max(CHROME_SCALE_MIN_PCT, Math.min(CHROME_SCALE_MAX_PCT, Math.round(v)));
 }
 
 /** The ribbon sizes offered in Settings, percent of normal. */

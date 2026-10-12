@@ -48,6 +48,8 @@ import {
   NAV_TEXT_SCALE_MIN,
   NAV_TEXT_SCALE_MAX,
   NAV_TEXT_SCALE_STEP,
+  sanitizeNavTextScale,
+  sanitizeChromeScale,
   CHROME_SCALE_MIN_PCT,
   CHROME_SCALE_MAX_PCT,
   CHROME_SCALE_STEP,
@@ -1273,13 +1275,13 @@ class SettingsModal {
     } else if (meta.kind === 'navTextScale') {
       row.appendChild(text);
       row.appendChild(
-        buildPercentSlider('navTextScale', NAV_TEXT_SCALE_MIN, NAV_TEXT_SCALE_MAX, NAV_TEXT_SCALE_STEP, 'Nav pane text size'),
+        buildPercentSlider('navTextScale', NAV_TEXT_SCALE_MIN, NAV_TEXT_SCALE_MAX, NAV_TEXT_SCALE_STEP, 'Nav pane text size', sanitizeNavTextScale, true),
       );
       return row;
     } else if (meta.kind === 'chromeScale') {
       row.appendChild(text);
       row.appendChild(
-        buildPercentSlider('chromeScalePct', CHROME_SCALE_MIN_PCT, CHROME_SCALE_MAX_PCT, CHROME_SCALE_STEP, 'Interface size'),
+        buildPercentSlider('chromeScalePct', CHROME_SCALE_MIN_PCT, CHROME_SCALE_MAX_PCT, CHROME_SCALE_STEP, 'Interface size', sanitizeChromeScale, false),
       );
       return row;
     } else if (meta.kind === 'colorOverrides') {
@@ -5636,14 +5638,18 @@ function buildScaleEditor(
 }
 
 /** Slider for a percent size setting (nav pane text, interface size), with
- *  the current value and a reset to 100%. Dragging previews live; the value
- *  is saved on every step, like the other appearance controls. */
+ *  a box to type the value and a reset to 100%. With `live`, dragging
+ *  applies each step; without it the drag only moves the number and the
+ *  size is applied on release, so the slider doesn't resize under the
+ *  pointer. A typed value is applied on Enter or when the box loses focus. */
 function buildPercentSlider(
   key: 'navTextScale' | 'chromeScalePct',
   min: number,
   max: number,
   step: number,
   label: string,
+  sanitize: (v: unknown) => number,
+  live: boolean,
 ): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'pmd-percent-slider';
@@ -5653,20 +5659,37 @@ function buildPercentSlider(
   range.max = String(max);
   range.step = String(step);
   range.setAttribute('aria-label', label);
-  const value = document.createElement('span');
-  value.className = 'pmd-percent-slider-value';
+  const box = document.createElement('input');
+  box.type = 'number';
+  box.className = 'pmd-percent-slider-value';
+  box.min = String(min);
+  box.max = String(max);
+  box.step = '1';
+  box.title = `${min}\u2013${max}%. Press Enter to apply.`;
+  box.setAttribute('aria-label', `${label} (percent)`);
+  const unit = document.createElement('span');
+  unit.textContent = '%';
   const reset = document.createElement('button');
   reset.type = 'button';
   reset.className = 'pmd-theme-editor-btn';
   reset.textContent = 'Reset';
   reset.title = 'Back to 100%';
-  range.addEventListener('input', () => settings.set(key, Number(range.value)));
+  range.addEventListener('input', () => {
+    if (live) settings.set(key, Number(range.value));
+    else box.value = range.value;
+  });
+  range.addEventListener('change', () => settings.set(key, Number(range.value)));
+  box.addEventListener('change', () => {
+    if (box.value.trim() !== '') settings.set(key, sanitize(Number(box.value)));
+    // Also puts back a value that was cleared or clamped to what's stored.
+    refresh();
+  });
   reset.addEventListener('click', () => settings.set(key, 100));
-  wrap.append(range, value, reset);
+  wrap.append(range, box, unit, reset);
   function refresh(): void {
     const cur = settings.get(key);
     range.value = String(cur);
-    value.textContent = `${cur}%`;
+    box.value = String(cur);
     reset.disabled = cur === 100;
   }
   refresh();

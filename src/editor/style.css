@@ -3716,9 +3716,18 @@ body.pmd-override-shading [data-shading] {
   width: 10rem;
 }
 .pmd-percent-slider-value {
-  min-width: 3.2em;
+  width: 4.2em;
+  padding: 0.2rem 0.3rem;
   text-align: right;
+  font: inherit;
   font-variant-numeric: tabular-nums;
+  color: var(--pmd-c-text);
+  background: var(--pmd-c-bg);
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 4px;
+}
+.pmd-percent-slider-value + span {
+  margin-left: -0.3rem;
 }
 .pmd-percent-slider .pmd-theme-editor-btn {
   border: 1px solid var(--pmd-c-border);
