@@ -4,6 +4,8 @@
  * Interface size / nav text size rows: the interface slider only moves
  * the number while dragging and applies on release; the box takes a
  * typed percent; the nav text slider still applies as it moves.
+ * Typed numbers elsewhere are held to the range the app enforces on
+ * load, so a value can't apply now and change at the next launch.
  */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
@@ -45,6 +47,11 @@ afterEach(() => {
   closeSettings();
   settings.set('chromeScalePct', 100);
   settings.set('navTextScale', 100);
+  settings.set('timerSoundVolume', 70);
+  settings.set('timerSoundEnabled', false);
+  settings.set('pairingPollSeconds', 30);
+  settings.set('lineHeight', 1.3);
+  settings.set('maxTextWidthPx', 0);
 });
 
 function controls(label: string): { range: HTMLInputElement; box: HTMLInputElement } {
@@ -90,5 +97,50 @@ describe('percent size rows', () => {
     const { range } = controls('Nav pane text size');
     fire(range, '130', 'input');
     expect(settings.get('navTextScale')).toBe(130);
+  });
+});
+
+describe('typed number fields', () => {
+  function rowInput(key: string): HTMLInputElement {
+    const input = document.querySelector<HTMLInputElement>(`[data-setting-key="${key}"] input[type="number"]`);
+    if (!input) throw new Error(`no number field: ${key}`);
+    return input;
+  }
+
+  it('clamps a plain number row to its range', () => {
+    // The volume row only shows while timer sound is on.
+    settings.set('timerSoundEnabled', true);
+    openSettings();
+    const volume = rowInput('timerSoundVolume');
+    fire(volume, '500', 'change');
+    expect(settings.get('timerSoundVolume')).toBe(100);
+    expect(volume.value).toBe('100');
+    const poll = rowInput('pairingPollSeconds');
+    fire(poll, '0', 'change');
+    expect(settings.get('pairingPollSeconds')).toBe(5);
+  });
+
+  it('clamps line spacing to 1–2 in 0.05 steps', () => {
+    openSettings();
+    const input = [...document.querySelectorAll<HTMLInputElement>('.pmd-line-height-input')].find(
+      (el) => el.max === '2.0',
+    )!;
+    fire(input, '9', 'change');
+    expect(settings.get('lineHeight')).toBe(2);
+    expect(input.value).toBe('2');
+    fire(input, '1.27', 'change');
+    expect(settings.get('lineHeight')).toBe(1.25);
+  });
+
+  it('text width: an out-of-range entry is clamped, not left on screen unapplied', () => {
+    openSettings();
+    settings.set('maxTextWidthPx', 800);
+    const input = document.querySelector<HTMLInputElement>('.pmd-max-text-width-input')!;
+    fire(input, '5000', 'change');
+    expect(settings.get('maxTextWidthPx')).toBe(3000);
+    expect(input.value).toBe('3000');
+    fire(input, '', 'change');
+    expect(settings.get('maxTextWidthPx')).toBe(3000);
+    expect(input.value).toBe('3000');
   });
 });

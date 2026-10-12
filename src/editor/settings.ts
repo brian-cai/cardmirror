@@ -2354,6 +2354,9 @@ export interface SettingMeta {
   /** Floor for `kind: 'number'` editors — the input's `min` and the
    *  clamp applied on change. Defaults to 0 when unset. */
   min?: number;
+  /** Ceiling for `kind: 'number'` editors, same as `min`. No ceiling when
+   *  unset. Keep both in step with the clamp in `sanitize`. */
+  max?: number;
   /** Extra search terms for the command palette. The label often
    *  uses one name for a thing the user might search by another
    *  ("Theme" vs "dark mode", "Line spacing" vs "line height"); these
@@ -2423,6 +2426,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
       'How much of the width the speech doc takes when you run Arrange Windows; the other windows (or, in three-pane, the docs slot) get the rest. 10–90, default 50.',
     kind: 'number',
     min: 10,
+    max: 90,
     category: 'general',
     section: 'Workspace',
     aliases: ['speech doc width', 'window split', 'arrange ratio'],
@@ -2488,6 +2492,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
       'Each open document is its own window, and each one holds a lot of memory — with many files open, that can slow down the whole computer. A window you haven\u2019t clicked into for this long rests: it frees its memory and shows a picture of itself, then reloads in about a second when you click it, right where you left off (unsaved changes included; undo history before it rested is lost). The speech doc and shared documents never rest. Default 15; 0 = never.',
     kind: 'number',
     min: 0,
+    max: 1440,
     category: 'general',
     section: 'Workspace',
     electronOnly: true,
@@ -3344,6 +3349,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
       'With press-to-start-and-stop on, this many seconds without speech ends dictation and the mic goes back to listening for commands. Long enough to think; short enough that a forgotten session does not sit open. Default 6.',
     kind: 'number',
     min: 2,
+    max: 600,
     category: 'accessibility',
     section: 'Voice control (experimental)',
     electronOnly: true,
@@ -3766,6 +3772,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     label: 'Alert volume',
     description: 'Loudness of the timer beeps, 0–100.',
     kind: 'number',
+    max: 100,
     category: 'appearance',
     section: 'Timer display',
     revealWhen: 'timerSoundEnabled',
@@ -4087,6 +4094,8 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     description:
       'How many points the excerpt\'s text size is reduced by (default 3). Sizes never drop below 1pt.',
     kind: 'number',
+    min: 1,
+    max: 20,
     category: 'editing',
     section: 'Create Reference',
     dependsOn: 'createReferenceShrinks',
@@ -4475,6 +4484,8 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     description:
       'New cards normally arrive instantly by live push. This sets the polling cadence used only against relays without push support, and (at least every 5 minutes) the safety-net catch-up while push is connected. Default 30; clamped to 5–3600.',
     kind: 'number',
+    min: 5,
+    max: 3600,
     category: 'pairing',
     electronOnly: true,
     dependsOn: 'pairingEnabled',
