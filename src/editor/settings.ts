@@ -2572,7 +2572,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'gestureZoom',
     label: 'Pinch / Ctrl+Scroll to zoom the document',
     description:
-      'Zoom the document with a trackpad pinch or Ctrl + mouse-wheel (in 10% steps, same as the zoom buttons and Ctrl-= / Ctrl-- chords). Off by default; enable for pinch / Ctrl-scroll zooming.',
+      'Zoom the document with a trackpad pinch or Ctrl + mouse-wheel (in 10% steps, same as the zoom buttons and \u2318/Ctrl + and \u2212). Off by default; enable for pinch / Ctrl-scroll zooming.',
     kind: 'toggle',
     category: 'general',
     section: 'Editor behavior',
@@ -3086,7 +3086,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'defaultZoomPct',
     label: 'Default document zoom',
     description:
-      'The body-text zoom level every document opens at (50–300%). Zooming an open document (the zoom buttons, Ctrl-= / Ctrl--, or pinch) only affects that window or pane and resets to this default on reload — so different documents can sit at different zooms. Chrome scale is separate and stays linked across windows.',
+      'The body-text zoom level every document opens at (50–300%). Zooming an open document (the zoom buttons, \u2318/Ctrl + and \u2212, or pinch) only affects that window or pane and resets to this default on reload — so different documents can sit at different zooms. Interface size is separate and stays linked across windows.',
     kind: 'defaultZoomPct',
     category: 'accessibility',
     aliases: ['zoom', 'default zoom', 'text size', 'document zoom'],
@@ -3469,7 +3469,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'ribbonCustomButtons',
     label: 'Custom ribbon buttons',
     description:
-      'Up to 10 buttons to the right of the comments buttons, each running a command of your choice with an icon you pick. Add as many as you like — with none configured the section is hidden. They are the third thing to disappear when the ribbon runs out of room.',
+      'Up to 10 buttons to the right of the comments buttons, each running a command of your choice with an icon you pick. With none configured the section is hidden. They are the third thing to disappear when the ribbon runs out of room.',
     kind: 'ribbonCustomButtons',
     category: 'appearance',
     section: 'Custom ribbon buttons',
@@ -3492,6 +3492,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     category: 'appearance',
     section: 'Document typography',
     mobile: true,
+    aliases: ['emphasis box', 'boxed', 'box thickness', 'pocket box', 'hide borders', 'underline thickness', 'double underline', 'italic', 'bold'],
   },
   {
     key: 'bodyFont',
@@ -3531,6 +3532,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     kind: 'displayColors',
     category: 'appearance',
     section: 'Document typography',
+    aliases: ['analytic color', 'undertag color', 'reading marker color', 'text color'],
   },
   {
     key: 'distinguishShading',
@@ -3733,7 +3735,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'timerCompact',
     label: 'Compact timer layout',
     description:
-      "Drops the 9 / 6 / 3 speech-preset buttons and tucks Reset under Start / Pause. Useful when the ribbon is tight.",
+      "Drops the speech-preset buttons and tucks Reset under Start / Pause. Useful when the ribbon is tight.",
     kind: 'toggle',
     category: 'appearance',
     section: 'Timer display',
@@ -3751,7 +3753,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'timerFlashSeconds',
     label: 'Alert points (seconds remaining)',
     description:
-      'When the running clock crosses each of these seconds-remaining values, the display flashes (if flashing is on) and a beep plays (if audible alerts are on). Comma-separated, e.g. "60, 30, 5, 3, 1".',
+      'When the running clock crosses each of these seconds-remaining values, the display flashes (if flashing is on) and a beep plays (if audible alerts are on). Comma-separated, e.g. "60, 30, 5, 3, 1". Up to 12 values, each from 1 to 3600 seconds.',
     kind: 'timerFlashSeconds',
     category: 'appearance',
     section: 'Timer display',
@@ -4125,7 +4127,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'highlightUnderlinedOnly',
     label: 'Highlight underlined text only',
     description:
-      'When on, Toggle Highlight and Toggle Background Color (F11 / Ctrl+F11, the paintbrush, and the color pickers) only paint text that is underlined or emphasized, so painting over a mix of underlined and plain text highlights just the underlined parts. In a word that mixes emphasis and plain underline, only the emphasized part is painted. Toggling off and "No highlight" still clear the whole selection. Composes with the automatic gap bridging above.',
+      'When on, Toggle Highlight and Toggle Background Color (F11 / \u2318/Ctrl+F11, the paintbrush, and the color pickers) only paint text that is underlined or emphasized, so painting over a mix of underlined and plain text highlights just the underlined parts. In a word that mixes emphasis and plain underline, only the emphasized part is painted. Toggling off and "No highlight" still clear the whole selection. Composes with the automatic gap bridging above.',
     kind: 'toggle',
     category: 'editing',
     section: 'Highlighting',
@@ -5153,9 +5155,10 @@ function sanitize(s: Settings): Settings {
     timerSpeechPresets: sanitizeSpeechPresets(s.timerSpeechPresets, [3, 6, 9, 12]),
     timerShowFourthPreset: !!s.timerShowFourthPreset,
     timerPrepMinutes:
-      typeof s.timerPrepMinutes === 'number' && s.timerPrepMinutes > 0 && s.timerPrepMinutes <= 99
+      // 0 is a real value (Pomodoro has no prep), as in the saved profiles.
+      typeof s.timerPrepMinutes === 'number' && s.timerPrepMinutes >= 0 && s.timerPrepMinutes <= 99
         ? Math.floor(s.timerPrepMinutes)
-        : 10,
+        : DEFAULTS.timerPrepMinutes,
     timerFlashEnabled: s.timerFlashEnabled === false ? false : true,
     timerFlashSeconds: sanitizeFlashSeconds(s.timerFlashSeconds),
     timerSoundEnabled: s.timerSoundEnabled === true,

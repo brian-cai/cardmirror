@@ -95,6 +95,13 @@ describe('pairing account row disconnect', () => {
     expect(disconnectBtn.disabled).toBe(false);
     disconnectBtn.click();
     await settled();
+    // Disconnect asks first (relinking takes a new connect code).
+    const confirmBtn = [...document.querySelectorAll<HTMLButtonElement>('.pmd-route-dialog button')].find(
+      (b) => b.textContent === 'Disconnect',
+    )!;
+    expect(confirmBtn, 'confirm dialog shown').toBeDefined();
+    confirmBtn.click();
+    await settled();
 
     // The failure mode was a chip still holding "Connected as …" after
     // Disconnect. It now flips to the not-linked variant immediately.

@@ -303,6 +303,20 @@ function scrollTabIntoView(tab: HTMLElement, container: HTMLElement): void {
 
 const METADATA_BY_KEY = new Map<string, SettingMeta>(SETTING_METADATA.map((m) => [m.key, m]));
 
+/** Tooltip for a greyed-out row: which setting has to change first. */
+function dependsOnHint(dependsOn: SettingMeta['dependsOn']): string {
+  if (dependsOn === undefined) return '';
+  const conds = Array.isArray(dependsOn) ? dependsOn : [dependsOn];
+  const unmet = conds.filter((c) => !evalDependsOn(c));
+  const names = unmet.map((c) => {
+    const key = typeof c === 'object' ? c.key : c;
+    return `\u201c${METADATA_BY_KEY.get(key)?.label ?? key}\u201d`;
+  });
+  if (names.length === 0) return '';
+  const turnOn = unmet.every((c) => typeof c !== 'object');
+  return turnOn ? `Turn on ${names.join(' and ')} to change this.` : `Depends on ${names.join(' and ')}.`;
+}
+
 /** Hide the children of one settings panel that don't match a search, and
  *  the section headings left with nothing under them. Setting rows match on
  *  their label / section / aliases (same fields as the command palette's
@@ -357,7 +371,7 @@ function filterPanelForSearch(
       const aliases = child.dataset['searchAliases'] ?? '';
       haystack = `${titleText || child.textContent || ''} ${buttonText} ${aliases} ${tabLabel}`;
     }
-    const hit = haystack !== '' && matches(haystack);
+    const hit = haystack !== '' && child.style.display !== 'none' && matches(haystack);
     child.classList.toggle('pmd-settings-search-miss', !hit);
     if (hit) {
       sectionHasMatch = true;
@@ -391,6 +405,8 @@ class SettingsModal {
     row: HTMLElement;
     dependsOn: SettingCondition | readonly SettingCondition[];
   }> = [];
+  /** Rows shown only while a boolean setting is on (`revealWhen`). */
+  private revealRows: Array<{ row: HTMLElement; revealWhen: keyof Settings }> = [];
   /** Unsubscribe handle returned by `settings.subscribe` while the
    *  dialog is open. Cleared on close. */
   private settingsUnsubscribe: (() => void) | null = null;
@@ -402,6 +418,9 @@ class SettingsModal {
    *  scroll-arrow buttons when the tabs overflow horizontally.
    *  Disconnected on close() and on each new render(). */
   private tabsResizeObserver: ResizeObserver | null = null;
+  /** Where the open tab was scrolled to when the dialog last closed, so
+   *  reopening Settings to adjust the same thing lands back on it. */
+  private lastScroll: { category: SettingsCategory; top: number } | null = null;
   /** Header search box; rebuilt (and so cleared) by each render(). */
   private searchInput: HTMLInputElement | null = null;
 
@@ -419,11 +438,29 @@ class SettingsModal {
       if (isBackdropClick(e, this.overlay)) this.close();
     });
 
+    // Chromium steps a focused number box when the wheel turns over it, so
+    // scrolling the list with the pointer on the box you just typed in
+    // changed its value. Scroll the list instead.
+    this.dialog.addEventListener(
+      'wheel',
+      (e) => {
+        const t = e.target;
+        if (!(t instanceof HTMLInputElement) || t.type !== 'number' || document.activeElement !== t) return;
+        e.preventDefault();
+        t.closest('.pmd-settings-panel')?.scrollBy(0, e.deltaY);
+      },
+      { passive: false },
+    );
+
     document.body.appendChild(this.overlay);
   }
 
   open(target?: SettingsTarget): void {
-    this.render();
+    // Already open (the app-menu Settings item still fires over a modal):
+    // keep the dialog as it is, with whatever is typed in it, and only
+    // follow the deep link.
+    const alreadyOpen = this.overlayToken !== null;
+    if (!alreadyOpen) this.render();
     this.overlay.style.display = '';
     if (this.overlayToken === null) {
       const token = pushOverlay();
@@ -457,24 +494,30 @@ class SettingsModal {
     // A plain open lands in the search box so the user can just type; a
     // deep-link open keeps focus on the dialog so the target row is what
     // they're looking at.
-    if (!target) this.searchInput?.focus();
+    if (!target && !alreadyOpen) this.searchInput?.focus();
     // Subscribe so toggling any "parent" setting (AI master switch,
     // multi-doc, etc.) greys / un-greys the dependent rows live
     // without needing a re-open.
-    this.settingsUnsubscribe = settings.subscribe(() => this.refreshDependents());
+    if (!alreadyOpen) {
+      this.settingsUnsubscribe = settings.subscribe(() => this.refreshDependents());
+    }
     this.refreshDependents();
     // Deep-link: jump to a tab and (optionally) scroll to one setting,
     // e.g. when reached from the search palette's `s` shortcuts. Ignore a
     // category that isn't visible on this host (e.g. a stale link to the
     // desktop-only Collaboration tab on web) so we don't strand a blank panel.
-    if (
-      target?.category &&
-      visibleCategoryTabs().some((t) => t.id === target.category)
-    ) {
-      this.setActiveCategory(target.category);
+    // A link to a setting alone opens that setting's tab.
+    const targetCategory =
+      target?.category ?? (target?.settingKey ? METADATA_BY_KEY.get(target.settingKey)?.category : undefined);
+    if (targetCategory && visibleCategoryTabs().some((t) => t.id === targetCategory)) {
+      this.setActiveCategory(targetCategory);
     }
     if (target?.settingKey) this.revealSetting(target.settingKey);
     if (target?.anchor) this.revealAnchor(target.anchor);
+    if (!target && !alreadyOpen && this.lastScroll?.category === this.activeCategory) {
+      const panel = this.dialog.querySelector<HTMLElement>('.pmd-settings-panel:not([hidden])');
+      if (panel) panel.scrollTop = this.lastScroll.top;
+    }
   }
 
   /** Scroll a named non-setting section (by `data-anchor`) into view and
@@ -519,6 +562,10 @@ class SettingsModal {
   }
 
   close(): void {
+    const openPanel = this.dialog.querySelector<HTMLElement>('.pmd-settings-panel:not([hidden])');
+    if (openPanel && this.overlayToken !== null && !this.searchInput?.value) {
+      this.lastScroll = { category: this.activeCategory, top: openPanel.scrollTop };
+    }
     if (this.settingsUnsubscribe) {
       this.settingsUnsubscribe();
       this.settingsUnsubscribe = null;
@@ -609,6 +656,21 @@ class SettingsModal {
       tabStrip.appendChild(btn);
       tabButtons[id] = btn;
     }
+    // Only the active tab is a Tab stop, so the arrows move between tabs.
+    tabStrip.addEventListener('keydown', (e) => {
+      const tabs = visibleCategoryTabs();
+      const i = tabs.findIndex((t) => t.id === this.activeCategory);
+      let next = -1;
+      if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = tabs.length - 1;
+      const tab = tabs[next];
+      if (!tab) return;
+      e.preventDefault();
+      this.setActiveCategory(tab.id);
+      tabButtons[tab.id]?.focus();
+    });
     tabsBar.appendChild(tabStrip);
 
     const scrollRightBtn = document.createElement('button');
@@ -653,6 +715,7 @@ class SettingsModal {
     // (set via `hidden`); we build all of them up-front so the
     // refreshDependents pass can find rows under inactive tabs too.
     this.dependentRows = [];
+    this.revealRows = [];
     const panels: Partial<Record<SettingsCategory, HTMLDivElement>> = {};
     for (const { id, label: tabLabel } of visibleCategoryTabs()) {
       const panel = document.createElement('div');
@@ -672,8 +735,7 @@ class SettingsModal {
           (!m.electronOnly || hostKind === 'electron') &&
           (!m.windowsOnly || isWindowsHost()) &&
           (!m.webOnly || hostKind === 'browser') &&
-          !hiddenInLite(m) &&
-          (!m.revealWhen || !!settings.get(m.revealWhen)),
+          !hiddenInLite(m),
       );
       let lastSection: string | undefined;
       for (const meta of entries) {
@@ -691,6 +753,7 @@ class SettingsModal {
         if (meta.dependsOn) {
           this.dependentRows.push({ row, dependsOn: meta.dependsOn });
         }
+        if (meta.revealWhen) this.revealRows.push({ row, revealWhen: meta.revealWhen });
         panel.appendChild(row);
       }
       if (entries.length === 0) {
@@ -803,6 +866,9 @@ class SettingsModal {
       }
       searchEmpty.hidden = anyPanel;
     };
+    // The rows are new, so their greyed / hidden state starts unset (a
+    // rebuild after an import left every dependent row looking enabled).
+    this.refreshDependents();
   }
 
   /** Filter the dialog to rows matching `query` across every tab (blank
@@ -970,9 +1036,15 @@ class SettingsModal {
     // (A Phase-3 special case held 'pairingEnabled' true on browser
     // hosts while its toggle was desktop-only; Phase 4 surfaced the
     // toggle on web, so the dependency greys identically everywhere.)
+    // Rows that only exist while another setting is on (alert volume while
+    // timer sound is on) come and go as it changes.
+    for (const { row, revealWhen } of this.revealRows) {
+      row.style.display = settings.get(revealWhen) ? '' : 'none';
+    }
     for (const { row, dependsOn } of this.dependentRows) {
       const enabled = evalDependsOn(dependsOn);
       row.classList.toggle('pmd-settings-row-disabled', !enabled);
+      row.title = enabled ? '' : dependsOnHint(dependsOn);
       const controls = row.querySelectorAll<
         HTMLInputElement | HTMLButtonElement | HTMLTextAreaElement | HTMLSelectElement
       >('input, button, textarea, select');
@@ -1651,6 +1723,9 @@ class SettingsModal {
       const initial = settings.get(meta.key);
       input.value = typeof initial === 'string' ? initial : '';
       input.addEventListener('change', () => {
+        // Loading trims these, so a pasted trailing space or newline would
+        // otherwise be in effect only until the next launch.
+        if (meta.kind !== 'password') input.value = input.value.trim();
         settings.set(meta.key as 'commentAuthor', input.value as never);
       });
       label.appendChild(input);
@@ -1718,6 +1793,47 @@ class SettingsModal {
   }
 }
 
+/** Subscription for an editor that rebuilds its rows from one setting.
+ *  The rows are rebuilt only when that setting changes, and not for a
+ *  field edit the editor stores through `quiet`: rebuilding on every
+ *  commit removed the field that Tab or a click was moving focus to, so
+ *  focus fell out of the dialog and the click was lost. */
+function watchSetting<K extends keyof Settings>(
+  wrap: HTMLElement,
+  key: K,
+  render: () => void,
+  /** Other settings the rows are drawn from. */
+  also: readonly (keyof Settings)[] = [],
+): { quiet: (next: Settings[K]) => void; mute: (store: () => void) => void } {
+  const read = (): string => JSON.stringify([key, ...also].map((k) => settings.get(k)));
+  let shown = read();
+  let muted = false;
+  const unsub = settings.subscribe(() => {
+    if (muted) return;
+    const now = read();
+    if (now === shown) return;
+    shown = now;
+    render();
+  });
+  registerRowCleanup(wrap, () => unsub());
+  const mute = (store: () => void): void => {
+    muted = true;
+    try {
+      store();
+    } finally {
+      muted = false;
+      shown = read();
+    }
+  };
+  return { quiet: (next) => mute(() => settings.set(key, next)), mute };
+}
+
+/** A typed box / underline thickness, held to what loading keeps: 0.25–12 pt
+ *  in quarter points (anything else was dropped at the next launch). */
+function clampThicknessPt(v: number): number {
+  return Math.min(12, Math.max(0.25, Math.round(v * 4) / 4));
+}
+
 function buildTypographyEditor(): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'pmd-typography-editor';
@@ -1768,15 +1884,17 @@ function buildTypographyEditor(): HTMLElement {
   sizeInput.step = '0.25';
   sizeInput.value = String(settings.get('displayTypography').emphasisBoxSize);
   sizeInput.addEventListener('change', () => {
-    const v = parseFloat(sizeInput.value);
-    if (!Number.isFinite(v) || v <= 0) {
+    const raw = parseFloat(sizeInput.value);
+    if (!Number.isFinite(raw) || raw <= 0) {
       sizeInput.value = String(settings.get('displayTypography').emphasisBoxSize);
       return;
     }
+    const v = clampThicknessPt(raw);
     settings.set('displayTypography', {
       ...settings.get('displayTypography'),
       emphasisBoxSize: v,
     });
+    sizeInput.value = String(v);
   });
   sizeRow.appendChild(sizeInput);
   const unit = document.createElement('span');
@@ -1825,15 +1943,17 @@ function buildTypographyEditor(): HTMLElement {
   pocketSizeInput.step = '0.25';
   pocketSizeInput.value = String(settings.get('displayTypography').pocketBoxSize);
   pocketSizeInput.addEventListener('change', () => {
-    const v = parseFloat(pocketSizeInput.value);
-    if (!Number.isFinite(v) || v <= 0) {
+    const raw = parseFloat(pocketSizeInput.value);
+    if (!Number.isFinite(raw) || raw <= 0) {
       pocketSizeInput.value = String(settings.get('displayTypography').pocketBoxSize);
       return;
     }
+    const v = clampThicknessPt(raw);
     settings.set('displayTypography', {
       ...settings.get('displayTypography'),
       pocketBoxSize: v,
     });
+    pocketSizeInput.value = String(v);
   });
   pocketSizeRow.appendChild(pocketSizeInput);
   const pocketUnit = document.createElement('span');
@@ -1865,15 +1985,17 @@ function buildTypographyEditor(): HTMLElement {
   underlineSizeInput.value = underlineSizeDisplay();
   underlineSizeInput.addEventListener('change', () => {
     const raw = underlineSizeInput.value.trim();
-    const v = raw === '' ? 0 : parseFloat(raw);
-    if (!Number.isFinite(v) || v < 0) {
+    const parsed = raw === '' ? 0 : parseFloat(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) {
       underlineSizeInput.value = underlineSizeDisplay();
       return;
     }
+    const v = parsed === 0 ? 0 : clampThicknessPt(parsed);
     settings.set('displayTypography', {
       ...settings.get('displayTypography'),
       underlineSize: v,
     });
+    underlineSizeInput.value = underlineSizeDisplay();
   });
   underlineSizeRow.appendChild(underlineSizeInput);
   const underlineUnit = document.createElement('span');
@@ -1993,7 +2115,7 @@ function buildInstallInfoSection(): HTMLElement {
   // Deep-link target: the command palette's "version / about this install"
   // result scrolls here (SettingsTarget.anchor).
   wrap.dataset['anchor'] = 'about-this-install';
-  wrap.dataset['searchAliases'] = 'version updates update';
+  wrap.dataset['searchAliases'] = 'version updates update tournament pause source fork release key';
 
   const hr = document.createElement('hr');
   hr.className = 'pmd-install-info-divider';
@@ -2185,8 +2307,8 @@ function buildUpdateSourceRow(electronHost: NonNullable<ReturnType<typeof getEle
   const apply = (value: string): void => {
     electronHost.setUpdateSource(value).then((result) => {
       if (!result.ok) {
+        // Nothing changed, and what was typed stays so it can be fixed.
         if (!result.cancelled) showToast(result.error);
-        refresh();
         return;
       }
       showToast(`Update source: ${result.active}. Use Check for updates to look now.`);
@@ -2756,7 +2878,10 @@ function buildParagraphSpacingEditor(): HTMLElement {
         input.value = String(cur[key]);
         return;
       }
-      settings.set('displayParagraphSpacing', { ...cur, [key]: v });
+      // Half points, as loading keeps them.
+      const half = Math.round(v * 2) / 2;
+      watch.quiet({ ...cur, [key]: half });
+      input.value = String(half);
     });
     c.appendChild(input);
     const unit = document.createElement('span');
@@ -2803,20 +2928,12 @@ function buildParagraphSpacingEditor(): HTMLElement {
   resetBtn.setAttribute('aria-label', 'Restore paragraph spacing defaults');
   resetBtn.addEventListener('click', () => {
     settings.set('displayParagraphSpacing', { ...DEFAULT_PARAGRAPH_SPACING });
-    // Re-sync the inputs (the subscriber skips re-render while focus is in
-    // this editor, and the reset button holds focus).
-    render();
   });
   footer.appendChild(resetBtn);
   wrap.appendChild(footer);
 
-  const unsubscribe = settings.subscribe(() => {
-    if (!(document.activeElement && wrap.contains(document.activeElement))) {
-      render();
-    }
-  });
+  const watch = watchSetting(wrap, 'displayParagraphSpacing', render);
   render();
-  registerRowCleanup(wrap, () => unsubscribe());
 
   return wrap;
 }
@@ -2932,10 +3049,13 @@ function buildDisplaySizesEditor(): HTMLElement {
       input.addEventListener('change', () => {
         const v = parseFloat(input.value);
         if (!Number.isFinite(v) || v <= 0) {
-          input.value = String(sizes[key]);
+          input.value = String(settings.get('displaySizes')[key]);
           return;
         }
-        commit({ ...settings.get('displaySizes'), [key]: v });
+        // Half points, as loading keeps them.
+        const half = Math.max(0.5, Math.round(v * 2) / 2);
+        watch.quiet({ ...settings.get('displaySizes'), [key]: half });
+        input.value = String(half);
       });
       row.appendChild(input);
 
@@ -2964,13 +3084,8 @@ function buildDisplaySizesEditor(): HTMLElement {
     wrap.appendChild(footer);
   }
 
-  const unsubscribe = settings.subscribe((s) => {
-    void s;
-    render();
-  });
+  const watch = watchSetting(wrap, 'displaySizes', render);
   render();
-
-  registerRowCleanup(wrap, () => unsubscribe());
 
   return wrap;
 }
@@ -3016,7 +3131,8 @@ function buildReadersEditor(): HTMLElement {
         const next = settings.get('readers').map((r, i) =>
           i === idx ? { ...r, name: nameInput.value.trim() || r.name } : r,
         );
-        commit(next);
+        watch.quiet(next);
+        nameInput.value = next[idx]?.name ?? nameInput.value;
       });
       row.appendChild(nameInput);
 
@@ -3029,13 +3145,14 @@ function buildReadersEditor(): HTMLElement {
       wpmInput.addEventListener('change', () => {
         const v = parseInt(wpmInput.value, 10);
         if (!Number.isFinite(v) || v <= 0) {
-          wpmInput.value = String(reader.wpm);
+          wpmInput.value = String(settings.get('readers')[idx]?.wpm ?? reader.wpm);
           return;
         }
         const next = settings.get('readers').map((r, i) =>
           i === idx ? { ...r, wpm: v } : r,
         );
-        commit(next);
+        watch.quiet(next);
+        wpmInput.value = String(v);
       });
       row.appendChild(wpmInput);
 
@@ -3061,7 +3178,8 @@ function buildReadersEditor(): HTMLElement {
         const clear = trimmed === '';
         const v = parseInt(trimmed, 10);
         if (!clear && (!Number.isFinite(v) || v <= 0)) {
-          tagWpmInput.value = reader.tagWpm != null ? String(reader.tagWpm) : '';
+          const cur = settings.get('readers')[idx]?.tagWpm;
+          tagWpmInput.value = cur != null ? String(cur) : '';
           return;
         }
         const next = settings.get('readers').map((r, i) => {
@@ -3069,7 +3187,7 @@ function buildReadersEditor(): HTMLElement {
           const { tagWpm: _prev, ...rest } = r;
           return clear ? rest : { ...rest, tagWpm: v };
         });
-        commit(next);
+        watch.quiet(next);
       });
       row.appendChild(tagWpmInput);
 
@@ -3111,7 +3229,8 @@ function buildReadersEditor(): HTMLElement {
       delBtn.type = 'button';
       delBtn.className = 'pmd-reader-delete';
       setIcon(delBtn, 'close');
-      delBtn.title = 'Remove reader';
+      delBtn.title = readers.length === 1 ? 'At least one reader is needed' : 'Remove reader';
+      delBtn.disabled = readers.length === 1;
       delBtn.addEventListener('click', () => {
         const next = settings.get('readers').filter((_, i) => i !== idx);
         if (next.length === 0) return; // keep at least one
@@ -3128,14 +3247,9 @@ function buildReadersEditor(): HTMLElement {
     commit([...cur, { name: `Reader ${cur.length + 1}`, wpm: 200 }]);
   });
 
-  // Re-render on any settings change (covers edits made elsewhere).
-  const unsubscribe = settings.subscribe((s) => {
-    void s;
-    render();
-  });
+  // Re-render when the list changes elsewhere, or on add / remove / move.
+  const watch = watchSetting(wrap, 'readers', render);
   render();
-
-  registerRowCleanup(wrap, () => unsubscribe());
 
   return wrap;
 }
@@ -3284,6 +3398,9 @@ function buildPairingAccountEditor(row: HTMLElement): HTMLElement {
         return;
       }
       message.textContent = ERROR_TEXT[res.error ?? ''] ?? `Couldn\u2019t connect (${res.error}).`;
+    } catch (err) {
+      // Otherwise "Connecting…" stayed up for good.
+      message.textContent = `Couldn\u2019t connect (${err instanceof Error ? err.message : String(err)}).`;
     } finally {
       connectBtn.disabled = false;
     }
@@ -3294,17 +3411,27 @@ function buildPairingAccountEditor(row: HTMLElement): HTMLElement {
     if (code) void connect(code, false);
   });
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && input.value.trim()) void connect(input.value.trim(), false);
+    // Codes are single-use: a second Enter while one is in flight would
+    // send it again and report it as invalid.
+    if (e.key === 'Enter' && input.value.trim() && !connectBtn.disabled) void connect(input.value.trim(), false);
   });
   disconnectBtn.addEventListener('click', () => {
     const electron = getElectronHost();
     if (!electron?.pairingDisconnectAccount) return;
-    void electron.pairingDisconnectAccount().then((st) => {
+    void (async () => {
+      // Linking again takes a new code from the account page.
+      if (
+        !(await confirmDialog('Disconnect this computer from your account? You\u2019ll need a new connect code to link it again.', {
+          okLabel: 'Disconnect',
+        }))
+      ) {
+        return;
+      }
+      await electron.pairingDisconnectAccount();
       renderStatus({ connected: false, expiresAt: 0 });
       settings.set('pairingConnectedUntil', 0);
       message.textContent = '';
-      void st;
-    });
+    })();
   });
 
   // Web edition (web-collab Phase 3): same row, same chip, backed by
@@ -3572,10 +3699,11 @@ function buildPairingPartnersEditor(): HTMLElement {
       nameInput.value = partner.name;
       nameInput.placeholder = 'Name';
       nameInput.addEventListener('change', () => {
-        commit(
+        nameInput.value = nameInput.value.trim();
+        watch.quiet(
           settings
             .get('pairingPartners')
-            .map((p, i) => (i === idx ? { ...p, name: nameInput.value.trim() } : p)),
+            .map((p, i) => (i === idx ? { ...p, name: nameInput.value } : p)),
         );
       });
       row.appendChild(nameInput);
@@ -3588,11 +3716,36 @@ function buildPairingPartnersEditor(): HTMLElement {
       codeInput.spellcheck = false;
       codeInput.autocomplete = 'off';
       codeInput.addEventListener('change', () => {
+        const cur = settings.get('pairingPartners');
+        const old = cur[idx]?.code ?? '';
         const code = normalizePairingCode(codeInput.value);
         codeInput.value = code;
-        commit(
-          settings.get('pairingPartners').map((p, i) => (i === idx ? { ...p, code } : p)),
-        );
+        if (code === old) return;
+        // Loading keeps only the first row with a given code.
+        const twin = code ? cur.find((p, i) => i !== idx && p.code === code) : undefined;
+        if (twin) {
+          showToast(`That code is already in your recipients${twin.name ? ` as ${twin.name}` : ''}.`);
+          codeInput.value = old;
+          return;
+        }
+        const next = cur.map((p, i) => (i === idx ? { ...p, code } : p));
+        watch.mute(() => {
+          settings.set('pairingPartners', next);
+          if (!old || !code) return;
+          // A replaced code (they regenerated theirs) is the same person:
+          // groups and the star point at recipients by code, so move them.
+          const groups = settings.get('pairingGroups');
+          if (groups.some((g) => g.memberCodes.includes(old))) {
+            settings.set(
+              'pairingGroups',
+              groups.map((g) => ({ ...g, memberCodes: g.memberCodes.map((c) => (c === old ? code : c)) })),
+            );
+          }
+          if (isStarredTarget('partner', old)) settings.set('pairingStarred', { kind: 'partner', ref: code });
+        });
+        // Hide and star are off for a row without a code.
+        hide.disabled = !code;
+        star.disabled = !code;
       });
       row.appendChild(codeInput);
 
@@ -3632,11 +3785,10 @@ function buildPairingPartnersEditor(): HTMLElement {
       row.appendChild(hide);
       if (partner.hidden) row.classList.add('pmd-pairing-row-hidden');
 
-      row.appendChild(
-        makeStarButton(isStarredTarget('partner', partner.code), !partner.code, () =>
-          toggleStarredTarget('partner', partner.code),
-        ),
+      const star = makeStarButton(isStarredTarget('partner', partner.code), !partner.code, () =>
+        toggleStarredTarget('partner', settings.get('pairingPartners')[idx]?.code ?? partner.code),
       );
+      row.appendChild(star);
 
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
@@ -3644,7 +3796,20 @@ function buildPairingPartnersEditor(): HTMLElement {
       setIcon(delBtn, 'close');
       delBtn.title = 'Remove recipient';
       delBtn.addEventListener('click', () => {
-        commit(settings.get('pairingPartners').filter((_, i) => i !== idx));
+        void (async () => {
+          const p = settings.get('pairingPartners')[idx];
+          // Their code can only come from them again.
+          if (
+            p?.code &&
+            !(await confirmDialog(
+              `Remove ${p.name || 'this recipient'}? Their code is deleted with them, and they leave any groups they are in.`,
+              { okLabel: 'Remove' },
+            ))
+          ) {
+            return;
+          }
+          commit(settings.get('pairingPartners').filter((q) => q !== p));
+        })();
       });
       row.appendChild(delBtn);
 
@@ -3654,13 +3819,12 @@ function buildPairingPartnersEditor(): HTMLElement {
 
   addBtn.addEventListener('click', () => {
     const cur = settings.get('pairingPartners');
-    // Placeholder name — the set→sanitize round-trip drops rows with no code and no name.
+    // Placeholder name — loading drops rows with no code and no name.
     commit([...cur, { code: '', name: `Recipient ${cur.length + 1}` }]);
   });
 
   render();
-  const unsub = settings.subscribe(() => render());
-  registerRowCleanup(wrap, () => unsub());
+  const watch = watchSetting(wrap, 'pairingPartners', render, ['pairingStarred']);
   return wrap;
 }
 
@@ -3779,7 +3943,9 @@ function buildRibbonCustomButtonsEditor(): HTMLElement {
       rowEl.appendChild(del);
       list.appendChild(rowEl);
     });
-    addBtn.style.display = buttons.length >= MAX_RIBBON_CUSTOM_BUTTONS ? 'none' : '';
+    // Stays visible at the limit, saying why it can't be used.
+    addBtn.disabled = buttons.length >= MAX_RIBBON_CUSTOM_BUTTONS;
+    addBtn.title = addBtn.disabled ? `${MAX_RIBBON_CUSTOM_BUTTONS} buttons is the most the ribbon holds` : '';
   }
 
   addBtn.addEventListener('click', () => {
@@ -3943,7 +4109,13 @@ function buildPairingBlockedEditor(): HTMLElement {
   blockBtn.className = 'pmd-readers-add';
   blockBtn.textContent = 'Block';
   const submitCode = (): void => {
-    block(codeInput.value);
+    const code = normalizePairingCode(codeInput.value);
+    if (!code) return;
+    if (settings.get('pairingBlockedCodes').some((c) => normalizePairingCode(c) === code)) {
+      showToast('That code is already blocked.');
+      return;
+    }
+    block(code);
     codeInput.value = '';
   };
   blockBtn.addEventListener('click', submitCode);
@@ -4141,11 +4313,12 @@ function buildPairingGroupsEditor(): HTMLElement {
       labelInput.value = group.label;
       labelInput.placeholder = 'Group name';
       labelInput.addEventListener('change', () => {
-        commit(
-          settings
-            .get('pairingGroups')
-            .map((g, i) => (i === idx ? { ...g, label: labelInput.value.trim() } : g)),
-        );
+        // A group with no name is dropped at the next launch: keep the old one.
+        const next = settings
+          .get('pairingGroups')
+          .map((g, i) => (i === idx ? { ...g, label: labelInput.value.trim() || g.label } : g));
+        watch.quiet(next);
+        labelInput.value = next[idx]?.label ?? labelInput.value;
       });
       header.appendChild(labelInput);
 
@@ -4171,7 +4344,19 @@ function buildPairingGroupsEditor(): HTMLElement {
       setIcon(delBtn, 'close');
       delBtn.title = 'Remove group';
       delBtn.addEventListener('click', () => {
-        commit(settings.get('pairingGroups').filter((_, i) => i !== idx));
+        void (async () => {
+          const g = settings.get('pairingGroups')[idx];
+          if (
+            g &&
+            g.memberCodes.length > 0 &&
+            !(await confirmDialog(`Remove the group ${g.label}? Its recipients stay in your list.`, {
+              okLabel: 'Remove',
+            }))
+          ) {
+            return;
+          }
+          commit(settings.get('pairingGroups').filter((x) => x !== g));
+        })();
       });
       header.appendChild(delBtn);
       card.appendChild(header);
@@ -4191,7 +4376,7 @@ function buildPairingGroupsEditor(): HTMLElement {
           cb.type = 'checkbox';
           cb.checked = group.memberCodes.includes(p.code);
           cb.addEventListener('change', () => {
-            commit(
+            watch.quiet(
               settings.get('pairingGroups').map((g, i) => {
                 if (i !== idx) return g;
                 const set = new Set(g.memberCodes);
@@ -4218,8 +4403,7 @@ function buildPairingGroupsEditor(): HTMLElement {
   });
 
   render();
-  const unsub = settings.subscribe(() => render());
-  registerRowCleanup(wrap, () => unsub());
+  const watch = watchSetting(wrap, 'pairingGroups', render, ['pairingPartners', 'pairingStarred']);
   return wrap;
 }
 
@@ -4695,6 +4879,10 @@ function buildCustomAutocorrectEditor(): HTMLElement {
       return;
     }
     const entries = settings.get('customAutocorrects');
+    if (entries.length >= 200) {
+      setMessage('The list is full (200 entries). Remove one first.');
+      return;
+    }
     const existing = entries.find((e) => e.from.toLowerCase() === from.toLowerCase());
     if (existing) {
       // Two rebindings of the same input can never coexist — refuse, and
@@ -4711,6 +4899,13 @@ function buildCustomAutocorrectEditor(): HTMLElement {
     renderList();
     fromInput.focus();
   });
+  for (const field of [fromInput, toInput]) {
+    field.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      addBtn.click();
+    });
+  }
   cb.addEventListener('change', () => {
     settings.set('customAutocorrectEnabled', cb.checked);
     syncDisabled();
@@ -4718,6 +4913,16 @@ function buildCustomAutocorrectEditor(): HTMLElement {
 
   renderList();
   syncDisabled();
+  // The clash warnings depend on Smart quotes and Custom dash, which are
+  // rows in this same section.
+  let clashKey = JSON.stringify(conflictContext());
+  const unsub = settings.subscribe(() => {
+    const now = JSON.stringify(conflictContext());
+    if (now === clashKey) return;
+    clashKey = now;
+    renderList();
+  });
+  registerRowCleanup(wrap, () => unsub());
   return wrap;
 }
 
@@ -4951,27 +5156,39 @@ function buildVoiceHoldKeyEditor(): HTMLElement {
     current.textContent = formatKeyForDisplay(settings.get('voiceDictateKey')) || '(none)';
   };
   render();
+  let stopCapture: (() => void) | null = null;
   btn.addEventListener('click', () => {
+    if (stopCapture) return;
     btn.textContent = 'Press a key… (Esc cancels)';
+    // On `window`, ahead of the dialog's own key handler on `document`,
+    // which would otherwise take Escape and close Settings.
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        done();
-        return;
-      }
       if (e.key === 'Control' || e.key === 'Shift' || e.key === 'Alt' || e.key === 'Meta') return;
       e.preventDefault();
-      e.stopPropagation();
-      settings.set('voiceDictateKey', ribbonKeyStringFor(e));
+      e.stopImmediatePropagation();
+      if (e.key !== 'Escape') {
+        const key = ribbonKeyStringFor(e);
+        // Loading puts the default back for this one (it is the search key).
+        if (key === 'Mod-Shift-Space') {
+          showToast('That key opens search. Pick another.');
+          return;
+        }
+        settings.set('voiceDictateKey', key);
+      }
       done();
     };
     const done = (): void => {
-      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('keydown', onKey, true);
+      stopCapture = null;
       btn.textContent = 'Change…';
       render();
     };
-    document.addEventListener('keydown', onKey, true);
+    stopCapture = done;
+    window.addEventListener('keydown', onKey, true);
   });
+  // Closing Settings mid-capture must not leave the next key typed in the
+  // document to be taken as the dictation key.
+  registerRowCleanup(wrap, () => stopCapture?.());
   wrap.append(current, btn);
   return wrap;
 }
@@ -4981,12 +5198,17 @@ function buildVoiceCalibrateEditor(): HTMLElement {
   wrap.className = 'pmd-voice-calibrate-editor';
   const status = document.createElement('div');
   status.className = 'pmd-voice-model-status';
-  const device = settings.get('voiceInputDeviceId') || '';
-  const prof = settings.get('voiceProfiles')[device];
-  const learned = prof ? Object.values(prof.aliases).reduce((n, l) => n + l.length, 0) : 0;
-  status.textContent = prof?.updatedAt
-    ? `Calibrated ${new Date(prof.updatedAt).toLocaleDateString()} · ${learned} learned spelling${learned === 1 ? '' : 's'} for this microphone`
-    : 'Not calibrated for this microphone yet.';
+  const refresh = (): void => {
+    const device = settings.get('voiceInputDeviceId') || '';
+    const prof = settings.get('voiceProfiles')[device];
+    const learned = prof ? Object.values(prof.aliases).reduce((n, l) => n + l.length, 0) : 0;
+    status.textContent = prof?.updatedAt
+      ? `Calibrated ${new Date(prof.updatedAt).toLocaleDateString()} · ${learned} learned spelling${learned === 1 ? '' : 's'} for this microphone`
+      : 'Not calibrated for this microphone yet.';
+  };
+  refresh();
+  const unsub = settings.subscribe(refresh);
+  registerRowCleanup(wrap, () => unsub());
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'pmd-settings-btn';
@@ -5353,6 +5575,9 @@ function buildTimerProfileEditor(): HTMLElement {
     btn.textContent = o.label;
     btn.dataset['value'] = o.value;
     btn.addEventListener('click', () => {
+      // Applying a profile stops the clock and refills prep, so a click on
+      // the one already in use must not wipe the round in progress.
+      if (o.value === settings.get('timerProfile')) return;
       // Shared with the Cycle Timer Preset command — applies the profile's saved
       // durations to the live settings and refills the prep clocks.
       applyTimerProfile(o.value);
@@ -5381,7 +5606,12 @@ function buildTimerProfileDurationsEditor(): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'pmd-timer-durations-editor';
 
-  function makeField(label: string, getValue: () => number, onChange: (v: number) => void): HTMLElement {
+  function makeField(
+    label: string,
+    min: number,
+    getValue: () => number,
+    onChange: (v: number) => void,
+  ): HTMLElement {
     const field = document.createElement('label');
     field.className = 'pmd-timer-durations-field';
     const labelEl = document.createElement('span');
@@ -5390,16 +5620,19 @@ function buildTimerProfileDurationsEditor(): HTMLElement {
     field.appendChild(labelEl);
     const input = document.createElement('input');
     input.type = 'number';
-    input.min = '0';
+    input.min = String(min);
     input.max = '99';
     input.step = '1';
     input.className = 'pmd-timer-durations-input';
     input.dataset['label'] = label;
     input.value = String(getValue());
-    input.addEventListener('input', () => {
+    // On commit, not per keystroke: a prep change refills the live prep
+    // clocks, and typing "10" used to do that twice (1, then 10).
+    input.addEventListener('change', () => {
       const v = parseInt(input.value, 10);
-      if (!Number.isFinite(v) || v < 0 || v > 99) return;
-      onChange(v);
+      if (Number.isFinite(v) && v !== getValue()) onChange(Math.min(99, Math.max(min, v)));
+      // Show what is in effect (a blank or out-of-range entry is replaced).
+      input.value = String(getValue());
     });
     field.appendChild(input);
     const unit = document.createElement('span');
@@ -5422,7 +5655,8 @@ function buildTimerProfileDurationsEditor(): HTMLElement {
       const labels = ['Preset 1', 'Preset 2', 'Preset 3', 'Preset 4'];
       const field = makeField(
         labels[i]!,
-        () => presets[i] ?? 0,
+        1, // loading rejects a 0-minute speech
+        () => settings.get('timerProfiles')[active].speechPresets[i] ?? presets[i] ?? 1,
         (v) => {
           const profiles = { ...settings.get('timerProfiles') };
           const cur = profiles[active];
@@ -5437,7 +5671,8 @@ function buildTimerProfileDurationsEditor(): HTMLElement {
     }
     const prepField = makeField(
       'Prep',
-      () => profileCfg.prepMinutes,
+      0,
+      () => settings.get('timerProfiles')[active].prepMinutes,
       (v) => {
         const profiles = { ...settings.get('timerProfiles') };
         const cur = profiles[active];
@@ -5682,13 +5917,27 @@ function buildPercentSlider(
     if (live) settings.set(key, Number(range.value));
     else box.value = range.value;
   });
-  range.addEventListener('change', () => settings.set(key, Number(range.value)));
+  // A new interface size reflows the dialog, which can scroll this control
+  // out of view; bring it back once the new size has laid out. (The control,
+  // not its row: at a large size the row is taller than the panel.)
+  const apply = (v: number): void => {
+    const before = settings.get(key);
+    settings.set(key, v);
+    if (settings.get(key) === before) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => wrap.scrollIntoView({ block: 'center' })),
+    );
+  };
+  range.addEventListener('change', () => apply(Number(range.value)));
   box.addEventListener('change', () => {
-    if (box.value.trim() !== '') settings.set(key, sanitize(Number(box.value)));
+    // Escape closes the dialog, and hiding a focused box fires `change`:
+    // a typed value that was never confirmed is dropped, not applied.
+    if (box.closest<HTMLElement>('.pmd-settings-overlay')?.style.display === 'none') return;
+    if (box.value.trim() !== '') apply(sanitize(Number(box.value)));
     // Also puts back a value that was cleared or clamped to what's stored.
     refresh();
   });
-  reset.addEventListener('click', () => settings.set(key, 100));
+  reset.addEventListener('click', () => apply(100));
   wrap.append(range, box, unit, reset);
   function refresh(): void {
     const cur = settings.get(key);
@@ -5946,10 +6195,12 @@ function buildColorSlotsEditor(key: keyof Settings): HTMLElement {
 
   const get = (): string[] => settings.get(key) as string[];
   const set = (slots: string[]) => settings.set(key, slots as never);
+  let shown = '';
 
   function render(): void {
     wrap.innerHTML = '';
     const slots = get();
+    shown = JSON.stringify(slots);
     for (let i = 0; i < slots.length; i++) {
       const row = document.createElement('div');
       row.className = 'pmd-color-slot-row';
@@ -5966,9 +6217,13 @@ function buildColorSlotsEditor(key: keyof Settings): HTMLElement {
       input.type = 'color';
       input.className = 'pmd-color-slot-input';
       input.value = slots[i]!;
+      input.setAttribute('aria-label', `Color ${i + 1}`);
       input.addEventListener('input', () => {
         const next = get().slice();
         next[i] = input.value;
+        // Already on screen: rebuilding the rows here removed this very
+        // input while its color chooser was open.
+        shown = JSON.stringify(next);
         set(next);
       });
       row.appendChild(input);
@@ -5984,6 +6239,7 @@ function buildColorSlotsEditor(key: keyof Settings): HTMLElement {
       trash.className = 'pmd-color-slot-trash';
       setIcon(trash, 'close');
       trash.title = 'Remove this slot';
+      trash.setAttribute('aria-label', `Remove color ${i + 1}`);
       trash.disabled = slots.length <= 1;
       trash.addEventListener('click', () => {
         const next = get().slice();
@@ -6010,7 +6266,9 @@ function buildColorSlotsEditor(key: keyof Settings): HTMLElement {
   }
 
   render();
-  const unsub = settings.subscribe(render);
+  const unsub = settings.subscribe(() => {
+    if (JSON.stringify(get()) !== shown) render();
+  });
   registerRowCleanup(wrap, () => unsub());
   return wrap;
 }
@@ -6034,11 +6292,21 @@ function buildColorOverridesEditor(): HTMLElement {
   resetAll.textContent = '↺ Reset all overrides';
   resetAll.title = 'Drop every override and fall back to defaults';
   resetAll.addEventListener('click', () => {
-    settings.set('customColorOverrides', {});
-    // The document-text rows are backed by displayColors, not the
-    // overrides blob — reset them too so "Reset all" clears every
-    // row the user sees in this panel.
-    settings.set('displayColors', { ...DEFAULT_DISPLAY_COLORS });
+    void (async () => {
+      if (
+        !(await confirmDialog(
+          'Reset every color in this panel to its default? This also resets the Analytic, Undertag and reading marker colors under Appearance.',
+          { okLabel: 'Reset all' },
+        ))
+      ) {
+        return;
+      }
+      settings.set('customColorOverrides', {});
+      // The document-text rows are backed by displayColors, not the
+      // overrides blob — reset them too so "Reset all" clears every
+      // row the user sees in this panel.
+      settings.set('displayColors', { ...DEFAULT_DISPLAY_COLORS });
+    })();
   });
   header.appendChild(resetAll);
   wrap.appendChild(header);
@@ -6631,6 +6899,7 @@ function buildTranslationEditor(): HTMLElement {
     if (!document.body.contains(wrap)) { unsub(); return; }
     applyAiState();
   });
+  registerRowCleanup(wrap, () => unsub());
 
   return wrap;
 }
@@ -6866,7 +7135,8 @@ function buildVersionHistoryEditor(): HTMLElement {
     input.addEventListener('change', () => {
       const n = Number.parseFloat(input.value);
       if (Number.isFinite(n) && n >= 0) {
-        settings.set(key, Math.round(n));
+        // 1 TB, the ceiling loading applies.
+        settings.set(key, Math.min(1_048_576, Math.round(n)));
       }
       // Snap the field to the stored (clamped) value either way.
       input.value = String(settings.get(key));
@@ -7480,7 +7750,7 @@ function buildShrinkProtectionsEditor(): HTMLElement {
         const next = settings.get('shrinkCustomProtections').map((r, i) =>
           i === idx ? { ...r, pattern: patternInput.value } : r,
         );
-        commit(next);
+        watch.quiet(next);
       });
       row.appendChild(patternInput);
 
@@ -7493,7 +7763,8 @@ function buildShrinkProtectionsEditor(): HTMLElement {
         const next = settings.get('shrinkCustomProtections').map((r, i) =>
           i === idx ? { ...r, isRegex: regexCb.checked } : r,
         );
-        commit(next);
+        watch.quiet(next);
+        patternInput.placeholder = regexCb.checked ? 'regex source' : 'literal string';
       });
       regexLabel.appendChild(regexCb);
       const regexTxt = document.createElement('span');
@@ -7526,6 +7797,7 @@ function buildShrinkProtectionsEditor(): HTMLElement {
       delBtn.className = 'pmd-shrink-protection-delete';
       setIcon(delBtn, 'close');
       delBtn.title = 'Remove protection';
+      delBtn.setAttribute('aria-label', 'Remove protection');
       delBtn.addEventListener('click', () => {
         const next = settings
           .get('shrinkCustomProtections')
@@ -7550,26 +7822,21 @@ function buildShrinkProtectionsEditor(): HTMLElement {
     }
   }
 
+  const firstEmpty = (): HTMLInputElement | undefined =>
+    [...list.querySelectorAll<HTMLInputElement>('.pmd-shrink-protection-pattern')].find((el) => !el.value);
   addBtn.addEventListener('click', () => {
-    const cur = settings.get('shrinkCustomProtections');
-    commit([...cur, { pattern: '', isRegex: false }]);
+    // One blank row at a time: finish that one first.
+    if (!firstEmpty()) {
+      const cur = settings.get('shrinkCustomProtections');
+      commit([...cur, { pattern: '', isRegex: false }]);
+    }
+    firstEmpty()?.focus();
   });
 
-  const unsubscribe = settings.subscribe((s) => {
-    void s;
-    // Skip re-render while the user is TYPING in a text input — a
-    // re-render would replace the input element and drop focus. But
-    // do re-render when buttons / checkboxes are focused (so + Add
-    // and × delete refresh the list live).
-    const active = document.activeElement;
-    const isTextInputFocused =
-      active instanceof HTMLInputElement &&
-      active.type === 'text' &&
-      wrap.contains(active);
-    if (!isTextInputFocused) render();
-  });
+  // Rebuild for add / remove (and changes from elsewhere), not for an edit
+  // to a pattern or its regex box.
+  const watch = watchSetting(wrap, 'shrinkCustomProtections', render);
   render();
-  registerRowCleanup(wrap, () => unsubscribe());
 
   return wrap;
 }

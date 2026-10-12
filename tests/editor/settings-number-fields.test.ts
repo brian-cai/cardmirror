@@ -92,6 +92,16 @@ describe('percent size rows', () => {
     expect(box.value).toBe('300');
   });
 
+  it('interface size: Escape drops a typed value that was never confirmed', () => {
+    openSettings();
+    const { box } = controls('Interface size');
+    box.value = '250';
+    // Closing hides the dialog; the blur that follows fires `change`.
+    closeSettings();
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(settings.get('chromeScalePct')).toBe(100);
+  });
+
   it('nav text size: still applies while dragging', () => {
     openSettings();
     const { range } = controls('Nav pane text size');

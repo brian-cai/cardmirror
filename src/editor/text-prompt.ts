@@ -59,6 +59,10 @@ export function installModalKeys(
     if (!dialog.contains(e.target as Node)) {
       e.preventDefault();
       e.stopPropagation();
+      // Focus fell out of the dialog (its focused control was removed, or
+      // Shift+Tab walked off the top): Tab brings it back in, where before
+      // every key but Escape was dead until a click.
+      if (e.key === 'Tab') dialog.focus();
     }
   };
   document.addEventListener('keydown', onKey, true);
