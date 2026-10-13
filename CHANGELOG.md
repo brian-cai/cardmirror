@@ -5,6 +5,60 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.4 — 2026-10-12
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Changed
+
+- **Interface size applies when you let go.** Dragging the slider no
+  longer resizes the app under your pointer; the new size applies when
+  you release it. You can also type a percent in the box next to the
+  slider (Enter applies, Escape cancels), in whole percents rather
+  than 5% steps. The nav pane text size slider has the same box.
+- **Settings reopens where you left it**, at the same scroll position
+  on the same tab, until you quit the app.
+- **Settings asks before removing things:** a recipient that has a
+  code, a group that has members, disconnecting your account, and
+  "Reset all overrides" under colors.
+- **Timer lengths apply when you finish typing** (Enter or clicking
+  away) instead of on every keystroke, and clicking the timer profile
+  already in use no longer resets the round in progress.
+- **Left / Right arrow keys move between Settings tabs**, and greyed
+  out rows say which setting turns them on.
+- Screen readers now announce a name for every control in Settings.
+
+### Fixed
+
+- Scrolling the Settings list with the pointer over a number box
+  changed the number.
+- Tab dropped focus out of Settings after editing a font size, reader
+  speed, paragraph spacing, recipient, group or shrink protection, and
+  the reorder arrows lost focus after every press.
+- Pasting a recipient's new code into their row removed them from
+  their groups and un-starred them.
+- Numbers typed outside a setting's range (line height, box and
+  underline thickness, maximum text width and others) took effect
+  until the next launch and then changed. They are now held to the
+  range as you type them.
+- A timer profile with 0 minutes of prep went back to 10 after a
+  restart.
+- Pressing Escape while choosing a dictation key closed Settings, and
+  closing Settings mid-choice made the next key you typed the
+  dictation key.
+- "Text size settings…" in the nav pane menu opened the wrong
+  Settings tab.
+- The color override rows in Settings kept showing the old theme's
+  colors after switching between light and dark.
+- A second recipient with the same code, a group with its name
+  cleared, and repeated acronym phrases or shrink protections are now
+  refused instead of disappearing at the next launch.
+- Choosing custom Condense with warning markers and leaving one empty
+  now says the command is off until both are filled in.
+- Enter adds an autocorrect entry; a setting changed in another window
+  shows up in an open Settings dialog.
+
 ## 1.15.3 — 2026-10-11
 
 BCai's (@brian-cai) build of CardMirror, updating from
