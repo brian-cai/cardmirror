@@ -5,6 +5,29 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.6 — 2026-10-13
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Changed
+
+- **The card-cutting buttons stay in the ribbon longer.** When the
+  ribbon runs out of room (a narrow window or a larger interface
+  size), the text-size step buttons and the table / image /
+  superscript / subscript / strikethrough buttons now hide first.
+  Your custom buttons, Cite / Underline / Emphasis / Clear and the
+  Pocket / Hat / Tag / Block style buttons hide after those.
+
+### Fixed
+
+- **Importing a team file now says why it failed.** A file picked
+  straight from Dropbox or Drive before it had downloaded was
+  reported as "isn't a CardMirror team file". The message now says
+  the file is empty and to copy it to your Desktop (or make it
+  available offline) first, and separately reports a damaged copy or
+  a file made by a newer CardMirror.
+
 ## 1.15.5 — 2026-10-12
 
 BCai's (@brian-cai) build of CardMirror, updating from
