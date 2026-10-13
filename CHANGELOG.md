@@ -5,6 +5,23 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.5 — 2026-10-12
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Go back to an earlier version.** If an update breaks something for
+  you, Settings → General → "Earlier versions" lists the past releases
+  you can return to. Pick one and confirm; it is downloaded from the
+  same place as updates, checked against the same release key, and the
+  app restarts into it. Automatic update checks are turned off so it
+  stays on that version; "Check for updates" brings you back to the
+  newest one. Only signed releases (1.14.2 and later) are offered.
+  Desktop app only. Settings added after the version you go back to
+  may return to their defaults.
+
 ## 1.15.4 — 2026-10-12
 
 BCai's (@brian-cai) build of CardMirror, updating from
