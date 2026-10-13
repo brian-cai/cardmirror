@@ -4280,26 +4280,28 @@ function initRibbonResizer(): void {
   // Each entry is the set of element IDs to hide/show together.
   // Adding a new group? Just append to this list.
   const panelIds: string[][] = [
-    ['cite-panel'],              // (a) Character styles
-    ['formatting-panel'],        // (b) Structural styles
-    ['numbering-panel'],         // (c) Card numbering cluster — hide THIRD
-    ['custom-ribbon-panel'],     // (d) User custom buttons
-    ['doc-name-chip'],           // (d) Active-doc filename pill (opt-in)
-    ['format-menu-panel'],       // (d) Table / image / sub / sup / strike
-    ['doc-ops-panel'],           // (e) Paragraph integrity
-    ['font-size-up-btn',         // (f) Font-size step buttons
+    ['font-size-up-btn',         // (a) Font-size step buttons
      'font-size-down-btn'],
-    ['color-panel'],             // (g) Highlight / shading / font color
+    ['format-menu-panel'],       // (b) Table / image / sub / sup / strike
+    ['doc-name-chip'],           // (c) Active-doc filename pill (opt-in)
+    ['numbering-panel'],         // (d) Card numbering cluster
+    ['doc-ops-panel'],           // (e) Paragraph integrity
+    // The card-cutting buttons outlast everything above: cutting is what
+    // the ribbon is for, so text size and table / image / strike go first.
+    ['custom-ribbon-panel'],     // (f) User custom buttons (chosen on purpose)
+    ['cite-panel'],              // (g) Character styles
+    ['formatting-panel'],        // (h) Structural styles
+    ['color-panel'],             // (i) Highlight / shading / font color
                                  //     / font-size input + picker. Hiding
                                  //     the whole color-panel also covers
-                                 //     the step buttons in (f), which is
+                                 //     the step buttons in (a), which is
                                  //     fine — display:none is idempotent.
-    ['comments-ops-panel'],      // (h) Comments toggle + add-comment.
-    ['open-btn', 'new-btn',      // (i) File ops: open, new, save,
+    ['comments-ops-panel'],      // (j) Comments toggle + add-comment.
+    ['open-btn', 'new-btn',      // (k) File ops: open, new, save,
      'export-btn', 'save-as-btn', //     save as, autosave-toggle.
      'autosave-btn'],
-    ['view-ops-panel'],          // (j) Read mode + nav-pane toggle.
-    ['settings-btn',             // (k) Settings + keyboard-shortcuts
+    ['view-ops-panel'],          // (l) Read mode + nav-pane toggle.
+    ['settings-btn',             // (m) Settings + keyboard-shortcuts
      'reference-btn'],           //     reference. Genuinely last —
                                  //     reaching them requires user
                                  //     intent and they don't compete
