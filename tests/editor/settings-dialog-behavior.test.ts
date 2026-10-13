@@ -163,3 +163,116 @@ describe('list editors', () => {
     expect(label.value).toBe('Team');
   });
 });
+
+describe('list editors', () => {
+  const press = (el: Element | null | undefined): void => {
+    (el as HTMLElement).focus();
+    (el as HTMLElement).click();
+  };
+
+  it('a reorder arrow keeps focus on the item it moved', () => {
+    openSettings();
+    const arrows = (title: string): HTMLButtonElement[] => [
+      ...row('findCategoryOrder').querySelectorAll<HTMLButtonElement>(`button[title="${title}"]`),
+    ];
+    const before = settings.get('findCategoryOrder').slice();
+    press(arrows('Move down')[0]);
+    expect(settings.get('findCategoryOrder')[1]).toBe(before[0]);
+    expect(document.activeElement).toBe(arrows('Move down')[1]);
+    // At the top the up arrow is disabled, so focus goes to the other one.
+    press(arrows('Move up')[1]);
+    expect(document.activeElement).toBe(arrows('Move down')[0]);
+    expect(settings.get('findCategoryOrder')).toEqual(before);
+  });
+
+  it('a text field follows a change made elsewhere, unless it has focus', () => {
+    openSettings();
+    const input = row('commentAuthorInitials').querySelector('input')!;
+    const was = settings.get('commentAuthorInitials');
+    settings.set('commentAuthorInitials', 'ZZ');
+    expect(input.value).toBe('ZZ');
+    input.focus();
+    settings.set('commentAuthorInitials', 'QQ');
+    expect(input.value).toBe('ZZ');
+    input.blur();
+    settings.set('commentAuthorInitials', was);
+  });
+
+  it('acronyms: one blank row at a time, and no repeated phrase', () => {
+    settings.set('acronymPatterns', [{ phrase: 'nuclear weapons', chars: [0] }]);
+    openSettings();
+    const r = row('acronymPatterns');
+    const add = [...r.querySelectorAll('button')].find((b) => b.textContent === '+ Add phrase')!;
+    add.click();
+    add.click();
+    expect(settings.get('acronymPatterns')).toHaveLength(2);
+    const blank = r.querySelectorAll<HTMLInputElement>('.pmd-acronym-phrase')[1]!;
+    blank.value = 'Nuclear Weapons ';
+    blank.dispatchEvent(new Event('input', { bubbles: true }));
+    blank.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(settings.get('acronymPatterns')).toEqual([{ phrase: 'nuclear weapons', chars: [0] }]);
+    expect(showToast).toHaveBeenCalled();
+    settings.set('acronymPatterns', []);
+  });
+
+  it('shrink protections: a repeated pattern is dropped', () => {
+    settings.set('shrinkCustomProtections', [
+      { pattern: 'abc', isRegex: false },
+      { pattern: '', isRegex: false },
+    ]);
+    openSettings();
+    const second = row('shrinkCustomProtections').querySelectorAll<HTMLInputElement>(
+      '.pmd-shrink-protection-pattern',
+    )[1]!;
+    second.value = 'abc';
+    second.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(settings.get('shrinkCustomProtections')).toEqual([{ pattern: 'abc', isRegex: false }]);
+    settings.set('shrinkCustomProtections', []);
+  });
+
+  it('custom condense markers: a note while one is missing', () => {
+    const was = settings.get('condenseWarningDelimiter');
+    openSettings();
+    const note = row('condenseWarningDelimiter').querySelector<HTMLElement>('.pmd-autocorrect-warning')!;
+    settings.set('condenseWarningCustomPauseMarker', '');
+    settings.set('condenseWarningDelimiter', 'custom');
+    expect(note.hidden).toBe(false);
+    settings.set('condenseWarningCustomPauseMarker', '[P]');
+    settings.set('condenseWarningCustomResumeMarker', '[R]');
+    expect(note.hidden).toBe(true);
+    settings.set('condenseWarningDelimiter', was);
+    settings.set('condenseWarningCustomPauseMarker', '');
+    settings.set('condenseWarningCustomResumeMarker', '');
+  });
+});
+
+describe('screen-reader names', () => {
+  it('every control in the dialog has one', async () => {
+    settings.set('pairingPartners', [{ label: 'Ann', code: 'aaaa-bbbb' }] as never);
+    settings.set('pairingGroups', [{ label: 'Team', memberCodes: ['aaaa-bbbb'] }] as never);
+    settings.set('shrinkCustomProtections', [{ pattern: 'x', isRegex: false }]);
+    settings.set('acronymPatterns', [{ phrase: 'nuclear weapons', chars: [0] }]);
+    settings.set('timerSoundEnabled', true);
+    openSettings();
+    // Some buttons get their text from an async status read.
+    await new Promise((r) => setTimeout(r, 0));
+    const named = (el: Element): boolean => {
+      if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return true;
+      if (el.getAttribute('title') || el.getAttribute('placeholder')) return true;
+      if (el.closest('label')?.textContent?.trim()) return true;
+      if (el.id && document.querySelector(`label[for="${el.id}"]`)) return true;
+      return el.tagName === 'BUTTON' && !!el.textContent?.trim();
+    };
+    const unnamed = [
+      ...document.querySelectorAll('.pmd-settings-dialog :is(input, select, textarea, button)'),
+    ]
+      .filter((el) => (el as HTMLElement).style.display !== 'none' && !named(el))
+      .map((el) => {
+        const key = el.closest('[data-setting-key]')?.getAttribute('data-setting-key');
+        return `${key ?? '?'}: ${el.tagName.toLowerCase()}.${el.className}`;
+      });
+    settings.set('shrinkCustomProtections', []);
+    settings.set('acronymPatterns', []);
+    expect(unnamed).toEqual([]);
+  });
+});

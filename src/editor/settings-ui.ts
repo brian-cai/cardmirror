@@ -271,6 +271,13 @@ function registerRowCleanup(_el: Element, callback: () => void): () => void {
   };
 }
 
+/** Whether a screen reader has anything to call this control. */
+function hasAccessibleName(el: Element): boolean {
+  if (el.getAttribute('aria-label') || el.getAttribute('aria-labelledby')) return true;
+  if (el.getAttribute('title') || el.getAttribute('placeholder')) return true;
+  return !!el.closest('label')?.textContent?.trim();
+}
+
 /** Nudge a tab into the visible band of its scrolling container.
  *  If the tab's bounding rect is fully inside the container's
  *  rect, no-op. Otherwise scroll just enough to reveal it on the
@@ -1053,6 +1060,18 @@ class SettingsModal {
   }
 
   private renderEntry(meta: SettingMeta): HTMLElement {
+    const row = this.buildEntry(meta);
+    // A row whose one control sits beside its title rather than inside a
+    // <label> would otherwise be announced as just "combo box" / "edit
+    // text". Rows with several controls name each one where they build it.
+    const unnamed = [
+      ...row.querySelectorAll<HTMLElement>('input, select, textarea'),
+    ].filter((el) => !hasAccessibleName(el));
+    if (unnamed.length === 1) unnamed[0]!.setAttribute('aria-label', meta.label);
+    return row;
+  }
+
+  private buildEntry(meta: SettingMeta): HTMLElement {
     const row = document.createElement('div');
     row.className = 'pmd-settings-row';
     // Tag the row so the palette's settings shortcuts can scroll to it.
@@ -1728,6 +1747,14 @@ class SettingsModal {
         if (meta.kind !== 'password') input.value = input.value.trim();
         settings.set(meta.key as 'commentAuthor', input.value as never);
       });
+      // Follow a change made elsewhere (another window, an import), but
+      // never under the cursor.
+      const unsub = settings.subscribe(() => {
+        if (document.activeElement === input) return;
+        const cur = settings.get(meta.key);
+        if (typeof cur === 'string' && input.value !== cur) input.value = cur;
+      });
+      registerRowCleanup(input, () => unsub());
       label.appendChild(input);
     } else if (meta.kind === 'aiCitePrompt') {
       // A button only — the prompt editor opens in its own modal
@@ -2068,6 +2095,7 @@ function buildColorsEditor(): HTMLElement {
     const picker = document.createElement('input');
     picker.type = 'color';
     picker.className = 'pmd-colors-input';
+    picker.setAttribute('aria-label', LABELS[key]);
     picker.value = settings.get('displayColors')[key];
     picker.addEventListener('input', () => setColor(key, picker.value));
     row.appendChild(picker);
@@ -2861,12 +2889,13 @@ function buildParagraphSpacingEditor(): HTMLElement {
   rowsContainer.className = 'pmd-para-spacing-rows';
   wrap.appendChild(rowsContainer);
 
-  function cell(key: ParagraphSpacingKey, value: number): HTMLElement {
+  function cell(key: ParagraphSpacingKey, value: number, name: string): HTMLElement {
     const c = document.createElement('span');
     c.className = 'pmd-para-spacing-cell';
     const input = document.createElement('input');
     input.type = 'number';
     input.className = 'pmd-para-spacing-input';
+    input.setAttribute('aria-label', name);
     input.min = '0';
     input.max = '96';
     input.step = '0.5';
@@ -2912,8 +2941,8 @@ function buildParagraphSpacingEditor(): HTMLElement {
       lbl.className = 'pmd-para-spacing-row-label';
       lbl.textContent = label;
       row.appendChild(lbl);
-      row.appendChild(cell(before, spacing[before]));
-      row.appendChild(cell(after, spacing[after]));
+      row.appendChild(cell(before, spacing[before], `${label}, space before`));
+      row.appendChild(cell(after, spacing[after], `${label}, space after`));
       rowsContainer.appendChild(row);
     }
   }
@@ -2960,6 +2989,7 @@ function buildLineHeightsEditor(): HTMLElement {
       const input = document.createElement('input');
       input.type = 'number';
       input.className = 'pmd-line-height-input';
+      input.setAttribute('aria-label', labelText);
       input.min = '1.0';
       input.max = '2.0';
       input.step = '0.05';
@@ -3042,6 +3072,7 @@ function buildDisplaySizesEditor(): HTMLElement {
       const input = document.createElement('input');
       input.type = 'number';
       input.className = 'pmd-display-size-input';
+      input.setAttribute('aria-label', DISPLAY_SIZE_LABELS[key]);
       input.min = '1';
       input.max = '144';
       input.step = '0.5';
@@ -3139,6 +3170,7 @@ function buildReadersEditor(): HTMLElement {
       const wpmInput = document.createElement('input');
       wpmInput.type = 'number';
       wpmInput.className = 'pmd-reader-wpm';
+      wpmInput.setAttribute('aria-label', 'Words per minute');
       wpmInput.min = '1';
       wpmInput.step = '1';
       wpmInput.value = String(reader.wpm);
@@ -3208,6 +3240,7 @@ function buildReadersEditor(): HTMLElement {
         if (idx === 0) return;
         [cur[idx - 1], cur[idx]] = [cur[idx]!, cur[idx - 1]!];
         commit(cur);
+        refocusReorder(list, 'pmd-reader-move', 'up', idx - 1);
       });
       row.appendChild(upBtn);
 
@@ -3222,6 +3255,7 @@ function buildReadersEditor(): HTMLElement {
         if (idx >= cur.length - 1) return;
         [cur[idx], cur[idx + 1]] = [cur[idx + 1]!, cur[idx]!];
         commit(cur);
+        refocusReorder(list, 'pmd-reader-move', 'down', idx + 1);
       });
       row.appendChild(downBtn);
 
@@ -3639,6 +3673,23 @@ function makeStarButton(starred: boolean, disabled: boolean, onToggle: () => voi
   return btn;
 }
 
+/** Reordering rebuilds the list, which removed the arrow that was pressed
+ *  and dropped keyboard focus out of the dialog. Focus the same arrow on
+ *  the row where the item landed (the other arrow at either end), so
+ *  repeated presses keep moving the same item. */
+function refocusReorder(
+  scope: HTMLElement,
+  btnClass: string,
+  dir: 'up' | 'down',
+  rowIdx: number,
+): void {
+  const at = (title: string): HTMLButtonElement | undefined =>
+    scope.querySelectorAll<HTMLButtonElement>(`button.${btnClass}[title="${title}"]`)[rowIdx];
+  const same = at(dir === 'up' ? 'Move up' : 'Move down');
+  const btn = same && !same.disabled ? same : at(dir === 'up' ? 'Move down' : 'Move up');
+  btn?.focus();
+}
+
 /** Up / down reorder pair for a settings-list row — the Find-category-order
  *  arrow pattern (same button class, disabled at the ends). Reorders the
  *  settings array itself: array order is what the consumer renders (send
@@ -3648,6 +3699,8 @@ function makeReorderButtons(
   idx: number,
   count: number,
   onSwap: (a: number, b: number) => void,
+  /** The list the rows are rebuilt into, so the arrow keeps focus. */
+  scope: HTMLElement,
 ): HTMLButtonElement[] {
   const make = (dir: 'up' | 'down'): HTMLButtonElement => {
     const btn = document.createElement('button');
@@ -3656,7 +3709,11 @@ function makeReorderButtons(
     setIcon(btn, dir === 'up' ? 'arrow-up' : 'arrow-down');
     btn.title = dir === 'up' ? 'Move up' : 'Move down';
     btn.disabled = dir === 'up' ? idx === 0 : idx === count - 1;
-    btn.addEventListener('click', () => onSwap(idx, dir === 'up' ? idx - 1 : idx + 1));
+    btn.addEventListener('click', () => {
+      const to = dir === 'up' ? idx - 1 : idx + 1;
+      onSwap(idx, to);
+      refocusReorder(scope, 'pmd-find-category-order-btn', dir, to);
+    });
     return btn;
   };
   return [make('up'), make('down')];
@@ -3755,7 +3812,7 @@ function buildPairingPartnersEditor(): HTMLElement {
         cur[a] = cur[b2]!;
         cur[b2] = tmp;
         commit(cur);
-      })) {
+      }, list)) {
         row.appendChild(b);
       }
 
@@ -3937,7 +3994,7 @@ function buildRibbonCustomButtonsEditor(): HTMLElement {
         arr[a] = arr[b2]!;
         arr[b2] = tmp;
         commit(arr);
-      })) {
+      }, list)) {
         rowEl.appendChild(b);
       }
       rowEl.appendChild(del);
@@ -4328,7 +4385,7 @@ function buildPairingGroupsEditor(): HTMLElement {
         cur[a] = cur[b2]!;
         cur[b2] = tmp;
         commit(cur);
-      })) {
+      }, list)) {
         header.appendChild(b);
       }
 
@@ -4963,6 +5020,14 @@ function buildNumberEditor(key: keyof Settings, min = 0, max = Infinity): HTMLEl
     settings.set(key, v as never);
     input.value = String(settings.get(key));
   });
+  // Follow a change made elsewhere (another window, an import), but never
+  // under the cursor.
+  const unsub = settings.subscribe(() => {
+    if (document.activeElement === input) return;
+    const cur = String(settings.get(key));
+    if (input.value !== cur) input.value = cur;
+  });
+  registerRowCleanup(input, () => unsub());
   return input;
 }
 
@@ -5090,6 +5155,8 @@ function buildVoiceModelEditor(): HTMLElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'pmd-voice-model-download';
+  // Shown, with its text, once the model status is known.
+  button.style.display = 'none';
   const deleteButton = document.createElement('button');
   deleteButton.type = 'button';
   deleteButton.className = 'pmd-voice-model-delete';
@@ -5740,6 +5807,7 @@ function buildWordCountOrderEditor(): HTMLElement {
     row.appendChild(label);
     const select = document.createElement('select');
     select.className = 'pmd-body-font-select';
+    select.setAttribute('aria-label', f.label);
     for (const o of WORD_COUNT_ORDERS) {
       const opt = document.createElement('option');
       opt.value = o.value;
@@ -5791,6 +5859,7 @@ function buildEnterAfterStyleEditor(): HTMLElement {
     row.appendChild(label);
     const select = document.createElement('select');
     select.className = 'pmd-body-font-select';
+    select.setAttribute('aria-label', f.label);
     for (const o of options) {
       const opt = document.createElement('option');
       opt.value = o.value;
@@ -6426,6 +6495,7 @@ function buildColorOverridesEditor(): HTMLElement {
     const input = document.createElement('input');
     input.type = 'color';
     input.className = 'pmd-color-override-input';
+    input.setAttribute('aria-label', tok.label);
 
     // Document-text tokens (analytic / undertag) are backed by the
     // `displayColors` setting, linked to the Appearance → Style colors
@@ -6446,6 +6516,7 @@ function buildColorOverridesEditor(): HTMLElement {
     alpha.max = '1';
     alpha.step = '0.01';
     alpha.title = 'Opacity';
+    alpha.setAttribute('aria-label', `${tok.label} opacity`);
     if (dcKey) alpha.hidden = true;
 
     const reset = document.createElement('button');
@@ -6528,8 +6599,24 @@ function buildColorOverridesEditor(): HTMLElement {
       }
     });
     registerRowCleanup(row, () => unsub());
+    if (!dcKey) themedRefreshers.push(refresh);
 
     return row;
+  }
+
+  // A row with no override shows the theme's own color, which changes with
+  // light / dark and the color-blind palette: those are set as attributes
+  // on the root element, not through the two settings a row watches.
+  const themedRefreshers: (() => void)[] = [];
+  if (typeof MutationObserver !== 'undefined') {
+    const themeObserver = new MutationObserver(() => {
+      for (const refresh of themedRefreshers) refresh();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'data-theme-doc', 'data-cvd'],
+    });
+    registerRowCleanup(wrap, () => themeObserver.disconnect());
   }
 
   for (const [groupName, tokens] of groups) {
@@ -6597,6 +6684,7 @@ function buildFindCategoryOrderEditor(): HTMLElement {
     cur[b] = tmp;
     settings.set('findCategoryOrder', cur);
     render();
+    refocusReorder(wrap, 'pmd-find-category-order-btn', b < a ? 'up' : 'down', b);
   }
 
   render();
@@ -6819,6 +6907,7 @@ function buildTranslationEditor(): HTMLElement {
   srcWrap.appendChild(fieldLabel('Source language'));
   const srcSel = document.createElement('select');
   srcSel.className = 'pmd-body-font-select';
+  srcSel.setAttribute('aria-label', 'Source language');
   const autoOpt = document.createElement('option');
   autoOpt.value = 'auto';
   autoOpt.textContent = 'Auto-detect';
@@ -6839,6 +6928,7 @@ function buildTranslationEditor(): HTMLElement {
   tgtWrap.appendChild(fieldLabel('Target language'));
   const tgtSel = document.createElement('select');
   tgtSel.className = 'pmd-body-font-select';
+  tgtSel.setAttribute('aria-label', 'Target language');
   for (const l of TRANSLATION_LANGUAGES) {
     const opt = document.createElement('option');
     opt.value = l.code;
@@ -6879,6 +6969,7 @@ function buildTranslationEditor(): HTMLElement {
   const key = document.createElement('input');
   key.type = 'password';
   key.className = 'pmd-settings-text';
+  key.setAttribute('aria-label', 'Google Cloud Translation API key');
   key.value = settings.get('googleTranslateApiKey');
   key.addEventListener('change', () => settings.set('googleTranslateApiKey', key.value.trim()));
   keyWrap.appendChild(key);
@@ -7337,6 +7428,23 @@ function buildCondenseWarningDelimiterEditor(): HTMLElement {
   customInner.appendChild(customLabel);
   customInner.appendChild(pauseInput);
   customInner.appendChild(resumeInput);
+  // Condense with warning does nothing while Custom is picked with a
+  // marker missing; say so here instead of leaving it to be discovered.
+  const customNote = document.createElement('div');
+  customNote.className = 'pmd-autocorrect-warning';
+  customNote.textContent =
+    'Fill in both markers. Until then, Condense with warning does nothing.';
+  customInner.appendChild(customNote);
+  const refreshNote = (): void => {
+    customNote.hidden = !(
+      settings.get('condenseWarningDelimiter') === 'custom' &&
+      (!settings.get('condenseWarningCustomPauseMarker') ||
+        !settings.get('condenseWarningCustomResumeMarker'))
+    );
+  };
+  refreshNote();
+  const unsub = settings.subscribe(refreshNote);
+  registerRowCleanup(wrap, () => unsub());
   customRow.appendChild(customInner);
   wrap.appendChild(customRow);
 
@@ -7691,6 +7799,21 @@ function buildAcronymPatternsEditor(): HTMLElement {
         update(idx, updated);
         renderPicker(picker, idx, updated);
       });
+      // A phrase already in the list: only one of the two rows could ever
+      // apply, so drop this one and point at the other.
+      phraseInput.addEventListener('change', () => {
+        const cur = settings.get('acronymPatterns');
+        const same = (a: string, b: string): boolean =>
+          a.trim().toLowerCase() === b.trim().toLowerCase();
+        const phrase = phraseInput.value;
+        if (!phrase.trim()) return;
+        const other = cur.findIndex((e, i) => i !== idx && same(e.phrase, phrase));
+        if (other < 0) return;
+        commit(cur.filter((_, i) => i !== idx));
+        render();
+        showToast(`“${phrase.trim()}” is already in the list.`);
+        phraseInputs()[other > idx ? other - 1 : other]?.focus();
+      });
 
       list.appendChild(row);
     });
@@ -7703,10 +7826,19 @@ function buildAcronymPatternsEditor(): HTMLElement {
     }
   }
 
+  const phraseInputs = (): HTMLInputElement[] => [
+    ...list.querySelectorAll<HTMLInputElement>('.pmd-acronym-phrase'),
+  ];
   addBtn.addEventListener('click', () => {
+    // One blank row at a time: finish that one first.
+    const blank = phraseInputs().find((el) => !el.value.trim());
+    if (blank) {
+      blank.focus();
+      return;
+    }
     commit([...settings.get('acronymPatterns'), { phrase: '', chars: [] }]);
     render();
-    const inputs = list.querySelectorAll<HTMLInputElement>('.pmd-acronym-phrase');
+    const inputs = phraseInputs();
     inputs[inputs.length - 1]?.focus();
   });
 
@@ -7731,6 +7863,22 @@ function buildShrinkProtectionsEditor(): HTMLElement {
   function commit(next: ShrinkProtection[]): void {
     settings.set('shrinkCustomProtections', next);
   }
+  /** A second row with the same pattern and kind protects nothing more;
+   *  remove it and say so. Returns true when the row was removed. */
+  function dropIfDuplicate(
+    cur: ShrinkProtection[],
+    idx: number,
+    pattern: string,
+    isRegex: boolean,
+  ): boolean {
+    if (!pattern) return false;
+    if (!cur.some((r, i) => i !== idx && r.pattern === pattern && r.isRegex === isRegex)) {
+      return false;
+    }
+    commit(cur.filter((_, i) => i !== idx));
+    showToast(`“${pattern}” is already protected.`);
+    return true;
+  }
 
   function render(): void {
     list.innerHTML = '';
@@ -7747,7 +7895,9 @@ function buildShrinkProtectionsEditor(): HTMLElement {
         ? 'regex source'
         : 'literal string';
       patternInput.addEventListener('change', () => {
-        const next = settings.get('shrinkCustomProtections').map((r, i) =>
+        const cur = settings.get('shrinkCustomProtections');
+        if (dropIfDuplicate(cur, idx, patternInput.value, regexCb.checked)) return;
+        const next = cur.map((r, i) =>
           i === idx ? { ...r, pattern: patternInput.value } : r,
         );
         watch.quiet(next);
@@ -7760,7 +7910,9 @@ function buildShrinkProtectionsEditor(): HTMLElement {
       regexCb.type = 'checkbox';
       regexCb.checked = rule.isRegex;
       regexCb.addEventListener('change', () => {
-        const next = settings.get('shrinkCustomProtections').map((r, i) =>
+        const cur = settings.get('shrinkCustomProtections');
+        if (dropIfDuplicate(cur, idx, patternInput.value, regexCb.checked)) return;
+        const next = cur.map((r, i) =>
           i === idx ? { ...r, isRegex: regexCb.checked } : r,
         );
         watch.quiet(next);
