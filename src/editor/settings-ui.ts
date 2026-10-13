@@ -2595,19 +2595,40 @@ async function exportTeamFile(): Promise<void> {
 
 /** Import a team file; resolves true when anything changed. */
 export async function importTeamFile(): Promise<boolean> {
-  const { mergeTeamFile, parseTeamFile, TEAM_FILE_EXTENSION } = await import('./pairing/team-file.js');
+  const { mergeTeamFile, parseTeamFile, TEAM_FILE_EXTENSION, TEAM_FILE_KIND } = await import('./pairing/team-file.js');
   const opened = await getHost().openFile({
     filters: [{ name: 'CardMirror team', extensions: [TEAM_FILE_EXTENSION, 'json'] }],
   });
   if (!opened) return false;
   let file: ReturnType<typeof parseTeamFile> = null;
+  let raw: unknown;
+  let isJson = false;
   try {
-    file = parseTeamFile(JSON.parse(new TextDecoder().decode(opened.bytes)));
+    raw = JSON.parse(new TextDecoder().decode(opened.bytes));
+    isJson = true;
+    file = parseTeamFile(raw);
   } catch {
     /* not JSON */
   }
   if (!file) {
-    showToast(`\u201c${opened.name}\u201d isn\u2019t a CardMirror team file.`);
+    // Say WHY, so a failed import can be fixed without a bug report: an
+    // empty read is a cloud placeholder that never downloaded; unreadable
+    // text is a copy that was changed or cut short on the way; valid JSON
+    // of the wrong kind / a later version is a different file or an old app.
+    const q = `\u201c${opened.name}\u201d`;
+    const r = (isJson && raw && typeof raw === 'object' ? raw : {}) as { kind?: unknown; version?: unknown };
+    if (opened.bytes.length === 0) {
+      showToast(
+        `${q} is empty \u2014 it may not have finished downloading from Dropbox or Drive. ` +
+          'Copy it to your Desktop (or make it available offline) and import that copy.',
+      );
+    } else if (!isJson) {
+      showToast(`${q} can\u2019t be read as a team file \u2014 this copy was changed or cut short. Ask for the file again.`);
+    } else if (r.kind === TEAM_FILE_KIND && typeof r.version === 'number' && r.version > 1) {
+      showToast(`${q} was made by a newer CardMirror. Update CardMirror, then import it again.`);
+    } else {
+      showToast(`${q} isn\u2019t a CardMirror team file.`);
+    }
     return false;
   }
   const merged = mergeTeamFile({
