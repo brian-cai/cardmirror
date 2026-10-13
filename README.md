@@ -148,6 +148,11 @@ Going to a tournament? **Pause update checks for 1 week** (Settings →
 General → "About this install") stops all automatic checks and
 downloads until the shown resume date.
 
+If an update breaks something for you, **Earlier versions** (same
+place) lists the past signed releases and puts one back. It turns
+automatic update checks off so you stay on that version; **Check for
+updates** returns you to the newest one.
+
 ## (Optional) Set up AI features
 
 A few features call out to an AI model:

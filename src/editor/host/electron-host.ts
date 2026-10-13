@@ -116,6 +116,14 @@ export interface PairingInboxItemIpc {
 
 /** Verbatim Flow bridge result shapes (mirrors verbatim-flow.ps1). */
 /** One document window in the Switch Window list (`host:list-windows`). */
+/** Answer to `listEarlierVersions`. */
+export type EarlierVersionsResult = {
+  current: string;
+  releasesUrl: string;
+  supported: boolean;
+  reason: string | null;
+} & ({ ok: true; versions: { version: string; publishedAt: string }[] } | { ok: false; error: string });
+
 export interface WindowListEntry {
   windowId: number;
   /** OS title — `${filename} — CardMirror`, or `CardMirror` when untitled. */
@@ -518,6 +526,15 @@ interface ElectronAPI {
    *  click action (ready → restart-install; available → release page).
    *  See main.ts "Update chip" for the model. */
   getUpdateChipState(): Promise<{ state: 'available' | 'ready'; version: string } | null>;
+  /** Past releases this install can go back to (older than the running
+   *  one, built for this platform, signed for the stream). `supported` is
+   *  false, with a `reason`, when this install can't replace itself. */
+  listEarlierVersions(): Promise<EarlierVersionsResult>;
+  /** Download and verify an earlier version after a native confirmation.
+   *  On `ok`, `updateChipAction()` restarts into it. */
+  installEarlierVersion(
+    version: string,
+  ): Promise<{ ok: true } | { ok: false; error: string; cancelled?: boolean }>;
   updateChipAction(): Promise<void>;
   onUpdateChip(
     handler: (payload: { state: 'available' | 'ready'; version: string } | null) => void,
@@ -1524,6 +1541,16 @@ export class ElectronHost implements Host {
     input: string,
   ): Promise<{ ok: true; active: string } | { ok: false; error: string; cancelled?: boolean }> {
     return api().setUpdateSource(input);
+  }
+
+  async listEarlierVersions(): Promise<EarlierVersionsResult> {
+    return api().listEarlierVersions();
+  }
+
+  async installEarlierVersion(
+    version: string,
+  ): Promise<{ ok: true } | { ok: false; error: string; cancelled?: boolean }> {
+    return api().installEarlierVersion(version);
   }
 
   async getUpdateChipState(): Promise<{ state: 'available' | 'ready'; version: string } | null> {

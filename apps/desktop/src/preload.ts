@@ -14,6 +14,13 @@
 
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
 
+type EarlierVersionsResult = {
+  current: string;
+  releasesUrl: string;
+  supported: boolean;
+  reason: string | null;
+} & ({ ok: true; versions: { version: string; publishedAt: string }[] } | { ok: false; error: string });
+
 interface FileFilter {
   name: string;
   extensions: string[];
@@ -152,6 +159,15 @@ interface PairingInboxItemIpc {
   setUpdateSource: (input: string) =>
     ipcRenderer.invoke('host:set-update-source', input) as Promise<
       { ok: true; active: string } | { ok: false; error: string; cancelled?: boolean }
+    >,
+  /** Settings → General "Earlier versions": the past releases this install
+   *  can go back to, and staging one (resolves once it is downloaded and
+   *  verified; `updateChipAction` then installs it). */
+  listEarlierVersions: () =>
+    ipcRenderer.invoke('host:list-earlier-versions') as Promise<EarlierVersionsResult>,
+  installEarlierVersion: (version: string) =>
+    ipcRenderer.invoke('host:install-earlier-version', version) as Promise<
+      { ok: true } | { ok: false; error: string; cancelled?: boolean }
     >,
   getUpdateChipState: () => ipcRenderer.invoke('host:update-chip-state'),
   updateChipAction: () => ipcRenderer.invoke('host:update-chip-action'),

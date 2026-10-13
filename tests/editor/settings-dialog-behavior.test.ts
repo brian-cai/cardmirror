@@ -30,7 +30,7 @@ vi.mock('../../src/editor/host/index.js', () => ({
   isWindowsHost: () => false,
 }));
 
-import { openSettings, closeSettings } from '../../src/editor/settings-ui.js';
+import { openSettings, closeSettings, buildEarlierVersionsRow } from '../../src/editor/settings-ui.js';
 import { settings } from '../../src/editor/settings.js';
 import { showToast } from '../../src/editor/toast.js';
 
@@ -274,5 +274,105 @@ describe('screen-reader names', () => {
     settings.set('shrinkCustomProtections', []);
     settings.set('acronymPatterns', []);
     expect(unnamed).toEqual([]);
+  });
+});
+
+describe('earlier versions', () => {
+  type Host = Parameters<typeof buildEarlierVersionsRow>[0];
+  const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+  const fakeHost = (over: Record<string, unknown>): Host =>
+    ({
+      listEarlierVersions: async () => ({
+        ok: true,
+        current: '1.15.5',
+        releasesUrl: 'https://github.com/brian-cai/cardmirror/releases',
+        supported: true,
+        reason: null,
+        versions: [
+          { version: '1.15.4', publishedAt: '2026-10-13T04:00:00Z' },
+          { version: '1.15.3', publishedAt: '' },
+        ],
+      }),
+      installEarlierVersion: async () => ({ ok: true }),
+      updateChipAction: async () => {},
+      openExternal: async () => {},
+      ...over,
+    }) as unknown as Host;
+  const parts = (el: HTMLElement) => {
+    const buttons = [...el.querySelectorAll('button')];
+    return {
+      show: buttons.find((b) => b.textContent === 'Show earlier versions')!,
+      go: buttons.find((b) => b.textContent === 'Go back to this version')!,
+      select: el.querySelector('select')!,
+      status: el.querySelector<HTMLElement>('[role="status"]')!,
+    };
+  };
+
+  afterEach(() => settings.set('checkForUpdatesOnLaunch', true));
+
+  it('going back turns off automatic checks, then restarts', async () => {
+    const calls: string[] = [];
+    const el = buildEarlierVersionsRow(
+      fakeHost({
+        installEarlierVersion: async (v: string) => {
+          calls.push(`install ${v}`);
+          return { ok: true };
+        },
+        updateChipAction: async () => {
+          calls.push(`restart auto=${settings.get('checkForUpdatesOnLaunch')}`);
+        },
+      }),
+    );
+    const { show, go, select } = parts(el);
+    expect(select.hidden).toBe(true);
+    show.click();
+    await tick();
+    expect([...select.options].map((o) => o.value)).toEqual(['1.15.4', '1.15.3']);
+    expect(go.hidden).toBe(false);
+    select.value = '1.15.3';
+    go.click();
+    await tick();
+    expect(calls).toEqual(['install 1.15.3', 'restart auto=false']);
+  });
+
+  it('a cancelled or failed switch changes nothing', async () => {
+    let restarted = false;
+    const el = buildEarlierVersionsRow(
+      fakeHost({
+        installEarlierVersion: async () => ({ ok: false, error: 'no signature' }),
+        updateChipAction: async () => {
+          restarted = true;
+        },
+      }),
+    );
+    const { show, go, status } = parts(el);
+    show.click();
+    await tick();
+    go.click();
+    await tick();
+    expect(restarted).toBe(false);
+    expect(settings.get('checkForUpdatesOnLaunch')).toBe(true);
+    expect(status.textContent).toBe('no signature');
+    expect(go.disabled).toBe(false);
+  });
+
+  it('an install that cannot replace itself gets the reason, not the button', async () => {
+    const el = buildEarlierVersionsRow(
+      fakeHost({
+        listEarlierVersions: async () => ({
+          ok: true,
+          current: '1.15.5',
+          releasesUrl: 'https://example.invalid/releases',
+          supported: false,
+          reason: 'Move it to the Applications folder.',
+          versions: [{ version: '1.15.4', publishedAt: '' }],
+        }),
+      }),
+    );
+    const { show, go, status } = parts(el);
+    show.click();
+    await tick();
+    expect(go.hidden).toBe(true);
+    expect(status.textContent).toBe('Move it to the Applications folder.');
   });
 });

@@ -55,6 +55,12 @@ import {
   type PinnedUpdateSource,
 } from './update-source.js';
 import {
+  earlierVersionsFrom,
+  manifestNameFor,
+  releaseFeedUrl,
+  type EarlierVersion,
+} from './earlier-versions.js';
+import {
   PUBLIC_KEY_ASSET,
   artifactNameFor,
   keyFingerprint,
@@ -4070,6 +4076,154 @@ ipcMain.handle('host:update-chip-action', () => {
   }
 });
 
+// ─── Earlier versions (Settings → General) ───────────────────────────
+// Going back to a past release reuses the update path end to end: the feed
+// is pointed at that one release, electron-updater stages it, the same
+// signature gate decides whether it may install, and the chip's install
+// step puts it in place. Only a release signed for this stream is offered,
+// and the switch needs a yes in a native dialog shown from here, so no
+// page, document or plugin can move an install to an old version quietly.
+
+type RevertOutcome = { ok: true } | { ok: false; error: string; cancelled?: boolean };
+/** The earlier version being staged, and how its request is answered. */
+let revertWaiter: { version: string; settle: (outcome: RevertOutcome) => void } | null = null;
+function settleRevert(outcome: RevertOutcome): void {
+  const waiter = revertWaiter;
+  revertWaiter = null;
+  waiter?.settle(outcome);
+}
+
+/** Whether this install can replace itself (the same conditions as an
+ *  ordinary update), and what to say when it can't. */
+function revertSupport(): { supported: boolean; reason: string | null } {
+  if (LITE_BUILD) return { supported: false, reason: 'CardMirror Lite never downloads anything.' };
+  if (!app.isPackaged) return { supported: false, reason: 'Only an installed build can change versions.' };
+  if (process.platform === 'darwin' && !macBundleSelfUpdatable(app.getPath('exe'))) {
+    return {
+      supported: false,
+      reason:
+        "CardMirror can't replace itself where it is installed. Move it to the Applications folder, or download the version you want from the releases page.",
+    };
+  }
+  if (process.platform === 'linux' && !process.env['APPIMAGE']) {
+    return {
+      supported: false,
+      reason: 'Only the AppImage can change versions by itself. Install the package you want from the releases page.',
+    };
+  }
+  return { supported: true, reason: null };
+}
+
+async function fetchEarlierVersions(): Promise<EarlierVersion[]> {
+  const manifest = manifestNameFor(process.platform, process.arch);
+  if (!manifest) return [];
+  const src = activeUpdateSource();
+  const res = await fetch(`https://api.github.com/repos/${src.owner}/${src.repo}/releases?per_page=40`, {
+    headers: { accept: 'application/vnd.github+json' },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
+  return earlierVersionsFrom(await res.json(), {
+    current: app.getVersion(),
+    manifest,
+    requireSignature: trustedKeysForActiveSource().length > 0,
+  });
+}
+
+ipcMain.handle('host:list-earlier-versions', async () => {
+  const support = revertSupport();
+  const base = { current: app.getVersion(), releasesUrl: releasesUrl(), ...support };
+  if (LITE_BUILD) return { ok: false as const, error: support.reason ?? '', ...base };
+  try {
+    return { ok: true as const, versions: await fetchEarlierVersions(), ...base };
+  } catch (err) {
+    return {
+      ok: false as const,
+      error: `Couldn't get the list of versions (${err instanceof Error ? err.message : String(err)}).`,
+      ...base,
+    };
+  }
+});
+
+/** Stage an earlier version. Resolves once it is downloaded and verified
+ *  (the update chip then reads "ready" for it, and the caller installs it
+ *  with the chip action), or with why it couldn't be. */
+ipcMain.handle('host:install-earlier-version', async (event, input: unknown): Promise<RevertOutcome> => {
+  const version = typeof input === 'string' ? input : '';
+  const support = revertSupport();
+  if (!support.supported) return { ok: false, error: support.reason ?? '' };
+  if (revertWaiter || updateCheckInFlight) {
+    return { ok: false, error: 'An update check is already running. Try again in a moment.' };
+  }
+  let versions: EarlierVersion[];
+  try {
+    versions = await fetchEarlierVersions();
+  } catch (err) {
+    return { ok: false, error: `Couldn't reach GitHub (${err instanceof Error ? err.message : String(err)}).` };
+  }
+  if (!versions.some((v) => v.version === version)) {
+    return { ok: false, error: `CardMirror ${version || '?'} isn't available to go back to.` };
+  }
+  const win = BrowserWindow.fromWebContents(event.sender) ?? dialogParentWindow();
+  if (!win) return { ok: false, error: 'No window to ask in.' };
+  const choice = await dialog.showMessageBox(win, {
+    type: 'question',
+    buttons: [`Go back to ${version}`, 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+    title: 'Earlier version',
+    message: `Go back to CardMirror ${version}?`,
+    detail:
+      `This replaces CardMirror ${app.getVersion()} with ${version} and restarts the app. Save your work first.\n\n` +
+      `Automatic update checks are turned off so it stays on ${version}. To come back to the newest version, ` +
+      'use Settings → General → Check for updates.\n\n' +
+      `Settings that were added after ${version} may go back to their defaults.`,
+  });
+  if (choice.response !== 0) return { ok: false, error: '', cancelled: true };
+  if (revertWaiter || updateCheckInFlight) {
+    return { ok: false, error: 'An update check is already running. Try again in a moment.' };
+  }
+
+  const src = activeUpdateSource();
+  updateCheckInFlight = true;
+  const notOffered = (): void => settleRevert({ ok: false, error: `The release didn't offer ${version}.` });
+  try {
+    autoUpdater.allowDowngrade = true;
+    autoUpdater.setFeedURL({ provider: 'generic', url: releaseFeedUrl(src, version) });
+    autoUpdater.once('update-not-available', notOffered);
+    return await new Promise<RevertOutcome>((resolve) => {
+      const timer = setTimeout(
+        () => settleRevert({ ok: false, error: 'The download took too long. Check your connection and try again.' }),
+        15 * 60_000,
+      );
+      revertWaiter = {
+        version,
+        settle: (outcome) => {
+          clearTimeout(timer);
+          resolve(outcome);
+        },
+      };
+      // The persistent handlers in startAutoUpdate stage and verify the
+      // download; they answer through settleRevert.
+      autoUpdater
+        .checkForUpdates()
+        .then((result) => {
+          if (result && result.updateInfo.version !== version) notOffered();
+        })
+        .catch((err: unknown) => {
+          settleRevert({ ok: false, error: err instanceof Error ? err.message : String(err) });
+        });
+    });
+  } finally {
+    // Back to following the stream's newest release, whatever happened.
+    autoUpdater.off('update-not-available', notOffered);
+    autoUpdater.allowDowngrade = false;
+    autoUpdater.setFeedURL({ provider: 'github', owner: src.owner, repo: src.repo });
+    updateFeedOverridden = true;
+    updateCheckInFlight = false;
+  }
+});
+
 /** Versions whose download failed the signature check this session, so a
  *  daily re-check doesn't re-download and re-warn about the same release. */
 const refusedUpdateVersions = new Set<string>();
@@ -4117,6 +4271,7 @@ function refuseUpdate(version: string, file: string | undefined, reason: string)
   console.warn(`Auto-update: refused ${version} — ${reason}.`);
   refusedUpdateVersions.add(version);
   if (file) void fs.rm(file, { force: true }).catch(() => {});
+  settleRevert({ ok: false, error: `CardMirror ${version} couldn't be verified, so it wasn't installed.` });
   const win = dialogParentWindow();
   if (!win) return;
   void dialog.showMessageBox(win, {
@@ -4148,6 +4303,7 @@ function startAutoUpdate(): void {
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.on('error', (err) => {
     console.warn('Auto-update error:', err);
+    settleRevert({ ok: false, error: err.message || String(err) });
   });
   autoUpdater.on('update-available', (info) => {
     console.log(`Auto-update: ${info.version} available, downloading…`);
@@ -4158,6 +4314,10 @@ function startAutoUpdate(): void {
         // no zip artifact) — fall back to an 'available' chip that opens
         // the release page, the pre-swap-updater behavior.
         console.warn('mac update staging failed; chip falls back to release page:', err);
+        if (revertWaiter) {
+          settleRevert({ ok: false, error: `Couldn't download CardMirror ${info.version}.` });
+          return;
+        }
         setUpdateChip({ state: 'available', version: info.version });
       });
     } else {
@@ -4167,7 +4327,10 @@ function startAutoUpdate(): void {
   autoUpdater.on('update-downloaded', (info) => {
     void (async () => {
       const file = (info as { downloadedFile?: string }).downloadedFile;
-      if (refusedUpdateVersions.has(info.version)) return;
+      if (refusedUpdateVersions.has(info.version)) {
+        settleRevert({ ok: false, error: `CardMirror ${info.version} couldn't be verified earlier this session.` });
+        return;
+      }
       const verdict = await verifyDownloadedUpdate({ version: info.version, files: info.files, downloadedFile: file });
       if (!verdict.ok) {
         autoUpdater.autoInstallOnAppQuit = false;
@@ -4185,6 +4348,9 @@ function startAutoUpdate(): void {
         macStagedUpdateZip = file;
         console.log(`Auto-update: ${info.version} staged (mac swap); chip shown.`);
         setUpdateChip({ state: 'ready', version: info.version });
+        settleRevert({ ok: true });
+      } else if (revertWaiter) {
+        settleRevert({ ok: false, error: `CardMirror ${info.version} has no file this Mac can install by itself.` });
       } else {
         setUpdateChip({ state: 'available', version: info.version });
       }
@@ -4197,6 +4363,7 @@ function startAutoUpdate(): void {
     // who never click the chip.
     autoUpdater.autoInstallOnAppQuit = true;
     setUpdateChip({ state: 'ready', version: info.version });
+    settleRevert({ ok: true });
   };
   // The at-launch check fires from the renderer's boot path (gated
   // on the `checkForUpdatesOnLaunch` setting + `host.isFirstWindow()`)

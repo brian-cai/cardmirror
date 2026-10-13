@@ -2143,7 +2143,7 @@ function buildInstallInfoSection(): HTMLElement {
   // Deep-link target: the command palette's "version / about this install"
   // result scrolls here (SettingsTarget.anchor).
   wrap.dataset['anchor'] = 'about-this-install';
-  wrap.dataset['searchAliases'] = 'version updates update tournament pause source fork release key';
+  wrap.dataset['searchAliases'] = 'version updates update tournament pause source fork release key earlier revert downgrade roll back rollback previous older';
 
   const hr = document.createElement('hr');
   hr.className = 'pmd-install-info-divider';
@@ -2263,6 +2263,7 @@ function buildInstallInfoSection(): HTMLElement {
     wrap.appendChild(actions);
     wrap.appendChild(pauseWrap);
     wrap.appendChild(buildUpdateSourceRow(electronHost));
+    wrap.appendChild(buildEarlierVersionsRow(electronHost));
   }
 
   if (electronHost && isLiteBuild()) {
@@ -2361,6 +2362,135 @@ function buildUpdateSourceRow(electronHost: NonNullable<ReturnType<typeof getEle
   row.appendChild(desc);
   row.appendChild(controls);
   refresh();
+  return row;
+}
+
+/** "Earlier versions": go back to a past release when a new one breaks
+ *  something. The list is fetched only when asked for. Picking one hands
+ *  off to the main process, which asks for confirmation in a native
+ *  dialog, downloads the release and checks its signature like any update;
+ *  then automatic update checks are turned off (every released version
+ *  honors that setting, so the old one stays put) and the app restarts
+ *  into it. */
+export function buildEarlierVersionsRow(
+  electronHost: NonNullable<ReturnType<typeof getElectronHost>>,
+): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'pmd-update-pause pmd-earlier-versions';
+  const title = document.createElement('div');
+  title.className = 'pmd-update-pause-status';
+  title.textContent = 'Earlier versions';
+  const desc = document.createElement('div');
+  desc.className = 'pmd-update-pause-desc';
+  desc.textContent =
+    'If a new version breaks something for you, you can go back to an older one. ' +
+    'It comes from the same place as updates and is checked the same way.';
+  const controls = document.createElement('div');
+  controls.className = 'pmd-install-info-actions';
+  const showBtn = document.createElement('button');
+  showBtn.type = 'button';
+  showBtn.className = 'pmd-install-info-btn';
+  showBtn.textContent = 'Show earlier versions';
+  const select = document.createElement('select');
+  select.className = 'pmd-body-font-select';
+  select.setAttribute('aria-label', 'Earlier version');
+  select.hidden = true;
+  const goBtn = document.createElement('button');
+  goBtn.type = 'button';
+  goBtn.className = 'pmd-install-info-btn';
+  goBtn.textContent = 'Go back to this version';
+  goBtn.hidden = true;
+  const pageBtn = document.createElement('button');
+  pageBtn.type = 'button';
+  pageBtn.className = 'pmd-install-info-btn';
+  pageBtn.textContent = 'Open the releases page';
+  pageBtn.hidden = true;
+  const status = document.createElement('div');
+  status.className = 'pmd-update-pause-desc';
+  status.setAttribute('role', 'status');
+  status.hidden = true;
+  const say = (text: string): void => {
+    status.textContent = text;
+    status.hidden = text === '';
+  };
+
+  let releasesUrl = '';
+  pageBtn.addEventListener('click', () => {
+    if (releasesUrl) void electronHost.openExternal(releasesUrl);
+  });
+
+  showBtn.addEventListener('click', () => {
+    showBtn.disabled = true;
+    say('Getting the list…');
+    void electronHost
+      .listEarlierVersions()
+      .then((result) => {
+        releasesUrl = result.releasesUrl;
+        pageBtn.hidden = !releasesUrl;
+        if (!result.ok) {
+          say(result.error);
+          return;
+        }
+        if (result.versions.length === 0) {
+          say(`There is no earlier version to go back to from ${result.current}.`);
+          return;
+        }
+        select.innerHTML = '';
+        for (const v of result.versions) {
+          const opt = document.createElement('option');
+          opt.value = v.version;
+          const when = v.publishedAt ? new Date(v.publishedAt) : null;
+          opt.textContent =
+            when && !Number.isNaN(when.getTime())
+              ? `${v.version} (${when.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })})`
+              : v.version;
+          select.appendChild(opt);
+        }
+        select.hidden = false;
+        showBtn.hidden = true;
+        // An install that can't replace itself still gets the list, with
+        // the reason and the page to download from.
+        goBtn.hidden = !result.supported;
+        say(result.supported ? `You are on ${result.current}.` : (result.reason ?? ''));
+      })
+      .catch((err: unknown) => {
+        say(`Couldn't get the list of versions: ${err instanceof Error ? err.message : String(err)}`);
+      })
+      .finally(() => {
+        showBtn.disabled = false;
+      });
+  });
+
+  goBtn.addEventListener('click', () => {
+    const version = select.value;
+    if (!version) return;
+    goBtn.disabled = true;
+    select.disabled = true;
+    say(`Downloading ${version}… the app restarts when it is ready.`);
+    void electronHost
+      .installEarlierVersion(version)
+      .then(async (result) => {
+        if (!result.ok) {
+          say(result.cancelled ? '' : result.error);
+          return;
+        }
+        // Stored before the restart: the earlier version reads this
+        // setting, and with it on it would update straight back.
+        settings.set('checkForUpdatesOnLaunch', false);
+        say(`Restarting into ${version}…`);
+        await electronHost.updateChipAction();
+      })
+      .catch((err: unknown) => {
+        say(`Couldn't go back to ${version}: ${err instanceof Error ? err.message : String(err)}`);
+      })
+      .finally(() => {
+        goBtn.disabled = false;
+        select.disabled = false;
+      });
+  });
+
+  controls.append(showBtn, select, goBtn, pageBtn);
+  row.append(title, desc, controls, status);
   return row;
 }
 
