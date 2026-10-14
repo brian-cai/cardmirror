@@ -1,8 +1,9 @@
 /**
  * Paste-source routing (smart paste conversion, survey 2026-07-15).
  * The detector must (a) recognize Word and haku.cards clipboard HTML
- * by strong signatures, and (b) refuse everything else — ordinary web
- * copies, Google Docs, CMS-laundered Word remnants, CardMirror's own
+ * by strong signatures, (b) send Google Docs and other word processors
+ * to the office converter, and (c) refuse everything else — ordinary web
+ * copies, CMS-laundered Word remnants, CardMirror's own
  * clipboard — so regular pastes are never routed into a converter.
  *
  * The haku fixtures mirror the production copy builders verbatim
@@ -60,8 +61,15 @@ describe('detectPasteDialect routing', () => {
     expect(detectPasteDialect(PLAIN_WEB)).toBeNull();
   });
 
-  it('never converts Google Docs copies (explicit excluder)', () => {
-    expect(detectPasteDialect(GOOGLE_DOCS)).toBeNull();
+  it('routes Google Docs copies to the office converter, not haku', () => {
+    expect(detectPasteDialect(GOOGLE_DOCS)).toBe('office');
+  });
+
+  it('routes other word processors (a Generator meta) to the office converter', () => {
+    const cocoa = `<html><head><meta name="Generator" content="Cocoa HTML Writer"><style type="text/css">span.s1 {text-decoration: underline}</style></head><body><p class="p1"><span class="s1">text</span></p></body></html>`;
+    const libre = `<html><head><meta http-equiv="content-type" content="text/html; charset=utf-8"/><meta name="generator" content="LibreOffice 24.2.0.3 (MacOSX)"/></head><body><p><u>text</u></p></body></html>`;
+    expect(detectPasteDialect(cocoa)).toBe('office');
+    expect(detectPasteDialect(libre)).toBe('office');
   });
 
   it('CMS-laundered Word remnants (Mso classes, mso-* inline props, no shell) do not match', () => {

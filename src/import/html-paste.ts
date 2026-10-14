@@ -389,6 +389,13 @@ function foldCss(css: string, out: RunStyle): void {
         if (pt !== null) out.sizePt = pt;
         break;
       }
+      case 'font': {
+        // Shorthand (`font: bold 13.0pt Calibri`) — Pages / TextEdit
+        // spell every size this way. Only the size is read.
+        const pt = parseSizePt(v);
+        if (pt !== null) out.sizePt = pt;
+        break;
+      }
       case 'mso-highlight': {
         const named = HIGHLIGHT_NAME_TO_OOXML[v];
         if (named) out.highlight = named;
@@ -673,23 +680,80 @@ function hasDebateStructure(doc: PMNode): boolean {
   return found;
 }
 
+/** Marks that only card cutting puts on text. A paste carrying any of
+ *  them is a card fragment — body text copied from mid-card — even with
+ *  no heading or cite around it, and the default paste path would drop
+ *  them all (the schema's parse rules read only CardMirror's own
+ *  classes, `<u>` and `<mark>`). */
+const CARD_FORMATTING_MARKS = new Set([
+  'underline_mark',
+  'underline_direct',
+  'emphasis_mark',
+  'cite_mark',
+  'highlight',
+  'shading',
+]);
+
+function hasCardFormatting(doc: PMNode): boolean {
+  let found = false;
+  doc.descendants((n) => {
+    if (found) return false;
+    if (n.isText && n.marks.some((m) => CARD_FORMATTING_MARKS.has(m.type.name))) found = true;
+    return !found;
+  });
+  return found;
+}
+
+/** A clipboard fragment with no block element at all — Google Docs
+ *  copies of part of one line are bare spans in its guid wrapper. */
+function inlineOnlyPara(body: Element, dict: StyleDict): ParaInfo | null {
+  const runs = collectRuns(body, dict);
+  if (!runs.some((r) => r.text.trim())) return null;
+  return {
+    nodeType: 'paragraph',
+    inlines: runsToInlines(runs, 'paragraph'),
+    headingId: null,
+    pStyle: 'p',
+    indent: 0,
+    spacing: null,
+  };
+}
+
 function convertViaImporter(html: string): PMNode | null {
   const dom = new DOMParser().parseFromString(html, 'text/html');
   const dict = parseStyleDict(dom);
-  const paras = trimEdgeEmpties(collectParas(dom.body, dict));
+  let paras = trimEdgeEmpties(collectParas(dom.body, dict));
+  if (!paras.length) {
+    const only = inlineOnlyPara(dom.body, dict);
+    if (only) paras = [only];
+  }
   if (!paras.length) return null;
   const doc = normalizeUnderlineMarks(assembleDoc(paras));
-  return hasDebateStructure(doc) ? doc : null;
+  return hasDebateStructure(doc) || hasCardFormatting(doc) ? doc : null;
 }
 
 /**
  * Convert Word clipboard HTML into a CardMirror doc, or null when the
- * HTML contains no recognizable debate structure (caller falls through
- * to the default paste). The caller is responsible for routing — this
+ * HTML contains neither debate structure nor card formatting (caller
+ * falls through to the default paste). The caller is responsible for routing — this
  * assumes `detectPasteDialect` already said 'word'.
  */
 export function convertWordHtml(html: string): PMNode | null {
   return convertViaImporter(html);
+}
+
+/**
+ * Convert clipboard HTML from other word processors — Google Docs,
+ * Pages / TextEdit, LibreOffice and the like (routing: 'office' in
+ * paste-dialect.ts). They have no Verbatim style names to carry, so
+ * this is the visual-rules path: inline and class CSS for underline,
+ * highlight, bold and sizes, `<h1>`–`<h4>` for headings. The Cocoa
+ * writer (Pages, TextEdit) states sizes in px that are really points
+ * (`font: 13.0px Calibri` for 13pt), so those are read as pt.
+ */
+export function convertOfficeHtml(html: string): PMNode | null {
+  const cocoa = /<meta[^>]+content=["']?Cocoa HTML Writer/i.test(html);
+  return convertViaImporter(cocoa ? html.replace(/(\d+(?:\.\d+)?)px\b/g, '$1pt') : html);
 }
 
 /**

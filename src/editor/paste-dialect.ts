@@ -13,10 +13,7 @@
  *
  *  1. CardMirror's own clipboard (pmd-* classes) → null. The schema's
  *     parse rules already understand it.
- *  2. Google Docs (docs-internal-guid) → null. Debaters cut in Docs
- *     too, and its inline-styled output superficially resembles
- *     haku's; explicit excluder until a Docs dialect exists.
- *  3. Word: Word writes a full HTML *document* to the clipboard —
+ *  2. Word: Word writes a full HTML *document* to the clipboard —
  *     `<meta name=Generator content="Microsoft Word …">`,
  *     `<meta name=ProgId content=Word.Document>`, and the
  *     `xmlns:w="urn:schemas-microsoft-com:office:word"` namespace
@@ -26,6 +23,9 @@
  *     Deliberately NOT matched: bare `mso-*` inline properties or
  *     `class=Mso*` — CMS-laundered Word remnants on blogs and haku's
  *     Word-targeted spans both carry those.
+ *  3. Google Docs (docs-internal-guid) → 'office'. Checked before
+ *     haku because its inline-styled output superficially resembles
+ *     haku's, and haku's body conventions must not run on it.
  *  4. haku.cards: no classes at all — a structural fingerprint of its
  *     copy builders, verified against the production bundles
  *     (2026-07-15): a Calibri font-stack wrapper `<div>`, a 13pt bold
@@ -35,16 +35,27 @@
  *     (practically a haku watermark — sites don't inline that).
  *     Scored, so an un-highlighted card still clears the bar while a
  *     random Calibri-and-underlines page does not.
+ *  5. Other word processors → 'office': a `<meta name=Generator>` in
+ *     the clipboard HTML. Like Word's shell, only a desktop app writes
+ *     one (a browser copy carries the fragment, never the page's
+ *     metas): Pages and TextEdit ("Cocoa HTML Writer" — also what a
+ *     Mac app's RTF-only clipboard becomes when read as HTML),
+ *     LibreOffice, WPS, OnlyOffice. Students without Word open a team
+ *     .docx in one of these (or in Docs) and copy cards out of it;
+ *     before this route those pastes lost every underline and
+ *     highlight, since the schema's parse rules read only our own
+ *     classes, `<u>` and `<mark>` (field report, 2026-10-14).
  */
 
-export type PasteDialect = 'word' | 'haku';
+export type PasteDialect = 'word' | 'haku' | 'office';
 
 export function detectPasteDialect(html: string | null | undefined): PasteDialect | null {
   if (!html || !/\S/.test(html)) return null;
   if (isCardMirrorHtml(html)) return null;
-  if (isGoogleDocsHtml(html)) return null;
   if (isWordShellHtml(html)) return 'word';
+  if (isGoogleDocsHtml(html)) return 'office';
   if (isHakuHtml(html)) return 'haku';
+  if (hasGeneratorMeta(html)) return 'office';
   return null;
 }
 
@@ -68,6 +79,11 @@ function isWordShellHtml(html: string): boolean {
     /<meta[^>]+content=["']?Word\.Document/i.test(html) ||
     /xmlns:w=["']urn:schemas-microsoft-com:office:word["']/i.test(html)
   );
+}
+
+/** A word processor's `<meta name="Generator" content="…">`. */
+function hasGeneratorMeta(html: string): boolean {
+  return /<meta[^>]+name=["']?generator\b/i.test(html);
 }
 
 /**

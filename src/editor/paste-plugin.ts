@@ -60,7 +60,7 @@ import { fragmentHasZone, flattenZonesInSlice, enclosingZonePos } from './transc
 import { recallLinkedCopy } from './clipboard-link-cache.js';
 import { detectPasteDialect } from './paste-dialect.js';
 import { surfaceError } from './error-surface.js';
-import { convertWordHtml, convertHakuHtml } from '../import/html-paste.js';
+import { convertWordHtml, convertHakuHtml, convertOfficeHtml } from '../import/html-paste.js';
 import {
   FOLDABLE_SPACES_RE,
   STRIPPABLE_INVISIBLES_RE,
@@ -603,12 +603,14 @@ export function buildPastePlugin(ctx: PastePluginCtx): Plugin<PluginState> {
 
         // Smart paste conversion: clipboard HTML that carries a strong
         // source signature (Word's document shell; haku's builder
-        // fingerprint — see paste-dialect.ts) converts through the docx
+        // fingerprint; Google Docs or another word processor — see
+        // paste-dialect.ts) converts through the docx
         // importer's assembly path into real CardMirror structure:
         // cards, cites, headings, named-style marks, highlights,
         // numbering. Runs AFTER the F2 branch (explicit plain paste
         // always wins) and only when the setting is on. The converter
-        // returns null when it finds no debate structure, so a
+        // returns null when it finds no debate structure or card
+        // formatting, so a
         // false-positive signature match falls through to the default
         // paths — never to mangled output.
         if (ctx.smartPasteConversion()) {
@@ -619,7 +621,9 @@ export function buildPastePlugin(ctx: PastePluginCtx): Plugin<PluginState> {
               ? convertWordHtml(html)
               : dialect === 'haku'
                 ? convertHakuHtml(html)
-                : null;
+                : dialect === 'office'
+                  ? convertOfficeHtml(html)
+                  : null;
           if (converted && converted.content.size) {
             event.preventDefault();
             const convSlice = new Slice(converted.content, 0, 0);

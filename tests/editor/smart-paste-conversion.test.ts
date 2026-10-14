@@ -115,6 +115,24 @@ describe('smart paste conversion in handlePaste', () => {
     view.destroy();
   });
 
+  it('a Google Docs mid-card copy merges into the body with its underline and highlight', () => {
+    const view = makeView(true);
+    const docs = `<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-9"><span style="font-size:11pt;"> and </span><span style="font-size:11pt;background-color:#ffff00;text-decoration:underline;">warming</span></b>`;
+    const handled = firePaste(view, pasteEvent({ 'text/html': docs, 'text/plain': ' and warming' }));
+    expect(handled).toBe(true);
+    expect(() => view.state.doc.check()).not.toThrow();
+    const bodies: string[] = [];
+    let marks: string[] = [];
+    view.state.doc.descendants((n) => {
+      if (n.type.name === 'card_body') bodies.push(n.textContent);
+      if (n.isText && n.text === 'warming') marks = n.marks.map((m) => m.type.name).sort();
+      return true;
+    });
+    expect(bodies).toEqual(['existing body and warming']);
+    expect(marks).toEqual(['highlight', 'underline_mark']);
+    view.destroy();
+  });
+
   it('the setting gates conversion off — the default paths run, no structure is created', () => {
     const view = makeView(false);
     firePaste(view, pasteEvent({ 'text/html': WORD_HTML, 'text/plain': 'Warming…' }));
