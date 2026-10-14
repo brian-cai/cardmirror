@@ -5,6 +5,22 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.7 — 2026-10-14
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Fixed
+
+- **Cards pasted from Google Docs, Pages and LibreOffice keep their
+  underlining and highlighting.** Smart paste only recognized
+  Microsoft Word and haku.cards, so copying a card out of a team
+  .docx opened anywhere else pasted as plain text. It now converts
+  those too, including a few words copied from the middle of a card.
+  (TextEdit and Quick Look lose a Verbatim file's formatting when
+  they open it, before anything is copied; open the .docx in
+  CardMirror instead.)
+
 ## 1.15.6 — 2026-10-13
 
 BCai's (@brian-cai) build of CardMirror, updating from
