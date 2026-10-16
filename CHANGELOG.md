@@ -5,6 +5,25 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.8 — 2026-10-15
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Fixed
+
+- **The speech-doc pin works in three-pane mode.** Marking a pane as
+  the speech doc never lit the 📌 button, so it looked like nothing
+  happened, and clicking it again unmarked the doc. The button now
+  shows whether the pane you're in is the speech doc.
+- **Pressing ` in the speech doc tells you why nothing happened.**
+  The tilde sends a card from another document into the speech doc;
+  pressed inside the speech doc itself it did nothing, silently. It
+  now says so.
+- **A new speech document made from the Home screen takes the first
+  card below its header.** The cursor started inside the header, so
+  the first card sent landed above it.
+
 ## 1.15.7 — 2026-10-14
 
 BCai's (@brian-cai) build of CardMirror, updating from
