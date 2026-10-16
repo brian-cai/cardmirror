@@ -608,10 +608,15 @@ installSpeechDocResolver(getHost());
  *  speech document" strip below the ribbon). */
 function refreshSpeechMarkBtn(): void {
   const resolver = getSpeechDocResolver();
-  const isSpeechDoc =
-    !!view && resolver.getSpeechUid() === currentDocUid;
+  const speechUid = resolver.getSpeechUid();
+  const isSpeechDoc = !!view && speechUid === currentDocUid;
+  // The button follows the FOCUSED doc — in multi-pane that's the focused
+  // pane, not `currentDocUid` (the hidden single-doc view). Comparing
+  // against currentDocUid left the pin unlit after marking a pane, so a
+  // second click "to make it work" unmarked it.
+  const activeIsSpeech = !!speechUid && speechUid === activeDocIdentity().sessionUid;
   if (speechMarkBtn) {
-    speechMarkBtn.setAttribute('aria-pressed', isSpeechDoc ? 'true' : 'false');
+    speechMarkBtn.setAttribute('aria-pressed', activeIsSpeech ? 'true' : 'false');
   }
   // Banner is only meaningful when this window IS the speech doc.
   // Multi-pane mode hides it via CSS (it uses per-pane chips); the
@@ -8190,6 +8195,16 @@ async function createSpeechDocInPlace(): Promise<boolean> {
   updateWindowTitle();
   // Mark this new doc as the speech doc for the session.
   getSpeechDocResolver().setSpeechByUid(currentDocUid);
+  // Cursor into the paragraph below the Pocket, as the spawned-window and
+  // multi-pane paths do. Left inside the Pocket, the first ` snapped the
+  // card to the nearest boundary — ABOVE the speech's header.
+  if (view && docNode.firstChild?.type.name === 'pocket' && docNode.childCount > 1) {
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, docNode.firstChild.nodeSize + 1),
+      ),
+    );
+  }
   return true;
 }
 

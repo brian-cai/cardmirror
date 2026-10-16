@@ -26,6 +26,7 @@ import { getSimilarSelectionState } from './similar-selection-plugin.js';
 import { getSpeechDocResolver } from './speech-doc-registry.js';
 import { getElectronHost } from './host/index.js';
 import { alertDialog } from './text-prompt.js';
+import { showToast } from './toast.js';
 import { sectionEndFromHeading } from './headings.js';
 import { checkedSliceFromJSON } from '../schema/slice-check.js';
 
@@ -482,15 +483,21 @@ export function sendToSpeech(
     );
     return;
   }
+  const localView = resolver.viewForUid(speechUid);
+  if (localView && sourceView === localView) {
+    // Sending FROM the speech doc itself has nowhere to go (Verbatim
+    // inserts a `~ Marked HH:MM ~` marker there; not implemented). Say so:
+    // a silent no-op read as "the tilde key is broken" to a student who
+    // had marked the file he was cutting from (field report, 2026-10-15).
+    showToast(
+      'This is your speech doc. Press ` in another document to send its card here.',
+    );
+    return;
+  }
   const slice = takeSendSlice(sourceView);
   if (!slice) return;
 
-  const localView = resolver.viewForUid(speechUid);
   if (localView) {
-    // Same-window path. No-op if the user is sending FROM the speech
-    // doc itself — Verbatim inserts a `~ Marked HH:MM ~` card-marker
-    // there; not implemented here.
-    if (sourceView === localView) return;
     insertSpeechSlice(localView, slice, atEnd, afterInsert);
     return;
   }
