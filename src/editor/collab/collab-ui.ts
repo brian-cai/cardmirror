@@ -198,6 +198,8 @@ setCollabCopresenceProvider((uid) => {
     // the flows also stamp lastStatus so an offline join/resume reads correctly.
     connected: sess.lastStatus?.connected ?? true,
     queued: sess.lastStatus?.queuedUpdates ?? 0,
+    offlineSince: sess.offlineSince,
+    reconnect: () => sess.session.restart(),
     peers: sess.cursors.presence().map((p) => ({ name: p.name, color: p.color, self: p.self, code: p.code })),
   };
 });
@@ -348,7 +350,20 @@ function updateChip(status: { connected: boolean; queuedUpdates: number } | null
     chip.title = 'Show who\u2019s in this session';
     chip.classList.add('pmd-status-button');
     const openPeople = (): void =>
-      toggleSessionPeople(chip, () => chipSession()?.cursors.presence() ?? []);
+      toggleSessionPeople(
+        chip,
+        () => chipSession()?.cursors.presence() ?? [],
+        () => {
+          const sess = chipSession();
+          if (!sess) return null;
+          return {
+            connected: sess.lastStatus?.connected ?? true,
+            queued: sess.lastStatus?.queuedUpdates ?? 0,
+            offlineSince: sess.offlineSince,
+            reconnect: () => sess.session.restart(),
+          };
+        },
+      );
     chip.addEventListener('click', openPeople);
     chip.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -378,6 +393,9 @@ function updateChip(status: { connected: boolean; queuedUpdates: number } | null
     chip.appendChild(dots);
   }
   label.textContent = text;
+  chip.title = status.connected
+    ? 'Show who\u2019s in this session'
+    : 'Not connected. Your edits are saved on this computer and send when the session reconnects. Click to reconnect now.';
   renderPresenceDots(dots as HTMLElement);
 }
 
@@ -809,6 +827,9 @@ export function refreshChipForFocus(): void {
 // entry isn't created (and its owning uid isn't known) until after newSessionDoc
 // creates the fresh doc, which is after the CollabSession (and these callbacks)
 // exist. Returns null before install / after teardown; callbacks then no-op.
+/** Outage length after which reconnecting toasts "Session back online". */
+const BACK_ONLINE_TOAST_MS = 30_000;
+
 function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSession | null) {
   return {
     onStatus: (s: { connected: boolean; queuedUpdates: number }) => {
@@ -841,6 +862,15 @@ function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSession | nul
           }, offlineNoticeMs);
         }
       } else if (s.connected && sess.lastStatus?.connected === false) {
+        // Back after a noticeable outage → say so (a blip of a few seconds
+        // during a relay deploy shouldn't toast).
+        if (sess.offlineSince !== null && Date.now() - sess.offlineSince >= BACK_ONLINE_TOAST_MS) {
+          showToast(
+            s.queuedUpdates > 0
+              ? `Session back online \u2014 sending ${s.queuedUpdates} edit${s.queuedUpdates === 1 ? '' : 's'}`
+              : 'Session back online',
+          );
+        }
         if (sess.offlineTimer !== null) {
           clearTimeout(sess.offlineTimer);
           sess.offlineTimer = null;

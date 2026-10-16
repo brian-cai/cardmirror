@@ -186,6 +186,10 @@ export interface CollabCopresence {
   role: 'host' | 'participant';
   connected: boolean;
   queued: number;
+  /** When this session lost its connection (null while connected). */
+  offlineSince: number | null;
+  /** Try to reconnect now instead of waiting out the retry backoff. */
+  reconnect: () => void;
   peers: { name: string; color: string; self: boolean; code?: string }[];
 }
 

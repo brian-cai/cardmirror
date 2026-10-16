@@ -796,10 +796,11 @@ class Slot {
     this.copresenceEl.title = 'Show who\u2019s in this session';
     const openPeople = (): void => {
       const anchor = this.copresenceEl;
-      toggleSessionPeople(anchor, () => {
+      const current = () => {
         const uid = this.visible?.uid ?? null;
-        return (uid ? collabCopresenceFor(uid)?.peers : null) ?? [];
-      });
+        return uid ? collabCopresenceFor(uid) : null;
+      };
+      toggleSessionPeople(anchor, () => current()?.peers ?? [], current);
     };
     this.copresenceEl.addEventListener('click', openPeople);
     this.copresenceEl.addEventListener('keydown', (e) => {
@@ -1255,6 +1256,9 @@ class Slot {
       : cp.queued > 0
         ? `Offline · ${cp.queued}`
         : 'Offline';
+    this.copresenceEl.title = cp.connected
+      ? 'Show who\u2019s in this session'
+      : 'Not connected. Your edits are saved on this computer and send when the session reconnects. Click to reconnect now.';
     const labelEl = document.createElement('span');
     labelEl.className = 'pmd-pane-copresence-label';
     labelEl.textContent = text;

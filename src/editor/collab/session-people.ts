@@ -29,10 +29,37 @@ export function orderPeople(people: readonly SessionPerson[]): SessionPerson[] {
   return [...self, ...others];
 }
 
+/** The session's connection, for the status line shown while it's offline
+ *  or still sending. */
+export interface SessionConnection {
+  connected: boolean;
+  queued: number;
+  offlineSince: number | null;
+  reconnect: () => void;
+}
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** The status line's text, or null when synced. Exported for tests. */
+export function connectionText(c: SessionConnection, now: number = Date.now()): string | null {
+  if (c.connected) return c.queued > 0 ? `Sending ${plural(c.queued, 'edit')}\u2026` : null;
+  const mins = c.offlineSince === null ? 0 : Math.floor((now - c.offlineSince) / 60_000);
+  const head = mins >= 1 ? `Offline for ${plural(mins, 'minute')}.` : 'Offline \u2014 reconnecting\u2026';
+  const tail =
+    c.queued > 0
+      ? `${plural(c.queued, 'edit')} saved on this computer will send when it reconnects.`
+      : 'Your edits are saved on this computer and send when it reconnects.';
+  return `${head} ${tail}`;
+}
+
 let open: { close: () => void; anchor: HTMLElement } | null = null;
 
 /** Toggle the popover above `anchor`. */
-export function toggleSessionPeople(anchor: HTMLElement, getPeople: () => SessionPerson[]): void {
+export function toggleSessionPeople(
+  anchor: HTMLElement,
+  getPeople: () => SessionPerson[],
+  getConnection?: () => SessionConnection | null,
+): void {
   if (open) {
     const wasSame = open.anchor === anchor;
     open.close();
@@ -49,9 +76,33 @@ export function toggleSessionPeople(anchor: HTMLElement, getPeople: () => Sessio
   const note = document.createElement('div');
   note.className = 'pmd-session-people-note';
   note.textContent = 'Shows people who have the document open right now.';
-  pop.append(title, list, note);
+  const status = document.createElement('div');
+  status.className = 'pmd-session-people-status';
+  status.hidden = true;
+  const statusText = document.createElement('span');
+  const reconnectBtn = document.createElement('button');
+  reconnectBtn.type = 'button';
+  reconnectBtn.className = 'pmd-session-people-btn pmd-session-people-reconnect';
+  reconnectBtn.textContent = 'Reconnect now';
+  reconnectBtn.addEventListener('click', () => {
+    getConnection?.()?.reconnect();
+    reconnectBtn.disabled = true;
+    reconnectBtn.textContent = 'Reconnecting\u2026';
+    // Re-arm after a few seconds if it's still offline.
+    setTimeout(() => {
+      reconnectBtn.disabled = false;
+      reconnectBtn.textContent = 'Reconnect now';
+    }, 4000);
+  });
+  status.append(statusText, reconnectBtn);
+  pop.append(title, status, list, note);
 
   const render = (): void => {
+    const conn = getConnection?.() ?? null;
+    const line = conn ? connectionText(conn) : null;
+    status.hidden = line === null;
+    statusText.textContent = line ?? '';
+    reconnectBtn.hidden = !conn || conn.connected;
     const people = orderPeople(getPeople());
     const n = people.length;
     title.textContent = n === 1 ? 'Just you in this session' : `${n} people in this session`;
@@ -67,7 +118,7 @@ export function toggleSessionPeople(anchor: HTMLElement, getPeople: () => Sessio
         if (!p.self && canAddContact(p.code)) {
           const add = document.createElement('button');
           add.type = 'button';
-          add.className = 'pmd-session-people-add';
+          add.className = 'pmd-session-people-btn pmd-session-people-add';
           add.textContent = 'Add contact';
           add.title = `Add ${p.name} to your contacts`;
           add.addEventListener('click', () => {

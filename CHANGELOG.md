@@ -5,6 +5,20 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.11 — 2026-10-16
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Improved
+
+- **Clearer offline sessions.** When a session loses its connection,
+  clicking the session status shows how long it's been offline and how
+  many edits are saved on your computer waiting to send, with a
+  Reconnect now button so you don't have to wait for the next automatic
+  retry. Hovering the status says your edits are safe. After an outage
+  of 30 seconds or more, a toast says when the session is back online.
+
 ## 1.15.10 — 2026-10-16
 
 BCai's (@brian-cai) build of CardMirror, updating from

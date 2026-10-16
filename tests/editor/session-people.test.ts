@@ -7,7 +7,7 @@ vi.mock('../../src/editor/text-prompt.js', async (importOriginal) => {
   return { ...mod, promptForText: async () => prompt.answer };
 });
 
-import { orderPeople, toggleSessionPeople } from '../../src/editor/collab/session-people.js';
+import { connectionText, orderPeople, toggleSessionPeople } from '../../src/editor/collab/session-people.js';
 import { settings } from '../../src/editor/settings.js';
 
 const people = [
@@ -69,5 +69,37 @@ describe('session people popover', () => {
     ]);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     settings.set('pairingPartners', []);
+  });
+
+  it('words the connection line: synced, sending, offline briefly, offline for a while', () => {
+    const base = { reconnect: () => {} };
+    const now = 1_000_000;
+    expect(connectionText({ ...base, connected: true, queued: 0, offlineSince: null }, now)).toBeNull();
+    expect(connectionText({ ...base, connected: true, queued: 1, offlineSince: null }, now)).toBe('Sending 1 edit…');
+    expect(connectionText({ ...base, connected: false, queued: 0, offlineSince: now - 5_000 }, now)).toBe(
+      'Offline — reconnecting… Your edits are saved on this computer and send when it reconnects.',
+    );
+    expect(connectionText({ ...base, connected: false, queued: 12, offlineSince: now - 3 * 60_000 }, now)).toBe(
+      'Offline for 3 minutes. 12 edits saved on this computer will send when it reconnects.',
+    );
+  });
+
+  it('shows Reconnect now only while offline, and it reconnects', () => {
+    const conn = { connected: false, queued: 2, offlineSince: Date.now(), reconnect: vi.fn() };
+    const anchor = document.createElement('div');
+    document.body.appendChild(anchor);
+    toggleSessionPeople(anchor, () => people, () => conn);
+    const status = document.querySelector('.pmd-session-people-status') as HTMLElement;
+    const btn = status.querySelector('button') as HTMLButtonElement;
+    expect(status.hidden).toBe(false);
+    expect(btn.hidden).toBe(false);
+    btn.click();
+    expect(conn.reconnect).toHaveBeenCalledOnce();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    conn.connected = true;
+    conn.queued = 0;
+    toggleSessionPeople(anchor, () => people, () => conn);
+    expect((document.querySelector('.pmd-session-people-status') as HTMLElement).hidden).toBe(true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   });
 });
