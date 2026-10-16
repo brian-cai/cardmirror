@@ -5,6 +5,20 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.12 — 2026-10-16
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Improved
+
+- **Debate Decoded account greys out on your own relay.** When a
+  custom relay (like relay.extinction.gg) is set up and accepts your
+  token, Settings → Collaboration greys out the Debate Decoded
+  account row and says it isn't needed: your own relay never uses the
+  account. If the relay can't be reached or rejects the token, the
+  row stays as it was.
+
 ## 1.15.11 — 2026-10-16
 
 BCai's (@brian-cai) build of CardMirror, updating from

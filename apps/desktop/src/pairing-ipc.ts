@@ -816,6 +816,30 @@ export function registerPairingIpc(): void {
       return connectAccount(payload.connectCode, !!payload.confirmEvict, evict);
     },
   );
+  // Does a self-hosted relay accept us? One authenticated mailbox GET
+  // (read-only: nothing is consumed) against the URL + token the settings
+  // dialog is showing — passed in, so a just-typed value is checked
+  // without racing the configure push. The account row greys out on a
+  // pass: custom relays never use the account (see relayToken()).
+  ipcMain.handle(
+    'host:pairing-relay-check',
+    async (_e, payload: { relayUrl?: unknown; relayToken?: unknown }) => {
+      const url = typeof payload?.relayUrl === 'string' ? payload.relayUrl.trim().replace(/\/+$/, '') : '';
+      if (!url) return { custom: false, ok: false, status: 0 };
+      const token = (typeof payload.relayToken === 'string' ? payload.relayToken.trim() : '') || DEFAULT_RELAY_TOKEN;
+      try {
+        const res = await fetch(`${url}/messages?recipient=${encodeURIComponent(ks().ownRoutingId())}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}`, [RELAY_CLIENT_VERSION_HEADER]: app.getVersion() },
+          signal: AbortSignal.timeout(8000),
+        });
+        void res.body?.cancel().catch(() => {});
+        return { custom: true, ok: res.ok || res.status === 304, status: res.status };
+      } catch {
+        return { custom: true, ok: false, status: 0 };
+      }
+    },
+  );
   ipcMain.handle('host:pairing-account-status', async () => {
     await ensureEntitlementLoaded();
     return accountStatus();

@@ -3564,6 +3564,9 @@ function buildPairingAccountEditor(row: HTMLElement): HTMLElement {
     'Renew on Debate Decoded to keep it.';
   wrap.appendChild(lapseNotice);
 
+  /** True while a working self-hosted relay makes the account moot. */
+  let relayManaged = false;
+
   function renderStatus(st: {
     connected: boolean;
     expiresAt: number;
@@ -3597,6 +3600,8 @@ function buildPairingAccountEditor(row: HTMLElement): HTMLElement {
       ),
     );
     lapseNotice.hidden = !st.lapsed;
+    if (relayManaged) linkRow.hidden = true;
+    connectedInfo.hidden = relayManaged && !connected;
   }
 
   const ERROR_TEXT: Record<string, string> = {
@@ -3782,6 +3787,63 @@ function buildPairingAccountEditor(row: HTMLElement): HTMLElement {
       if (st.evicted) message.textContent = ERROR_TEXT['evicted']!;
     });
     registerRowCleanup(row, () => off?.());
+  }
+
+  // On a working self-hosted relay the account does nothing (custom relays
+  // authenticate with their own token, never the membership), so grey the
+  // row out and say why. Disconnect stays live to free a seat.
+  const relayNote = document.createElement('div');
+  relayNote.className = 'pmd-pairing-account-relay-note';
+  relayNote.hidden = true;
+  wrap.insertBefore(relayNote, wrap.firstChild);
+  const applyRelayManaged = (managed: boolean, url: string): void => {
+    relayManaged = managed;
+    row.classList.toggle('pmd-settings-row-relay-managed', managed);
+    input.disabled = managed;
+    connectBtn.disabled = managed;
+    linkRow.hidden = managed || !disconnectBtn.hidden;
+    // A red "Not connected" reads as an error when nothing needs connecting.
+    connectedInfo.hidden = managed && disconnectBtn.hidden;
+    relayNote.hidden = !managed;
+    let host = url;
+    try {
+      host = new URL(url).host;
+    } catch {
+      /* show the URL as typed */
+    }
+    relayNote.textContent = managed
+      ? `Not needed: card sharing and co-editing go through your own relay (${host}), which doesn\u2019t use a Debate Decoded account.`
+      : '';
+  };
+  if (electron?.pairingRelayCheck) {
+    let seq = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const check = (): void => {
+      const relayUrl = settings.get('pairingRelayUrl').trim();
+      const relayToken = settings.get('pairingRelayToken');
+      const mine = ++seq;
+      if (!relayUrl) {
+        applyRelayManaged(false, '');
+        return;
+      }
+      void electron.pairingRelayCheck!({ relayUrl, relayToken }).then((r) => {
+        if (mine === seq) applyRelayManaged(r.custom && r.ok, relayUrl);
+      });
+    };
+    check();
+    let prevUrl = settings.get('pairingRelayUrl');
+    let prevToken = settings.get('pairingRelayToken');
+    const unsub = settings.subscribe((st) => {
+      if (st.pairingRelayUrl === prevUrl && st.pairingRelayToken === prevToken) return;
+      prevUrl = st.pairingRelayUrl;
+      prevToken = st.pairingRelayToken;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(check, 600);
+    });
+    registerRowCleanup(row, () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    });
   }
 
   return wrap;

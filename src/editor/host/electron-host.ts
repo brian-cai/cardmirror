@@ -425,6 +425,12 @@ interface ElectronAPI {
     evict?: string;
   }): Promise<PairingConnectResultIpc>;
   pairingAccountStatus?(): Promise<PairingAccountStatusIpc>;
+  /** Whether a self-hosted relay accepts this URL + token (custom: false
+   *  when the URL is empty, i.e. the official relay). */
+  pairingRelayCheck?(payload: {
+    relayUrl: string;
+    relayToken: string;
+  }): Promise<{ custom: boolean; ok: boolean; status: number }>;
   pairingDisconnectAccount?(): Promise<PairingAccountStatusIpc>;
   onPairingEntitlementChanged?(
     handler: (status: PairingAccountStatusIpc & { evicted?: boolean; lapsed?: boolean }) => void,
@@ -1308,6 +1314,13 @@ export class ElectronHost implements Host {
     return (
       (await api().pairingConnectAccount?.(payload)) ?? { ok: false, error: 'disabled' }
     );
+  }
+
+  async pairingRelayCheck(payload: {
+    relayUrl: string;
+    relayToken: string;
+  }): Promise<{ custom: boolean; ok: boolean; status: number }> {
+    return (await api().pairingRelayCheck?.(payload)) ?? { custom: false, ok: false, status: 0 };
   }
 
   async pairingAccountStatus(): Promise<PairingAccountStatusIpc> {

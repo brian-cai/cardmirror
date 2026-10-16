@@ -837,6 +837,8 @@ interface PairingInboxItemIpc {
   /** Blog-account entitlement (gates nothing until relay-side enforcement). */
   pairingConnectAccount: (payload: { connectCode: string; confirmEvict?: boolean; evict?: string }) =>
     ipcRenderer.invoke('host:pairing-connect-account', payload) as Promise<PairingConnectResultIpc>,
+  pairingRelayCheck: (payload: { relayUrl: string; relayToken: string }) =>
+    ipcRenderer.invoke('host:pairing-relay-check', payload) as Promise<{ custom: boolean; ok: boolean; status: number }>,
   pairingAccountStatus: () =>
     ipcRenderer.invoke('host:pairing-account-status') as Promise<PairingAccountStatusIpc>,
   pairingDisconnectAccount: () =>
