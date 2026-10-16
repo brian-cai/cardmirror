@@ -186,7 +186,7 @@ export interface CollabCopresence {
   role: 'host' | 'participant';
   connected: boolean;
   queued: number;
-  peers: { name: string; color: string; self: boolean }[];
+  peers: { name: string; color: string; self: boolean; code?: string }[];
 }
 
 let copresenceProvider: ((uid: string) => CollabCopresence | null) | null = null;

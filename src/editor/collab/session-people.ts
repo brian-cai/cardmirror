@@ -8,12 +8,18 @@
  * The roster comes from the session's cursor-presence store (people whose
  * cursors were seen recently); the list refreshes while open, so someone
  * joining or leaving shows up within a few seconds.
+ *
+ * Someone who publishes their pairing code and isn't a contact yet gets an
+ * "Add contact" button (name pre-filled with their display name).
  */
+import { addContact, canAddContact } from '../pairing/add-contact.js';
 
 export interface SessionPerson {
   name: string;
   color: string;
   self: boolean;
+  /** Their pairing code, when their build publishes it. */
+  code?: string;
 }
 
 /** People, you first, then everyone else by name. Exported for tests. */
@@ -58,6 +64,19 @@ export function toggleSessionPeople(anchor: HTMLElement, getPeople: () => Sessio
         const name = document.createElement('span');
         name.textContent = p.self ? `${p.name} (you)` : p.name;
         li.append(dot, name);
+        if (!p.self && canAddContact(p.code)) {
+          const add = document.createElement('button');
+          add.type = 'button';
+          add.className = 'pmd-session-people-add';
+          add.textContent = 'Add contact';
+          add.title = `Add ${p.name} to your contacts`;
+          add.addEventListener('click', () => {
+            void addContact(p.code, p.name).then(() => {
+              if (open?.anchor === anchor) render();
+            });
+          });
+          li.append(add);
+        }
         return li;
       }),
     );

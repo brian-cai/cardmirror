@@ -198,7 +198,7 @@ setCollabCopresenceProvider((uid) => {
     // the flows also stamp lastStatus so an offline join/resume reads correctly.
     connected: sess.lastStatus?.connected ?? true,
     queued: sess.lastStatus?.queuedUpdates ?? 0,
-    peers: sess.cursors.presence().map((p) => ({ name: p.name, color: p.color, self: p.self })),
+    peers: sess.cursors.presence().map((p) => ({ name: p.name, color: p.color, self: p.self, code: p.code })),
   };
 });
 

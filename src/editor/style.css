@@ -16770,6 +16770,20 @@ body.pmd-multi-doc #collab-chip {
   gap: 0.5rem;
   padding: 0.2rem 0;
 }
+.pmd-session-people-add {
+  margin-left: auto;
+  padding: 0.1rem 0.45rem;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--pmd-c-text);
+  background: transparent;
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.pmd-session-people-add:hover {
+  background: var(--pmd-c-hover);
+}
 .pmd-session-people-note {
   margin-top: 0.45rem;
   font-size: 0.75rem;

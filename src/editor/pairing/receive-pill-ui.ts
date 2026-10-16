@@ -24,8 +24,7 @@ import {
   inboxItemCardCount, inboxStore, type InboxItem } from './inbox-store.js';
 import { insertReceivedItem, RECEIVE_NEEDS_DOC_MESSAGE } from './inbox-insert.js';
 import { showToast } from '../toast.js';
-import { promptForText } from '../text-prompt.js';
-import { looksLikePairingCode, normalizePairingCode } from './pairing-ids.js';
+import { addContact, canAddContact } from './add-contact.js';
 import { parseRoomInvite } from './room-invite.js';
 import { collabEnabled } from '../collab/collab-gate.js';
 import { offerSharingSetup } from './sharing-setup.js';
@@ -572,33 +571,13 @@ export class ReceivePillController {
 /** True when `item` names a sender code that isn't you and isn't already
  *  one of your contacts. */
 export function canAddSenderAsContact(item: Pick<InboxItem, 'senderCode'>): boolean {
-  const code = item.senderCode ? normalizePairingCode(item.senderCode) : '';
-  if (!looksLikePairingCode(code)) return false;
-  if (normalizePairingCode(settings.get('pairingOwnCode')) === code) return false;
-  return !settings.get('pairingPartners').some((p) => normalizePairingCode(p.code) === code);
+  return canAddContact(item.senderCode);
 }
 
 /** Save the sender of `item` as a contact, asking for the name (pre-filled
  *  with the display name they send under). Resolves true when added. */
-export async function addSenderAsContact(
-  item: Pick<InboxItem, 'senderCode' | 'senderName'>,
-): Promise<boolean> {
-  if (!canAddSenderAsContact(item)) return false;
-  const code = normalizePairingCode(item.senderCode!);
-  const named = await promptForText({
-    message: 'Add to contacts',
-    detail: 'Shown in the Send pill and on cards and invites you get from them.',
-    initial: (item.senderName || '').trim(),
-    placeholder: 'Name',
-    okLabel: 'Add',
-  });
-  if (named == null) return false;
-  // Re-check: another window may have added them while the prompt was open.
-  if (!canAddSenderAsContact(item)) return true;
-  const name = named.trim();
-  settings.set('pairingPartners', [...settings.get('pairingPartners'), { code, name }]);
-  showToast(`Added ${name || `\u2026${code.slice(-6)}`} to your contacts`);
-  return true;
+export function addSenderAsContact(item: Pick<InboxItem, 'senderCode' | 'senderName'>): Promise<boolean> {
+  return addContact(item.senderCode, item.senderName);
 }
 
 /** Prefer your local nickname for the sender, then their self-declared

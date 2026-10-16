@@ -27,6 +27,7 @@ import type { EditorView } from 'prosemirror-view';
 import { CursorEphemeralStore, LoroEphemeralCursorPlugin } from 'loro-prosemirror';
 import type { PeerID } from 'loro-crdt';
 import { settings } from '../settings.js';
+import { looksLikePairingCode, normalizePairingCode } from '../pairing/pairing-ids.js';
 import type { CollabSession } from './collab-session.js';
 import { leasedRanges } from '../ai/edit-coordinator.js';
 
@@ -186,6 +187,16 @@ interface LeaseAd {
 
 const leaseAdsKey = new PluginKey<DecorationSet>('collab-lease-ads');
 
+/** One person in the session roster. `code` is their pairing code, when
+ *  their build publishes it and they have one. */
+export interface PresencePerson {
+  peer: string;
+  name: string;
+  color: string;
+  self: boolean;
+  code?: string;
+}
+
 export interface CursorsHandle {
   /** Announce departure to partners now (call before dispose/stop).
    *  `keepalive`: the page is unloading — let the browser finish the post. */
@@ -206,7 +217,7 @@ export interface CursorsHandle {
    *  dots. Remotes only appear once they've broadcast presence, so the
    *  remote list is populated only while cursors are enabled
    *  (`collabShowCursors`); self is always included. */
-  presence(): { peer: string; name: string; color: string; self: boolean }[];
+  presence(): PresencePerson[];
   dispose(): void;
 }
 
@@ -263,9 +274,13 @@ export function installCursorPresence(
     }
   }, KEEPALIVE_MS);
 
-  const user = {
+  // Your pairing code rides along (when you have one) so the people in
+  // the session can add you to their contacts from the roster.
+  const ownCode = normalizePairingCode(settings.get('pairingOwnCode'));
+  const user: { name: string; color: string; code?: string } = {
     name: settings.get('pairingDisplayName').trim() || defaultPresenceName(),
     color: peerColor(peerId),
+    ...(looksLikePairingCode(ownCode) ? { code: ownCode } : {}),
   };
 
   // --- inbound cursor coalescing buffer (see CURSOR_RECEIVE_COALESCE_MS) ---
@@ -383,18 +398,22 @@ export function installCursorPresence(
         return [];
       }
     },
-    presence(): { peer: string; name: string; color: string; self: boolean }[] {
-      const out = [{ peer: String(peerId), name: user.name, color: user.color, self: true }];
+    presence(): PresencePerson[] {
+      const out: PresencePerson[] = [
+        { peer: String(peerId), name: user.name, color: user.color, self: true, code: user.code },
+      ];
       try {
         const states = store.getAllStates() as Record<
           string,
-          { user?: { name?: string; color?: string } }
+          { user?: { name?: string; color?: string; code?: string } }
         >;
         for (const p of Object.keys(states)) {
           if (p === peerId) continue;
           const nm = states[p]?.user?.name;
           const name = (typeof nm === 'string' && nm.trim()) || 'Partner';
-          out.push({ peer: p, name, color: peerColor(p), self: false });
+          const cd = states[p]?.user?.code;
+          const code = typeof cd === 'string' ? normalizePairingCode(cd) : '';
+          out.push({ peer: p, name, color: peerColor(p), self: false, code: looksLikePairingCode(code) ? code : undefined });
         }
       } catch {
         /* store shape / timing — self-only is safe */

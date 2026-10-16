@@ -5,6 +5,19 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.10 — 2026-10-16
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Add people in a shared session to your contacts.** Click the
+  session status to see who's in the session. Anyone who isn't a
+  contact yet has an Add contact button, pre-filled with their display
+  name. This works for people on 1.15.10 or later who have a pairing
+  code set up.
+
 ## 1.15.9 — 2026-10-16
 
 BCai's (@brian-cai) build of CardMirror, updating from
