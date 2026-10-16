@@ -5,6 +5,24 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.9 — 2026-10-16
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Add whoever invited you to your contacts.** A session invite in
+  the Receive pill has an Add contact button, pre-filled with the
+  display name they set, so you can send to them later without asking
+  for their code. It only shows for people who aren't contacts yet.
+- **Keep your contacts in a file automatically.** Settings →
+  Collaboration → Team file → Auto-export contacts… picks a file once;
+  after that, adding, renaming or removing a contact or group rewrites
+  it. It's a normal team file (your code and name, contacts and
+  groups, never your relay or sessions), so Import team… reads it on
+  another machine. Desktop only.
+
 ## 1.15.8 — 2026-10-15
 
 BCai's (@brian-cai) build of CardMirror, updating from
