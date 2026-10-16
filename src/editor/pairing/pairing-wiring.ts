@@ -24,6 +24,7 @@ import { postNotice } from '../status-notices.js';
 import { inboxStore } from './inbox-store.js';
 import { SendPillController } from './send-pill-ui.js';
 import { ReceivePillController } from './receive-pill-ui.js';
+import { installContactsAutoExport } from './contacts-auto-export.js';
 
 /** Build + mount the Send and Receive pills into the tray (after the
  *  dropzone, so they sit to its right). */
@@ -101,6 +102,8 @@ export function initPairingWiring(): void {
   // process deliberately never registers).
   if (isLiteBuild()) return;
   void inboxStore.init();
+  // Desktop: keep the chosen contacts file (if any) in step with edits.
+  installContactsAutoExport();
 
   const electron = getElectronHost();
   if (electron?.onPairingVersionMismatch) {

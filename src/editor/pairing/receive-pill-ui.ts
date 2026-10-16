@@ -24,6 +24,8 @@ import {
   inboxItemCardCount, inboxStore, type InboxItem } from './inbox-store.js';
 import { insertReceivedItem, RECEIVE_NEEDS_DOC_MESSAGE } from './inbox-insert.js';
 import { showToast } from '../toast.js';
+import { promptForText } from '../text-prompt.js';
+import { looksLikePairingCode, normalizePairingCode } from './pairing-ids.js';
 import { parseRoomInvite } from './room-invite.js';
 import { collabEnabled } from '../collab/collab-gate.js';
 import { offerSharingSetup } from './sharing-setup.js';
@@ -427,6 +429,23 @@ export class ReceivePillController {
     main.appendChild(meta);
     row.appendChild(main);
 
+    // The invite carries the inviter's send code: offer to keep them as a
+    // contact, named from the display name they set.
+    if (canAddSenderAsContact(item)) {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'pmd-receive-row-join pmd-receive-row-add-contact';
+      add.textContent = 'Add contact';
+      add.title = `Add ${item.senderName || 'the person who invited you'} to your contacts`;
+      add.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void addSenderAsContact(item).then((added) => {
+          if (added) add.remove();
+        });
+      });
+      row.appendChild(add);
+    }
+
     const joiner = collabEnabled() ? collabInviteJoiner() : null;
     if (joiner) {
       const join = document.createElement('button');
@@ -548,6 +567,38 @@ export class ReceivePillController {
     if (this.root.contains(t)) return;
     this.setOpen(false);
   };
+}
+
+/** True when `item` names a sender code that isn't you and isn't already
+ *  one of your contacts. */
+export function canAddSenderAsContact(item: Pick<InboxItem, 'senderCode'>): boolean {
+  const code = item.senderCode ? normalizePairingCode(item.senderCode) : '';
+  if (!looksLikePairingCode(code)) return false;
+  if (normalizePairingCode(settings.get('pairingOwnCode')) === code) return false;
+  return !settings.get('pairingPartners').some((p) => normalizePairingCode(p.code) === code);
+}
+
+/** Save the sender of `item` as a contact, asking for the name (pre-filled
+ *  with the display name they send under). Resolves true when added. */
+export async function addSenderAsContact(
+  item: Pick<InboxItem, 'senderCode' | 'senderName'>,
+): Promise<boolean> {
+  if (!canAddSenderAsContact(item)) return false;
+  const code = normalizePairingCode(item.senderCode!);
+  const named = await promptForText({
+    message: 'Add to contacts',
+    detail: 'Shown in the Send pill and on cards and invites you get from them.',
+    initial: (item.senderName || '').trim(),
+    placeholder: 'Name',
+    okLabel: 'Add',
+  });
+  if (named == null) return false;
+  // Re-check: another window may have added them while the prompt was open.
+  if (!canAddSenderAsContact(item)) return true;
+  const name = named.trim();
+  settings.set('pairingPartners', [...settings.get('pairingPartners'), { code, name }]);
+  showToast(`Added ${name || `\u2026${code.slice(-6)}`} to your contacts`);
+  return true;
 }
 
 /** Prefer your local nickname for the sender, then their self-declared

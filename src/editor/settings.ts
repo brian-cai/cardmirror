@@ -1759,6 +1759,10 @@ export interface Settings {
   pairingStarred: { kind: 'partner' | 'group'; ref: string } | null;
   /** Pairing: how the receive pill flashes when a card arrives. */
   pairingReceiveFlash: PairingReceiveFlash;
+  /** Pairing (desktop): a team file (.cmteam) kept in step with your
+   *  contacts and groups — rewritten after every change. '' = off. Set
+   *  from Settings → Collaboration → Team file. */
+  contactsAutoExportPath: string;
   /** Clean: style names the .docx style cleaner must never prune, remove, or
    *  reassign away from (their basedOn/linked dependencies are kept too).
    *  Managed from the Clean utility's protected-styles panel. */
@@ -2132,6 +2136,7 @@ const DEFAULTS: Settings = {
   pairingBlockedCodes: [],
   pairingStarred: null,
   pairingReceiveFlash: 'once',
+  contactsAutoExportPath: '',
   cleanProtectedStyles: [],
 };
 
@@ -5601,6 +5606,8 @@ function sanitize(s: Settings): Settings {
     pairingOwnCode: typeof s.pairingOwnCode === 'string' ? s.pairingOwnCode.trim() : '',
     pairingDisplayName:
       typeof s.pairingDisplayName === 'string' ? s.pairingDisplayName.trim().slice(0, 80) : '',
+    contactsAutoExportPath:
+      typeof s.contactsAutoExportPath === 'string' ? s.contactsAutoExportPath.trim() : '',
     collabShowCursors: s.collabShowCursors !== false,
     pairingPartners: sanitizePairingPartners(s.pairingPartners),
     pairingGroups: sanitizePairingGroups(s.pairingGroups, s.pairingPartners),

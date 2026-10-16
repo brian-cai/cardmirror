@@ -2526,7 +2526,67 @@ function buildTeamFileSection(rerender: () => void): HTMLElement {
   importBtn.addEventListener('click', () => void importTeamFile().then((changed) => changed && rerender()));
   actions.append(exportBtn, importBtn);
   section.appendChild(actions);
+  if (getElectronHost()) section.appendChild(buildContactsAutoExportRow(rerender));
   return section;
+}
+
+/** Team file → keep a file updated: pick a .cmteam once, and every change
+ *  to contacts or groups rewrites it (contacts-auto-export.ts). Desktop only. */
+function buildContactsAutoExportRow(rerender: () => void): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'pmd-settings-contacts-autoexport';
+  const desc = document.createElement('div');
+  desc.className = 'pmd-settings-row-desc';
+  const path = settings.get('contactsAutoExportPath');
+  desc.textContent = path
+    ? `Keeping your contacts and groups updated in ${path} — rewritten whenever you add, rename or remove a contact or group (no relay or sessions).`
+    : 'Keep a team file updated automatically: pick where to save it once, and it’s rewritten whenever you add, rename or remove a contact or group (no relay or sessions).';
+  wrap.appendChild(desc);
+  const actions = document.createElement('div');
+  actions.className = 'pmd-settings-backup-actions';
+  const pick = document.createElement('button');
+  pick.type = 'button';
+  pick.className = 'pmd-settings-backup-btn';
+  pick.textContent = path ? 'Change file…' : 'Auto-export contacts…';
+  pick.addEventListener('click', () => void pickContactsAutoExportFile().then((ok) => ok && rerender()));
+  actions.appendChild(pick);
+  if (path) {
+    const stop = document.createElement('button');
+    stop.type = 'button';
+    stop.className = 'pmd-settings-backup-btn';
+    stop.textContent = 'Stop auto-export';
+    stop.addEventListener('click', () => {
+      settings.set('contactsAutoExportPath', '');
+      rerender();
+    });
+    actions.appendChild(stop);
+  }
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+/** Save dialog for the auto-export file: writes it now and turns the
+ *  watcher on. Resolves true when a file was chosen. */
+async function pickContactsAutoExportFile(): Promise<boolean> {
+  const { contactsFileText, writeContactsFile } = await import('./pairing/contacts-auto-export.js');
+  const { TEAM_FILE_EXTENSION } = await import('./pairing/team-file.js');
+  const current = settings.get('contactsAutoExportPath');
+  const suggested = `CardMirror contacts.${TEAM_FILE_EXTENSION}`;
+  const saved = await getHost().saveAs(
+    suggested,
+    new TextEncoder().encode(contactsFileText(settings.all(), suggested)),
+    {
+      filters: [{ name: 'CardMirror team', extensions: [TEAM_FILE_EXTENSION, 'json'] }],
+      ...(current ? { nearPath: current } : {}),
+    },
+  );
+  if (!saved || typeof saved.handle !== 'string') return false;
+  settings.set('contactsAutoExportPath', saved.handle);
+  // Rewrite under the chosen name: the team label inside the file is the
+  // file's name, and the dialog wrote it with the suggested one.
+  await writeContactsFile(true);
+  showToast('Your contacts file will now update automatically');
+  return true;
 }
 
 async function exportTeamFile(): Promise<void> {
