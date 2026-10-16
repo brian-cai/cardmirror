@@ -446,6 +446,16 @@ export class NavigationPanel {
     }
     header.appendChild(levelGroup);
 
+    // Name the pane, so people know what to look for in Settings
+    // ("Nav pane text size", …). Click → those settings.
+    const caption = document.createElement('button');
+    caption.type = 'button';
+    caption.className = 'pmd-nav-caption';
+    caption.textContent = 'Nav pane';
+    caption.title = 'Nav pane settings';
+    caption.addEventListener('click', () => openNavPaneSettings());
+    header.appendChild(caption);
+
     const actions = document.createElement('div');
     actions.className = 'pmd-nav-header-actions';
     header.appendChild(actions);
@@ -3182,7 +3192,7 @@ interface ContextMenuItemBase {
   checked?: boolean;
 }
 interface ContextMenuSeparator { kind: 'separator' }
-type ContextMenuItem = ContextMenuItemBase | ContextMenuSeparator;
+export type ContextMenuItem = ContextMenuItemBase | ContextMenuSeparator;
 
 /** The nav right-click menu's Text size section (xtgg). */
 function navTextSizeItems(): ContextMenuItem[] {
@@ -3192,6 +3202,11 @@ function navTextSizeItems(): ContextMenuItem[] {
     { kind: 'item', label: 'Text size: smaller', action: () => stepNavTextScale(-1) },
   ];
   if (pct !== 100) items.push({ kind: 'item', label: 'Text size: reset to 100%', action: () => resetNavTextScale() });
+  items.push({
+    kind: 'item',
+    label: 'Nav pane settings\u2026',
+    action: () => openNavPaneSettings(),
+  });
   items.push({
     kind: 'item',
     label: 'Text size settings\u2026',
@@ -3205,9 +3220,14 @@ function headingTypeName(entry: HeadingEntry): string {
   return entry.type.replace(/_/g, ' ');
 }
 
+function openNavPaneSettings(): void {
+  void import('./settings-ui.js').then((m) => m.openSettings({ search: 'nav pane' }));
+}
+
 /** Fill `menu` with `items`, place it at (x, y) clamped to the viewport,
- *  and arm the close-on-outside-click / key handlers. */
-function showNavContextMenu(menu: HTMLElement, x: number, y: number, items: ContextMenuItem[]): void {
+ *  and arm the close-on-outside-click / key handlers. Also used by the
+ *  ribbon's right-click menu. */
+export function showNavContextMenu(menu: HTMLElement, x: number, y: number, items: ContextMenuItem[]): void {
   for (const item of items) {
     if (item.kind === 'separator') {
       const sep = document.createElement('div');

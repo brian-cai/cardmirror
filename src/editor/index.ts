@@ -24,7 +24,7 @@ import { toDocxOffThread } from './docx-save.js';
 import { transformForExport, countMarkedCards, bakesUnreadRedOnSave } from '../export/transform-for-export.js';
 import type { Thread, Comment } from './comments-plugin.js';
 import type { LocalComment } from './learn-store.js';
-import { NavigationPanel } from './nav-panel.js';
+import { NavigationPanel, showNavContextMenu } from './nav-panel.js';
 import { initUpdateChip } from './update-chip.js';
 import { mountTimerUI } from './timer-ui.js';
 import { initTimerAudio } from './timer-audio.js';
@@ -4409,6 +4409,33 @@ function initRibbonResizer(): void {
   reflow();
 }
 initRibbonResizer();
+initRibbonLabel();
+
+/** Name the ribbon (the word Settings uses: "Ribbon button size", "Custom
+ *  ribbon buttons", …): a tooltip on its empty spots, and a right-click
+ *  there offering the ribbon's settings. Buttons keep their own menus. */
+function initRibbonLabel(): void {
+  const ribbon = document.getElementById('ribbon');
+  if (!ribbon) return;
+  ribbon.setAttribute('aria-label', 'Ribbon');
+  ribbon.title = 'Ribbon \u2014 right-click an empty spot for ribbon settings';
+  ribbon.addEventListener('contextmenu', (e) => {
+    if (e.defaultPrevented) return;
+    const t = e.target as Element | null;
+    if (t?.closest?.('button, input, select, textarea, a, [contenteditable="true"], .pmd-doc-name-chip')) return;
+    e.preventDefault();
+    if (!isRightClickContextMenu(e)) return;
+    const menu = document.createElement('div');
+    menu.className = 'pmd-nav-context-menu';
+    const open = (target: Parameters<typeof import('./settings-ui.js').openSettings>[0]): void => {
+      void import('./settings-ui.js').then((m) => m.openSettings(target));
+    };
+    showNavContextMenu(menu, e.clientX, e.clientY, [
+      { kind: 'item', label: 'Ribbon settings\u2026', action: () => open({ search: 'ribbon' }) },
+      { kind: 'item', label: 'Custom ribbon buttons\u2026', action: () => open({ settingKey: 'ribbonCustomButtons' }) },
+    ]);
+  });
+}
 
 applyTheme(settings.get('theme'), settings.get('themeAppliesToDocument'));
 applyShowDocNameChip(settings.get('showDocNameChip'));

@@ -117,6 +117,7 @@ export const RIBBON_GROUPS: RibbonGroup[] = [
       'smartShrink',
       'regrow',
       'copyPreviousCite',
+      'findUnformattedCites',
       'convertCardsToReadMode',
       'createReference',
       'extractUndertag',

@@ -521,6 +521,11 @@ class SettingsModal {
     }
     if (target?.settingKey) this.revealSetting(target.settingKey);
     if (target?.anchor) this.revealAnchor(target.anchor);
+    if (target?.search && this.searchInput) {
+      this.searchInput.value = target.search;
+      this.applySearch(target.search);
+      this.searchInput.focus();
+    }
     if (!target && !alreadyOpen && this.lastScroll?.category === this.activeCategory) {
       const panel = this.dialog.querySelector<HTMLElement>('.pmd-settings-panel:not([hidden])');
       if (panel) panel.scrollTop = this.lastScroll.top;

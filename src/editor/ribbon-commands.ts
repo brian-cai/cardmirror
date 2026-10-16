@@ -4586,6 +4586,7 @@ export type RibbonCommandId =
   | 'standardizeHighlightExcept'
   | 'standardizeShadingExcept'
   | 'convertCardsToReadMode'
+  | 'findUnformattedCites'
   | 'toggleReadMode'
   | 'toggleReaderView'
   | 'openContainingFolder'
@@ -4863,6 +4864,7 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'standardizeHighlightExcept',
   'standardizeShadingExcept',
   'convertCardsToReadMode',
+  'findUnformattedCites',
   'toggleReadMode',
   'toggleReaderView',
   'openContainingFolder',
@@ -5082,6 +5084,7 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   standardizeHighlightExcept: 'Standardize Highlighting (with Exception)',
   standardizeShadingExcept: 'Standardize Background Color (with Exception)',
   convertCardsToReadMode: 'Convert Cards to Read Mode',
+  findUnformattedCites: 'Find Unformatted Cites',
   toggleReadMode: 'Toggle Read Mode',
   toggleReaderView: 'Toggle Reading View',
   openContainingFolder: 'Open Containing Folder',
@@ -5292,6 +5295,7 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
   setNavDepth3: ['nav depth', 'navigation depth', 'outline level', 'level 3', 'blocks'],
   setNavDepth4: ['nav depth', 'navigation depth', 'outline level', 'level 4', 'tags'],
   convertCardsToReadMode: ['zap card', 'zap cards'],
+  findUnformattedCites: ['detect cites', 'auto cite', 'format cites', 'missing cites', 'f8 cites', 'read mode cites', 'author year'],
   toggleReadMode: ['show read mode', 'hide read mode', 'invisibility mode'],
   toggleReaderView: ['reading view', 'reader view', 'paginated view', 'read view', 'book view', 'columns'],
   openContainingFolder: ['reveal in finder', 'show in folder', 'show in explorer', 'reveal file', 'file location', 'containing folder'],
@@ -5491,6 +5495,7 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   standardizeHighlightExcept: '',
   standardizeShadingExcept: '',
   convertCardsToReadMode: '',
+  findUnformattedCites: '',
   toggleReadMode: '',
   toggleReaderView: '',
   openContainingFolder: '',
@@ -6287,6 +6292,12 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
         )(state, dispatch, view);
     case 'convertCardsToReadMode':
       return convertCardsToReadMode;
+    case 'findUnformattedCites':
+      return (_state, dispatch, view) => {
+        if (!dispatch) return true;
+        if (view) void import('./cite-finder-ui.js').then((m) => m.openCiteFinder(view));
+        return true;
+      };
     case 'toggleReadMode':
       return (_state, dispatch) => {
         if (!dispatch) return true;

@@ -5,6 +5,28 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.15 — 2026-10-16
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Find Unformatted Cites.** Read mode only shows a card's author and
+  year when they're formatted as a cite (F8), so cards from teams that
+  paste cites as plain text lose who wrote them. This command (command
+  bar, Editing utilities, or a custom ribbon button) finds cards with no
+  cite formatting whose first line opens like a cite ("Smith 24",
+  "Lee and Park, 2019", "Smith et al. '21", "Smith (2024)"), lists them
+  with the proposed cite in bold, and formats every one you leave ticked
+  in a single step (one undo). Sentences like "In 2020 the government…"
+  aren't flagged.
+- **The ribbon and the nav pane say what they're called.** The nav pane's
+  header reads "Nav pane" (click it for its settings), and right-clicking
+  an empty spot on the ribbon offers Ribbon settings and Custom ribbon
+  buttons. Both open Settings already searched for the right word. The
+  nav pane's right-click menu has Nav pane settings too.
+
 ## 1.15.14 — 2026-10-16
 
 BCai's (@brian-cai) build of CardMirror, updating from

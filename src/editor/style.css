@@ -3325,6 +3325,53 @@ code {
   flex-direction: column;
   gap: 0.6rem;
 }
+.pmd-cite-finder {
+  max-width: 42rem;
+  max-height: 85vh;
+}
+.pmd-cite-finder-tools {
+  display: flex;
+  gap: 0.4rem;
+}
+.pmd-cite-finder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  border: 1px solid var(--pmd-c-border-soft);
+  border-radius: 6px;
+}
+.pmd-cite-finder-list li + li {
+  border-top: 1px solid var(--pmd-c-border-soft);
+}
+.pmd-cite-finder-list label {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+}
+.pmd-cite-finder-list input {
+  margin-top: 0.2rem;
+}
+.pmd-cite-finder-text {
+  min-width: 0;
+  font-size: 0.85rem;
+}
+.pmd-cite-finder-tag {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pmd-cite-finder-line {
+  color: var(--pmd-c-text-muted);
+}
+.pmd-cite-finder-line strong {
+  color: var(--pmd-c-text);
+}
 .pmd-confirm-title {
   font-weight: 700;
   font-size: 0.95rem;
@@ -5204,6 +5251,28 @@ body.pmd-nav-resize-active {
 }
 .pmd-nav-panel header {
   flex-wrap: wrap;
+}
+/* "Nav pane" — names the pane (the word Settings uses). Takes the free
+   space between the level buttons and the actions, and shrinks away
+   rather than wrapping when the pane is narrow. */
+.pmd-nav-caption {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  padding: 0;
+  margin: 0 -0.25rem; /* borrow the header gaps on both sides */
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--pmd-c-text-muted);
+  cursor: pointer;
+}
+.pmd-nav-caption:hover {
+  color: var(--pmd-c-text);
 }
 .pmd-nav-search-bar {
   display: none;

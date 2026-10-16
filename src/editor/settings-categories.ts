@@ -71,4 +71,6 @@ export interface SettingsTarget {
   settingKey?: keyof Settings;
   /** `data-anchor` value of a non-setting section to scroll to + flash. */
   anchor?: string;
+  /** Open with this typed into the search box (e.g. "ribbon"). */
+  search?: string;
 }
