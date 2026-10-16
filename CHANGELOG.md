@@ -5,6 +5,19 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.13 — 2026-10-16
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Expand one heading to a level.** Right-click a heading in the
+  navigation pane and choose "Expand this pocket to heading level 3"
+  (or 2, or 4). Only that heading opens to that depth; the rest of the
+  outline stays as it was. With several headings selected, each of
+  them expands.
+
 ## 1.15.12 — 2026-10-16
 
 BCai's (@brian-cai) build of CardMirror, updating from

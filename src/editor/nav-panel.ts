@@ -1316,6 +1316,56 @@ export class NavigationPanel {
     return out;
   }
 
+  /** "Expand this pocket to heading level N" — the Show heading level
+   *  filter applied to one heading's subtree (each selected heading's,
+   *  when the clicked row is part of a multi-selection), leaving the rest
+   *  of the outline as it is. Only levels deeper than the heading. */
+  private subtreeLevelItems(entry: HeadingEntry): ContextMenuItem[] {
+    if (!this.currentDoc) return [];
+    const targets = this.contextTargets(entry).filter((t) => t.id != null);
+    const entries = collectHeadings(this.currentDoc);
+    const hasKids = (t: HeadingEntry): boolean => {
+      const i = entries.findIndex((e) => e.id === t.id);
+      const next = i >= 0 ? entries[i + 1] : undefined;
+      return next != null && next.level > t.level;
+    };
+    const withKids = targets.filter(hasKids);
+    if (withKids.length === 0) return [];
+    const shallowest = Math.min(...withKids.map((t) => t.level));
+    const what = withKids.length > 1 ? 'selected headings' : `this ${headingTypeName(entry)}`;
+    const items: ContextMenuItem[] = [{ kind: 'separator' }];
+    for (let lvl = shallowest + 1; lvl <= 4; lvl++) {
+      items.push({
+        kind: 'item',
+        label: `Expand ${what} to heading level ${lvl}`,
+        action: () => this.expandSubtreesToLevel(withKids, lvl),
+      });
+    }
+    return items;
+  }
+
+  /** Within each target's subtree: a parent shallower than `level` opens,
+   *  one at `level` or deeper folds — the same rule as `setMaxLevel`, but
+   *  only under these headings. */
+  private expandSubtreesToLevel(targets: readonly HeadingEntry[], level: number): void {
+    if (!this.currentDoc) return;
+    const entries = collectHeadings(this.currentDoc);
+    for (const t of targets) {
+      const start = entries.findIndex((e) => e.id === t.id);
+      if (start < 0) continue;
+      for (let i = start; i < entries.length; i++) {
+        const e = entries[i]!;
+        if (i > start && e.level <= t.level) break;
+        if (e.id == null) continue;
+        const next = entries[i + 1];
+        if (next == null || next.level <= e.level) continue; // no children
+        if (e.level < level) this.collapsed.delete(e.id);
+        else this.collapsed.add(e.id);
+      }
+    }
+    this.render(this.currentDoc);
+  }
+
   private toggleCollapsed(entry: HeadingEntry): void {
     if (entry.id == null) return;
     if (this.collapsed.has(entry.id)) {
@@ -2713,6 +2763,7 @@ export class NavigationPanel {
             },
           ] as ContextMenuItem[])
         : []),
+      ...this.subtreeLevelItems(entry),
       { kind: 'separator' },
       ...[1, 2, 3, 4].map((lvl): ContextMenuItem => ({
         kind: 'item',
@@ -3147,6 +3198,11 @@ function navTextSizeItems(): ContextMenuItem[] {
     action: () => void import('./settings-ui.js').then((m) => m.openSettings({ settingKey: 'navTextScale' })),
   });
   return items;
+}
+
+/** A heading's kind for menu labels ("pocket", "hat", "block"). */
+function headingTypeName(entry: HeadingEntry): string {
+  return entry.type.replace(/_/g, ' ');
 }
 
 /** Fill `menu` with `items`, place it at (x, y) clamped to the viewport,
