@@ -2704,7 +2704,7 @@ export class NavigationPanel {
     closeAnyOpenContextMenu();
 
     const menu = document.createElement('div');
-    menu.className = 'pmd-nav-context-menu';
+    menu.className = 'pmd-nav-context-menu pmd-nav-pane-menu';
 
     // Right-click on a row that's part of the multi-selection → the
     // menu acts on ALL selected rows; on any other row → just that one.
@@ -2786,7 +2786,7 @@ export class NavigationPanel {
     if (!isRightClickContextMenu(e) || isMobileShellActive()) return;
     closeAnyOpenContextMenu();
     const menu = document.createElement('div');
-    menu.className = 'pmd-nav-context-menu';
+    menu.className = 'pmd-nav-context-menu pmd-nav-pane-menu';
     showNavContextMenu(menu, e.clientX, e.clientY, navTextSizeItems());
   }
 

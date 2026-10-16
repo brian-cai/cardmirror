@@ -6026,6 +6026,21 @@ html.pmd-nav-flat .pmd-nav-type-analytic:hover .pmd-nav-label {
   font-weight: 600;
 }
 
+/* The nav pane's own right-click menus follow the nav text size
+   (--nav-text-scale, ⌘/Ctrl+scroll over the pane). Padding is in em so
+   it grows with the text. Other context menus share the base class and
+   keep their fixed size. */
+.pmd-nav-pane-menu {
+  font-size: calc(0.85rem * var(--nav-text-scale, 1));
+  min-width: calc(200px * var(--nav-text-scale, 1));
+}
+.pmd-nav-pane-menu .pmd-nav-context-item {
+  padding: 0.41em 1.76em 0.41em 2.06em;
+}
+.pmd-nav-pane-menu .pmd-nav-context-item-checked::before {
+  left: 0.59em;
+}
+
 .pmd-nav-context-separator {
   height: 1px;
   background: var(--pmd-c-divider);

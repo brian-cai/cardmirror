@@ -5,6 +5,18 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.14 — 2026-10-16
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Improved
+
+- **Nav pane right-click menu follows the nav text size.** When you
+  enlarge the navigation pane's text (⌘/Ctrl+scroll over the pane, or
+  Settings → Nav pane text size), its right-click menu grows with it
+  instead of staying small.
+
 ## 1.15.13 — 2026-10-16
 
 BCai's (@brian-cai) build of CardMirror, updating from
