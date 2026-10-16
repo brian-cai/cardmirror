@@ -203,6 +203,8 @@ export function installNavResizeHandle(host: HTMLElement): HTMLElement {
 export class NavigationPanel {
   private root: HTMLElement;
   private view: EditorView | null = null;
+  /** Removes the editor scroll listener behind `navFollowScroll`. */
+  private detachScrollFollow: (() => void) | null = null;
   private readonly readOnly: boolean = false;
   private listEl: HTMLOListElement;
   private emptyEl: HTMLElement;
@@ -659,6 +661,7 @@ export class NavigationPanel {
     // anyway.
     this.applyMaxLevelToCollapseState();
     this.render(this.currentDoc);
+    this.installScrollFollow(view);
 
     // Register as a drop-target surface and subscribe to drag events
     // so we render indicators regardless of which surface initiated
@@ -712,6 +715,8 @@ export class NavigationPanel {
     this.removeSearchEscapeListeners();
     if (this.searchRenderTimer !== null) clearTimeout(this.searchRenderTimer);
     this.cancelLongPress();
+    this.detachScrollFollow?.();
+    this.detachScrollFollow = null;
     this.unsubscribeSettings?.();
     this.unsubscribeSettings = null;
     this.unsubscribeDrag?.();
@@ -1911,6 +1916,62 @@ export class NavigationPanel {
     if (opts?.preserveMultiSelect !== true && settings.get('navFollowCursor')) {
       this.scrollCaretRowIntoView('nearest');
     }
+  }
+
+  /**
+   * `navFollowScroll`: on editor scroll, light the section at the top of
+   * the viewport, as if the caret were there. A caret move re-lights the
+   * caret's own section through the usual `setCaretHeading` path.
+   * Skipped mid-drag and while a Shift/Ctrl multi-select stands, so
+   * scrolling never throws away a deliberate selection.
+   */
+  private installScrollFollow(view: EditorView): void {
+    this.detachScrollFollow?.();
+    this.detachScrollFollow = null;
+    // Scroll doesn't bubble, so catch it in the capture phase. Resolving
+    // the scroller up front would break in multi-pane, which mounts the
+    // editor after `attach` and moves it between slots.
+    let scroller: Element | null = null;
+    let frame = 0;
+    const sync = (): void => {
+      frame = 0;
+      if (this.view !== view || !settings.get('navFollowScroll')) return;
+      if (dragController.isActive() || this.selectedIds.size > 1) return;
+      const dom = view.dom.getBoundingClientRect();
+      const box = scroller?.getBoundingClientRect();
+      const top = Math.max(box?.top ?? 0, dom.top);
+      const bottom = Math.min(box?.bottom ?? window.innerHeight, dom.bottom);
+      // The caret wins while it's on screen: the scroll may be the editor
+      // keeping the caret in view (typing, arrowing past the bottom), and
+      // the section at the top of the window isn't the one being edited.
+      const { state } = view;
+      const caret = view.coordsAtPos(state.selection.head);
+      if (caret.bottom > top && caret.top < bottom) {
+        this.setCaretHeading(state.selection.from, selfRefSelectionPos(state));
+      } else {
+        // A few px down so a heading `scrollToHeadingId` aligned to the
+        // top edge counts as on screen.
+        const hit = view.posAtCoords({ left: dom.left + dom.width / 2, top: top + 8 });
+        if (!hit) return;
+        this.setCaretHeading(hit.pos);
+      }
+      this.scrollCaretRowIntoView('nearest');
+    };
+    const onScroll = (e: Event): void => {
+      const t = e.target;
+      if (t instanceof Element) {
+        if (!t.contains(view.dom)) return;
+        scroller = t;
+      } else {
+        scroller = null; // document / viewport scroll
+      }
+      if (!frame) frame = requestAnimationFrame(sync);
+    };
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    this.detachScrollFollow = () => {
+      document.removeEventListener('scroll', onScroll, { capture: true });
+      if (frame) cancelAnimationFrame(frame);
+    };
   }
 
   private handleShiftClick(entry: HeadingEntry): void {

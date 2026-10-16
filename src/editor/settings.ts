@@ -582,6 +582,13 @@ export interface Settings {
    *  Scroll only: the cursor, the nav selection, and the collapsed set are
    *  untouched. On by default. */
   navFollowCursor: boolean;
+  /** When true, scrolling the editor moves the nav-pane highlight to the
+   *  section at the top of the viewport (and brings that row into view),
+   *  instead of the highlight staying on the section the cursor is in.
+   *  While the cursor itself is on screen its section keeps the highlight,
+   *  so typing or arrowing that scrolls the editor doesn't steal it.
+   *  Off by default. */
+  navFollowScroll: boolean;
   /** Master switch for drag-to-rearrange: nav-pane row drags and the
    *  editor's pickup-modifier drag. OFF turns those gestures inert
    *  (clicks still navigate; nothing moves) — for touch devices where
@@ -2018,6 +2025,7 @@ const DEFAULTS: Settings = {
   navSearchHideNonMatches: true,
   navSearchContent: false,
   navFollowCursor: true,
+  navFollowScroll: false,
   dragInteractions: true,
   copyPreviousCiteNearestOnly: true,
   showOnboardingStarter: true,
@@ -2729,6 +2737,16 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
       'sync outline',
       'outline follows',
     ],
+  },
+  {
+    key: 'navFollowScroll',
+    label: 'Navigation pane follows scrolling',
+    description:
+      'Once the cursor scrolls out of sight, the navigation pane highlights the section at the top of the window instead of the section the cursor is in',
+    kind: 'toggle',
+    category: 'general',
+    section: 'Workspace',
+    aliases: ['scroll spy', 'scrollspy', 'sync scroll', 'nav follows scroll', 'outline follows scroll'],
   },
   {
     key: 'mobileLayout',
@@ -5381,6 +5399,7 @@ function sanitize(s: Settings): Settings {
     navSearchHideNonMatches: s.navSearchHideNonMatches !== false,
     navSearchContent: s.navSearchContent === true,
     navFollowCursor: s.navFollowCursor !== false,
+    navFollowScroll: s.navFollowScroll === true,
     dragInteractions: s.dragInteractions !== false,
     readerReduceMotion: s.readerReduceMotion === true,
     // Default-on: preserve `false` only when explicitly set so the
