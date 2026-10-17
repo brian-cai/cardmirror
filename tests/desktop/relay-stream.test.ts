@@ -170,4 +170,83 @@ describe('RelayStream', () => {
     expect(hits).toBe(1);
     expect(stream.running).toBe(false);
   });
+
+  describe('dead-link watchdog', () => {
+    function watched(url: string, events: ReturnType<typeof collect>, idleTimeoutMs = 150, connectTimeoutMs = 150) {
+      const stream = new RelayStream({
+        url: () => url,
+        headers: () => ({}),
+        minBackoffMs: 20,
+        maxBackoffMs: 40,
+        idleTimeoutMs,
+        connectTimeoutMs,
+        callbacks: events.callbacks,
+      });
+      activeStreams.push(stream);
+      return stream;
+    }
+
+    it('a heartbeating stream that goes silent is reconnected', async () => {
+      let conns = 0;
+      const url = await serve((_req, res) => {
+        conns++;
+        sse(res);
+        // First connection heartbeats once, then goes silent but stays
+        // "open" — a half-dead link on bad wifi.
+        if (conns === 1) res.write(': hb\n\n');
+      });
+      const events = collect({});
+      watched(url, events).start();
+      await until(() => events.connected >= 2, 3000);
+      expect(conns).toBeGreaterThanOrEqual(2);
+    });
+
+    it('heartbeats keep a quiet stream connected', async () => {
+      let conns = 0;
+      const timers: ReturnType<typeof setInterval>[] = [];
+      const url = await serve((_req, res) => {
+        conns++;
+        sse(res);
+        res.write(': hb\n\n');
+        const t = setInterval(() => res.write(': hb\n\n'), 50);
+        timers.push(t);
+        res.on('close', () => clearInterval(t));
+      });
+      const events = collect({});
+      watched(url, events).start();
+      await until(() => events.connected === 1);
+      await new Promise((r) => setTimeout(r, 500));
+      timers.forEach(clearInterval);
+      expect(conns).toBe(1);
+    });
+
+    it('a server that never heartbeats is reconnected once, then left alone', async () => {
+      let conns = 0;
+      const url = await serve((_req, res) => {
+        conns++;
+        sse(res);
+      });
+      const events = collect({});
+      watched(url, events).start();
+      await until(() => events.connected === 2, 3000);
+      await new Promise((r) => setTimeout(r, 500));
+      expect(conns).toBe(2);
+    });
+
+    it('a connect that never says hello times out and retries', async () => {
+      let conns = 0;
+      const url = await serve((_req, res) => {
+        conns++;
+        if (conns === 1) {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+          return; // headers, then nothing — no hello
+        }
+        sse(res);
+      });
+      const events = collect({});
+      watched(url, events).start();
+      await until(() => events.connected === 1, 3000);
+      expect(conns).toBe(2);
+    });
+  });
 });

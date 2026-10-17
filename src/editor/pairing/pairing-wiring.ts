@@ -108,6 +108,13 @@ export function initPairingWiring(): void {
   installTeamFileSync();
 
   const electron = getElectronHost();
+  // Coming back to the app is when you're looking for an invite: check
+  // the mailbox right away instead of trusting a possibly-dead stream.
+  if (electron?.pairingPollNow) {
+    window.addEventListener('focus', () => {
+      if (settings.get('pairingEnabled')) void electron.pairingPollNow?.().catch(() => {});
+    });
+  }
   if (electron?.onPairingVersionMismatch) {
     electron.onPairingVersionMismatch((info) => {
       // Throttle so a backlog of incompatible cards doesn't spam toasts.

@@ -428,6 +428,8 @@ interface ElectronAPI {
   /** Read a team file the user picked earlier (null when it's gone, not
    *  granted, or too big). */
   readTeamFile?(filePath: string): Promise<{ bytes: Uint8Array; mtimeMs: number } | null>;
+  /** Check the relay mailbox now (throttled in main) — window focus. */
+  pairingPollNow?(): Promise<void>;
   /** Whether a self-hosted relay accepts this URL + token (custom: false
    *  when the URL is empty, i.e. the official relay). */
   pairingRelayCheck?(payload: {
@@ -1323,6 +1325,10 @@ export class ElectronHost implements Host {
     const r = (await api().readTeamFile?.(filePath)) ?? null;
     if (!r) return null;
     return { bytes: r.bytes instanceof Uint8Array ? r.bytes : new Uint8Array(r.bytes), mtimeMs: r.mtimeMs };
+  }
+
+  async pairingPollNow(): Promise<void> {
+    await api().pairingPollNow?.();
   }
 
   async pairingRelayCheck(payload: {

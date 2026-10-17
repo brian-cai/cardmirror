@@ -839,6 +839,7 @@ interface PairingInboxItemIpc {
     ipcRenderer.invoke('host:pairing-connect-account', payload) as Promise<PairingConnectResultIpc>,
   readTeamFile: (filePath: string) =>
     ipcRenderer.invoke('host:read-team-file', filePath) as Promise<{ bytes: Uint8Array; mtimeMs: number } | null>,
+  pairingPollNow: () => ipcRenderer.invoke('host:pairing-poll-now') as Promise<void>,
   pairingRelayCheck: (payload: { relayUrl: string; relayToken: string }) =>
     ipcRenderer.invoke('host:pairing-relay-check', payload) as Promise<{ custom: boolean; ok: boolean; status: number }>,
   pairingAccountStatus: () =>

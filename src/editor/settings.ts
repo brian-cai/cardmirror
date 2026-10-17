@@ -4481,7 +4481,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'pairingPollSeconds',
     label: 'Fallback poll every (seconds)',
     description:
-      'New cards normally arrive instantly by live push. This sets the polling cadence used only against relays without push support, and (at least every 5 minutes) the safety-net catch-up while push is connected. Default 30; clamped to 5–3600.',
+      'New cards and session invites normally arrive instantly by live push. This sets the polling cadence against relays without push support, and the safety-net catch-up while push is connected (at least every 30 seconds on a self-hosted relay, every 5 minutes on the official one). Default 30; clamped to 5–3600.',
     kind: 'number',
     min: 5,
     max: 3600,

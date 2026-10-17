@@ -5,6 +5,31 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.19 — 2026-10-17
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Improved
+
+- **Session invites and cards arrive reliably on bad wifi.**
+  - The live connection that delivers them now notices when it has
+    quietly died. Previously a dropped wifi link could leave it "open"
+    but dead for minutes. It reconnects within a minute, and right away
+    when the network comes back.
+  - On a self-hosted relay (like relay.extinction.gg), CardMirror also
+    checks the mailbox every 30 seconds instead of every 5 minutes. It
+    checks again whenever you switch back to the app.
+- **Sending retries on bad wifi.** A send that hits a network blip
+  retries a few times over about 12 seconds before reporting it
+  couldn't reach the recipient. A retry never leaves the recipient
+  with two copies.
+
+### Fixed
+
+- Two cards or invites arriving at the same moment right after launch
+  could lose one of them.
+
 ## 1.15.18 — 2026-10-17
 
 BCai's (@brian-cai) build of CardMirror, updating from

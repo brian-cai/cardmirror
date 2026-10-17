@@ -33,7 +33,8 @@
  * so pointing at production is a one-line change to DEFAULT_RELAY_URL.
  */
 
-import { app, BrowserWindow, ipcMain, powerMonitor } from 'electron';
+import { app, BrowserWindow, ipcMain, net, powerMonitor } from 'electron';
+import { randomUUID } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import * as os from 'node:os';
 import * as fs from 'node:fs/promises';
@@ -135,6 +136,9 @@ interface InnerPayload {
   senderCode?: string;
   senderName?: string;
   via?: string;
+  /** One id per logical send, shared by its retries, so a retry whose
+   *  first attempt actually landed doesn't show up twice. */
+  sendId?: string;
   item?: SendItem;
 }
 
@@ -182,6 +186,26 @@ let polling = false;
  *  DELETE failed (the message would still be on the relay next poll), and
  *  absorbs push/catch-up overlap (at-least-once delivery). */
 const consumed = new Set<string>();
+/** Inner `sendId`s already added to the inbox this session — absorbs a
+ *  send retry whose earlier attempt reached the relay after all. */
+const consumedSends = new Set<string>();
+
+/** Bad wifi can leave a request hanging for minutes; never let one
+ *  wedge the poller (`polling` stays true until it settles). */
+const POLL_TIMEOUT_MS = 20_000;
+const SEND_TIMEOUT_MS = 20_000;
+const ACK_TIMEOUT_MS = 15_000;
+/** Send attempts per recipient, and the waits between them. Retried on
+ *  network errors, timeouts, 408/429 and 5xx — never on other 4xx. */
+const SEND_RETRY_DELAYS_MS = [1000, 3000, 8000];
+/** Catch-up cadence floor while the push stream is up. A self-hosted
+ *  relay is ours to poll (empty polls are bodyless 304s); the official
+ *  relay is shared, so it keeps the gentler floor. */
+const CATCHUP_FLOOR_CUSTOM_S = 30;
+const CATCHUP_FLOOR_OFFICIAL_S = 300;
+/** "Check now" requests (window focus) closer than this are folded. */
+const POLL_NOW_MIN_GAP_MS = 10_000;
+let lastPollStartedAt = 0;
 
 // ── Keystore (this machine's X25519 identity) ────────────────────────
 
@@ -390,15 +414,22 @@ async function maybeRenewEntitlement(): Promise<void> {
 // ── Inbox state (persisted, broadcast) ───────────────────────────────
 
 let inbox: InboxItem[] = [];
-let inboxLoaded = false;
+/** The one load of pairing-inbox.json. Shared, so a message processed
+ *  while the read is in flight waits for it — a bare "loaded" flag let
+ *  that message land in the inbox and then be wiped when the read
+ *  finished (two cards arriving together at launch lost one). */
+let inboxLoad: Promise<void> | null = null;
 
 function inboxPath(): string {
   return path.join(app.getPath('userData'), 'pairing-inbox.json');
 }
 
-async function ensureInboxLoaded(): Promise<void> {
-  if (inboxLoaded) return;
-  inboxLoaded = true;
+function ensureInboxLoaded(): Promise<void> {
+  inboxLoad ??= loadInbox();
+  return inboxLoad;
+}
+
+async function loadInbox(): Promise<void> {
   try {
     const text = await fs.readFile(inboxPath(), 'utf8');
     const parsed = JSON.parse(text);
@@ -520,7 +551,7 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
 
 function deleteMessage(msgId: string): void {
   const url = `${relayUrl()}/messages/${encodeURIComponent(msgId)}`;
-  fetch(url, { method: 'DELETE', headers: authHeaders() }).catch((err) => {
+  fetch(url, { method: 'DELETE', headers: authHeaders(), signal: AbortSignal.timeout(ACK_TIMEOUT_MS) }).catch((err) => {
     console.warn(`[pairing] DELETE ${msgId} failed:`, err);
   });
 }
@@ -534,11 +565,14 @@ async function pollOnce(): Promise<void> {
   if (polling || !config.enabled) return;
   void maybeRenewEntitlement();
   polling = true;
+  lastPollStartedAt = Date.now();
   try {
     const url = `${relayUrl()}/messages?recipient=${encodeURIComponent(ks().ownRoutingId())}`;
     const res = await fetch(url, {
       method: 'GET',
       headers: authHeaders(lastPollTag ? { 'If-None-Match': lastPollTag } : {}),
+      // Covers the body read below too (the signal stays attached).
+      signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
     if (res.status === 304) return; // empty poll — bodyless (capacity, 2026-08-18)
     if (!res.ok) {
@@ -605,8 +639,15 @@ async function processMessages(messages: RelayMessage[]): Promise<void> {
         deleteMessage(m.msgId);
         continue;
       }
-      // Dedupe by source msgId so a failed DELETE can't double-add.
+      // Dedupe by source msgId so a failed DELETE can't double-add, and
+      // by sendId so a retried send that landed twice adds once.
       const id = `rx-${m.msgId}`;
+      const sendId = typeof inner.sendId === 'string' && inner.sendId ? inner.sendId : null;
+      if (sendId && consumedSends.has(sendId)) {
+        deleteMessage(m.msgId);
+        continue;
+      }
+      if (sendId) consumedSends.add(sendId);
       if (!inbox.some((it) => it.id === id)) {
         inbox = [
           ...inbox,
@@ -708,8 +749,68 @@ function applyDelivery(): void {
     },
   });
   stream.start();
-  const catchupMs = Math.max(config.pollSeconds, 300) * 1000;
+  const floor = config.relayUrl.trim() ? CATCHUP_FLOOR_CUSTOM_S : CATCHUP_FLOOR_OFFICIAL_S;
+  const catchupMs = Math.max(config.pollSeconds, floor) * 1000;
   catchupTimer = setInterval(() => void pollOnce(), catchupMs);
+}
+
+/** POST one sealed bundle, retrying transient failures (bad wifi) with
+ *  short waits. Resolves the final HTTP status, or 0 when the relay was
+ *  never reached. The same body is resent: the receiver dedupes by its
+ *  inner sendId. */
+async function postWithRetry(gz: Buffer): Promise<number> {
+  let status = 0;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(`${relayUrl()}/messages`, {
+        method: 'POST',
+        headers: authHeaders({
+          'Content-Type': 'application/json',
+          'Content-Encoding': 'gzip',
+        }),
+        body: gz,
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+      });
+      void res.body?.cancel().catch(() => {});
+      status = res.status;
+      if (res.ok) return status;
+      const transient = status === 408 || status === 429 || status >= 500;
+      if (!transient) return status;
+    } catch (err) {
+      status = 0;
+      console.warn(`[pairing] POST attempt ${attempt + 1} failed:`, (err as Error).message ?? err);
+    }
+    const wait = SEND_RETRY_DELAYS_MS[attempt];
+    if (wait === undefined) return status;
+    await new Promise((r) => setTimeout(r, wait));
+  }
+}
+
+/** Run a catch-up now (a window regained focus, the network came
+ *  back), folding requests that arrive in a burst. */
+function pollSoon(): void {
+  if (!config.enabled) return;
+  if (Date.now() - lastPollStartedAt < POLL_NOW_MIN_GAP_MS) return;
+  void pollOnce();
+}
+
+/** Network comes back (wifi rejoins) → reconnect the push stream right
+ *  away instead of waiting out its backoff, and catch up. */
+let netWatchTimer: ReturnType<typeof setInterval> | null = null;
+function watchNetwork(): void {
+  if (netWatchTimer !== null) return;
+  let online = net.isOnline();
+  netWatchTimer = setInterval(() => {
+    const now = net.isOnline();
+    if (now === online) return;
+    online = now;
+    if (!now || !config.enabled) return;
+    console.log('[pairing] network back — refreshing delivery channel');
+    if (stream) stream.restart();
+    lastPollStartedAt = 0;
+    void pollOnce();
+  }, 3000);
+  netWatchTimer.unref?.();
 }
 
 // ── IPC ──────────────────────────────────────────────────────────────
@@ -791,6 +892,7 @@ export function registerPairingIpc(): void {
     const oldEntitlement = entitlementState?.entitlement ?? '';
     const ownCode = ks().regenerate();
     consumed.clear();
+    consumedSends.clear();
     if (entitlementState !== null || membershipLapsed) {
       entitlementState = null;
       membershipLapsed = false;
@@ -866,6 +968,11 @@ export function registerPairingIpc(): void {
   // Wake-from-sleep: the stream's socket may be silently dead — force a
   // prompt reconnect (whose hello triggers the catch-up poll). In
   // fallback-poll mode just poll immediately instead of waiting a cycle.
+  watchNetwork();
+  ipcMain.handle('host:pairing-poll-now', () => {
+    pollSoon();
+  });
+
   powerMonitor.on('resume', () => {
     // Renderers first (collab session streams restart themselves) —
     // NOT gated on pairing being enabled.
@@ -920,6 +1027,7 @@ export function registerPairingIpc(): void {
               senderCode,
               senderName: config.displayName,
               via: payload.via,
+              sendId: randomUUID(),
               item: {
                 label: payload.item.label,
                 type: payload.item.type,
@@ -934,19 +1042,12 @@ export function registerPairingIpc(): void {
               ...bundle,
             };
             const gz = gzipSync(Buffer.from(JSON.stringify(body), 'utf8'));
-            const res = await fetch(`${relayUrl()}/messages`, {
-              method: 'POST',
-              headers: authHeaders({
-                'Content-Type': 'application/json',
-                'Content-Encoding': 'gzip',
-              }),
-              body: gz,
-            });
-            if (res.ok) ok++;
+            const status = await postWithRetry(gz);
+            if (status >= 200 && status < 300) ok++;
             else {
               fail++;
-              if (res.status === 401 || res.status === 403) authFail++;
-              console.warn(`[pairing] POST returned ${res.status}`);
+              if (status === 401 || status === 403) authFail++;
+              console.warn(`[pairing] POST ${status ? `returned ${status}` : 'failed (network)'}`);
             }
           } catch (err) {
             fail++;
