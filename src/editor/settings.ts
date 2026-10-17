@@ -4420,20 +4420,6 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     dependsOn: 'pairingEnabled',
   },
   {
-    key: 'pairingConnectedUntil',
-    label: 'Debate Decoded account',
-    description:
-      'Links this machine to your paid Debate Decoded membership, required for card sharing ' +
-      'and co-editing on the official relay. To link, open ' +
-      'debate-decoded.ghost.io/cardmirror-connect, sign in, and paste the code it shows you ' +
-      'here. Each membership covers two machines; linking a third asks before unlinking the ' +
-      'oldest.',
-    kind: 'pairingAccount',
-    category: 'pairing',
-    dependsOn: 'pairingEnabled',
-    aliases: ['account', 'auth', 'authorize', 'debate decoded', 'connect code', 'membership'],
-  },
-  {
     key: 'pairingDisplayName',
     label: 'Your display name',
     // Web too (not electronOnly): co-editing presence cursors carry
@@ -4522,6 +4508,20 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     category: 'pairing',
     dependsOn: 'pairingEnabled',
     aliases: ['relay token', 'relay password'],
+  },
+  {
+    key: 'pairingConnectedUntil',
+    label: 'Debate Decoded account',
+    description:
+      'Links this machine to your paid Debate Decoded membership, required for card sharing ' +
+      'and co-editing on the official relay. To link, open ' +
+      'debate-decoded.ghost.io/cardmirror-connect, sign in, and paste the code it shows you ' +
+      'here. Each membership covers two machines; linking a third asks before unlinking the ' +
+      'oldest.',
+    kind: 'pairingAccount',
+    category: 'pairing',
+    dependsOn: 'pairingEnabled',
+    aliases: ['account', 'auth', 'authorize', 'debate decoded', 'connect code', 'membership'],
   },
   {
     key: 'pluginsEnabled',

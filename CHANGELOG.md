@@ -5,6 +5,21 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.17 — 2026-10-17
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Improved
+
+- **Team file first.** Settings → Collaboration now opens with the Team
+  file section (Export team, Import team, sync and auto-export), since
+  importing one sets up everything else on the tab. The Debate Decoded
+  account moved to the bottom.
+- **Import team asks for your name first.** Before choosing the file,
+  you confirm the display name teammates will see and the team file
+  will list you under (pre-filled when you already have one).
+
 ## 1.15.16 — 2026-10-16
 
 BCai's (@brian-cai) build of CardMirror, updating from

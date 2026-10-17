@@ -749,6 +749,11 @@ class SettingsModal {
           (!m.webOnly || hostKind === 'browser') &&
           !hiddenInLite(m),
       );
+      // Team file first on Collaboration: importing one sets up everything
+      // else on this tab (send codes, groups, relay, sessions) at once.
+      if (id === 'pairing' && getElectronHost()) {
+        panel.appendChild(buildTeamFileSection(() => this.render()));
+      }
       let lastSection: string | undefined;
       for (const meta of entries) {
         // Section headers: emitted when consecutive entries' `section`
@@ -792,11 +797,6 @@ class SettingsModal {
       // it lives outside SETTING_METADATA (like General's info sections
       // above), and loads lazily so the panel code stays off the settings
       // open path — same style as the other heavy, on-demand panels.
-      // Team file: share everyone's send codes, groups, the private relay
-      // and live sessions in one file instead of pasting them one by one.
-      if (id === 'pairing' && getElectronHost()) {
-        panel.appendChild(buildTeamFileSection(() => this.render()));
-      }
       if (id === 'plugins') {
         const section = document.createElement('section');
         section.className = 'pmd-plugins-panel';
@@ -2504,7 +2504,7 @@ export function buildEarlierVersionsRow(
  *  `.cmteam` file; import merges one in (team-file.ts). */
 function buildTeamFileSection(rerender: () => void): HTMLElement {
   const section = document.createElement('section');
-  section.className = 'pmd-settings-backup';
+  section.className = 'pmd-settings-backup pmd-settings-team-section';
   section.dataset['searchAliases'] = 'team roster share codes import export groups partners students relay token';
   const title = document.createElement('div');
   title.className = 'pmd-settings-row-title';
@@ -2702,6 +2702,21 @@ async function exportTeamFile(): Promise<void> {
 /** Import a team file; resolves true when anything changed. */
 export async function importTeamFile(): Promise<boolean> {
   const { mergeTeamFile, parseTeamFile, TEAM_FILE_EXTENSION, TEAM_FILE_KIND } = await import('./pairing/team-file.js');
+  // Your name first: it's what the team file lists you as and what
+  // teammates see on cards and invites from you.
+  const typedName = await promptForText({
+    message: 'Your display name',
+    detail:
+      'Teammates see this on cards and session invites you send, and the team file lists you under it. ' +
+      'You can change it later in Settings \u2192 Collaboration.',
+    initial: settings.get('pairingDisplayName').trim(),
+    placeholder: 'e.g. Ana Lopez',
+    okLabel: 'Next: choose team file',
+  });
+  if (typedName == null) return false;
+  if (typedName.trim() && typedName.trim() !== settings.get('pairingDisplayName').trim()) {
+    settings.set('pairingDisplayName', typedName.trim());
+  }
   const opened = await getHost().openFile({
     filters: [{ name: 'CardMirror team', extensions: [TEAM_FILE_EXTENSION, 'json'] }],
   });

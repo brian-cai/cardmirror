@@ -55,7 +55,6 @@ describe('Collaboration tab on web', () => {
     expect(webRows).toEqual([
       'pairingEnabled',
       'pairingOwnCode',
-      'pairingConnectedUntil',
       'pairingDisplayName',
       'pairingPartners',
       'pairingGroups',
@@ -63,6 +62,7 @@ describe('Collaboration tab on web', () => {
       'pairingReceiveFlash',
       'pairingRelayUrl',
       'pairingRelayToken',
+      'pairingConnectedUntil',
     ]);
   });
 });

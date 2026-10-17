@@ -6400,6 +6400,16 @@ html.pmd-nav-flat .pmd-nav-type-analytic:hover .pmd-nav-label {
   flex-direction: column;
   gap: 0.3rem;
 }
+/* The team file leads the Collaboration tab: no gap above, a rule below
+   separating it from the settings rows. */
+.pmd-settings-team-section {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+  padding-bottom: 1rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--pmd-c-divider-faint);
+}
 .pmd-settings-backup-actions {
   display: flex;
   gap: 0.5rem;
