@@ -758,7 +758,7 @@ function applyDelivery(): void {
  *  short waits. Resolves the final HTTP status, or 0 when the relay was
  *  never reached. The same body is resent: the receiver dedupes by its
  *  inner sendId. */
-async function postWithRetry(gz: Buffer): Promise<number> {
+async function postWithRetry(gz: ReturnType<typeof gzipSync>): Promise<number> {
   let status = 0;
   for (let attempt = 0; ; attempt++) {
     try {
