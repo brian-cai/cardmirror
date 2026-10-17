@@ -5,6 +5,20 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.18 — 2026-10-17
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Improved
+
+- **Faster typing in large documents** (from upstream PR #107). The nav
+  pane, word count and comments column now wait for a real pause in
+  typing before they refresh, rather than refreshing after nearly every
+  keystroke. Typing in a card body no longer rebuilds the nav pane when
+  no heading changed, and card numbers in the nav pane are looked up
+  directly instead of scanning the document.
+
 ## 1.15.17 — 2026-10-17
 
 BCai's (@brian-cai) build of CardMirror, updating from
