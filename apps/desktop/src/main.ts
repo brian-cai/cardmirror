@@ -1251,6 +1251,26 @@ ipcMain.handle('host:read-file-at-path', async (_event, filePath: string) => {
   }
 });
 
+// Read a synced team file (.cmteam / .json) by path. Same read scope as
+// documents (the user picked it in the Import team dialog, which grants
+// it, persisted across restarts); small files only — a team file is a
+// list of names and codes.
+const TEAM_FILE_MAX_BYTES = 1024 * 1024;
+ipcMain.handle('host:read-team-file', async (_event, filePath: string) => {
+  if (typeof filePath !== 'string' || !filePath) return null;
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext !== '.cmteam' && ext !== '.json') return null;
+  if (!(await isReadAllowed(filePath))) return null;
+  try {
+    const st = await fs.stat(filePath);
+    if (st.size > TEAM_FILE_MAX_BYTES) return null;
+    const bytes = await fs.readFile(filePath);
+    return { bytes: new Uint8Array(bytes), mtimeMs: st.mtimeMs };
+  } catch {
+    return null;
+  }
+});
+
 // stat a file (mtime + size) for the recovery-save staleness check. Null
 // when the path is gone / unreadable.
 ipcMain.handle('host:stat-file', async (_event, filePath: string) => {

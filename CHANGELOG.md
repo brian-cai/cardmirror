@@ -5,6 +5,26 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.16 — 2026-10-16
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Team files collect the team.** Importing a team file adds your
+  pairing code and display name to it (the import dialog says so, and
+  asks for a name if you haven't set one), so a file in a shared Dropbox
+  or Drive folder fills up as each teammate imports it. Everything else
+  in the file is kept as it was.
+- **Team files stay synced.** After you import one, CardMirror re-reads
+  it on launch, when you come back to the window and every five
+  minutes: new teammates, groups and sessions are added (nothing you
+  have is removed), and you're added back if you're missing. A changed
+  relay is never applied automatically; that still takes Import team.
+  Settings → Collaboration → Team file shows the synced file, with Sync
+  now and Stop syncing.
+
 ## 1.15.15 — 2026-10-16
 
 BCai's (@brian-cai) build of CardMirror, updating from

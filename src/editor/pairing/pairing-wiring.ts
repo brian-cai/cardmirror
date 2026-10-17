@@ -25,6 +25,7 @@ import { inboxStore } from './inbox-store.js';
 import { SendPillController } from './send-pill-ui.js';
 import { ReceivePillController } from './receive-pill-ui.js';
 import { installContactsAutoExport } from './contacts-auto-export.js';
+import { installTeamFileSync } from './team-file-sync.js';
 
 /** Build + mount the Send and Receive pills into the tray (after the
  *  dropzone, so they sit to its right). */
@@ -104,6 +105,7 @@ export function initPairingWiring(): void {
   void inboxStore.init();
   // Desktop: keep the chosen contacts file (if any) in step with edits.
   installContactsAutoExport();
+  installTeamFileSync();
 
   const electron = getElectronHost();
   if (electron?.onPairingVersionMismatch) {

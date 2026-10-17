@@ -199,3 +199,24 @@ export function mergeTeamFile(opts: {
   }
   return { partners, groups, addedPeople, addedGroups, updatedGroups };
 }
+
+/** The team file's raw JSON with `{ name, code }` appended to `people`, or
+ *  null when the code is already listed (or `raw` isn't a team file). Every
+ *  other field is kept exactly as it was — groups, relay, sessions, hand
+ *  edits, anything a newer app wrote — since this rewrites a shared file. */
+export function addPersonToTeamFileJson(
+  raw: unknown,
+  person: { code: string; name: string },
+): Record<string, unknown> | null {
+  if (!parseTeamFile(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  const code = normalizePairingCode(person.code);
+  const name = person.name.trim();
+  if (!code || !name) return null;
+  const people = Array.isArray(obj['people']) ? (obj['people'] as unknown[]) : [];
+  const listed = people.some(
+    (p) => typeof (p as { code?: unknown })?.code === 'string' && normalizePairingCode((p as { code: string }).code) === code,
+  );
+  if (listed) return null;
+  return { ...obj, people: [...people, { name, code }] };
+}

@@ -1763,6 +1763,11 @@ export interface Settings {
    *  contacts and groups — rewritten after every change. '' = off. Set
    *  from Settings → Collaboration → Team file. */
   contactsAutoExportPath: string;
+  /** Desktop: the team file (.cmteam) imported last, kept in sync — re-read
+   *  on launch, on focus and every few minutes to pick up new people, groups
+   *  and sessions, and to add this machine's own code + display name to it
+   *  when missing. Empty = not syncing. A path on THIS machine. */
+  teamFileSyncPath: string;
   /** Clean: style names the .docx style cleaner must never prune, remove, or
    *  reassign away from (their basedOn/linked dependencies are kept too).
    *  Managed from the Clean utility's protected-styles panel. */
@@ -2137,6 +2142,7 @@ const DEFAULTS: Settings = {
   pairingStarred: null,
   pairingReceiveFlash: 'once',
   contactsAutoExportPath: '',
+  teamFileSyncPath: '',
   cleanProtectedStyles: [],
 };
 
@@ -5608,6 +5614,7 @@ function sanitize(s: Settings): Settings {
       typeof s.pairingDisplayName === 'string' ? s.pairingDisplayName.trim().slice(0, 80) : '',
     contactsAutoExportPath:
       typeof s.contactsAutoExportPath === 'string' ? s.contactsAutoExportPath.trim() : '',
+    teamFileSyncPath: typeof s.teamFileSyncPath === 'string' ? s.teamFileSyncPath.trim() : '',
     collabShowCursors: s.collabShowCursors !== false,
     pairingPartners: sanitizePairingPartners(s.pairingPartners),
     pairingGroups: sanitizePairingGroups(s.pairingGroups, s.pairingPartners),

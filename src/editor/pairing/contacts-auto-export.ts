@@ -57,6 +57,9 @@ export async function writeContactsFile(force = false): Promise<boolean> {
   const electron = getElectronHost();
   const path = settings.get('contactsAutoExportPath');
   if (!electron || !path) return true;
+  // Never overwrite the synced team file with just your contacts: it would
+  // drop the team's relay and sessions.
+  if (path === settings.get('teamFileSyncPath')) return true;
   const text = contactsFileText(settings.all(), path);
   if (!force && lastWritten?.path === path && lastWritten.text === text) return true;
   try {

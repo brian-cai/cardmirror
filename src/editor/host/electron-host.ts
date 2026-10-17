@@ -425,6 +425,9 @@ interface ElectronAPI {
     evict?: string;
   }): Promise<PairingConnectResultIpc>;
   pairingAccountStatus?(): Promise<PairingAccountStatusIpc>;
+  /** Read a team file the user picked earlier (null when it's gone, not
+   *  granted, or too big). */
+  readTeamFile?(filePath: string): Promise<{ bytes: Uint8Array; mtimeMs: number } | null>;
   /** Whether a self-hosted relay accepts this URL + token (custom: false
    *  when the URL is empty, i.e. the official relay). */
   pairingRelayCheck?(payload: {
@@ -1314,6 +1317,12 @@ export class ElectronHost implements Host {
     return (
       (await api().pairingConnectAccount?.(payload)) ?? { ok: false, error: 'disabled' }
     );
+  }
+
+  async readTeamFile(filePath: string): Promise<{ bytes: Uint8Array; mtimeMs: number } | null> {
+    const r = (await api().readTeamFile?.(filePath)) ?? null;
+    if (!r) return null;
+    return { bytes: r.bytes instanceof Uint8Array ? r.bytes : new Uint8Array(r.bytes), mtimeMs: r.mtimeMs };
   }
 
   async pairingRelayCheck(payload: {

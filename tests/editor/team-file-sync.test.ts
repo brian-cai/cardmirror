@@ -1,0 +1,92 @@
+// @vitest-environment jsdom
+/**
+ * Team file sync: importing a team file adds you to it, and the synced file
+ * is re-read for new teammates (additive) — never rerouting the relay.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const disk = vi.hoisted(() => ({ files: new Map<string, string>(), writes: 0 }));
+
+vi.mock('../../src/editor/host/index.js', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../../src/editor/host/index.js')>();
+  return {
+    ...mod,
+    getElectronHost: () => ({
+      readTeamFile: async (path: string) => {
+        const text = disk.files.get(path);
+        return text == null ? null : { bytes: new TextEncoder().encode(text), mtimeMs: 1 };
+      },
+      writeFileAtPath: async (path: string, bytes: Uint8Array) => {
+        disk.writes++;
+        disk.files.set(path, new TextDecoder().decode(bytes));
+      },
+    }),
+  };
+});
+
+import { settings } from '../../src/editor/settings.js';
+import { addPersonToTeamFileJson, parseTeamFile } from '../../src/editor/pairing/team-file.js';
+import { syncTeamFile } from '../../src/editor/pairing/team-file-sync.js';
+
+const ME = 'cmk1.MEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEM';
+const ANA = 'cmk1.ANAANAANAANAANAANAANAANAANAANAANAANAANAANA';
+const BEN = 'cmk1.BENBENBENBENBENBENBENBENBENBENBENBENBENBEN';
+const PATH = '/Dropbox/Westside.cmteam';
+
+const teamJson = (people: { name: string; code: string }[], extra: Record<string, unknown> = {}) =>
+  JSON.stringify({ kind: 'cardmirror-team', version: 1, name: 'Westside', people, groups: [], ...extra });
+
+beforeEach(() => {
+  disk.files.clear();
+  disk.writes = 0;
+  localStorage.clear();
+  settings.set('pairingOwnCode', ME);
+  settings.set('pairingDisplayName', 'Brian');
+  settings.set('pairingPartners', []);
+  settings.set('pairingGroups', []);
+  settings.set('pairingRelayUrl', '');
+  settings.set('pairingRelayToken', '');
+  settings.set('teamFileSyncPath', PATH);
+});
+
+describe('adding yourself to a team file', () => {
+  it('appends your entry and keeps every other field', () => {
+    const raw = JSON.parse(teamJson([{ name: 'Coach', code: ANA }], { relay: { url: 'https://r', token: 't' }, note: 'hand edit' }));
+    const next = addPersonToTeamFileJson(raw, { code: ME, name: 'Brian' })!;
+    expect(next['people']).toEqual([{ name: 'Coach', code: ANA }, { name: 'Brian', code: ME }]);
+    expect(next['relay']).toEqual({ url: 'https://r', token: 't' });
+    expect(next['note']).toBe('hand edit');
+    expect(addPersonToTeamFileJson(next, { code: ME, name: 'Brian' })).toBeNull(); // already listed
+  });
+});
+
+describe('syncing the team file', () => {
+  it('picks up new teammates and adds you when missing', async () => {
+    disk.files.set(PATH, teamJson([{ name: 'Coach', code: ANA }, { name: 'Ben', code: BEN }]));
+    expect(await syncTeamFile(true)).toBe('changed');
+    expect(settings.get('pairingPartners').map((p) => p.name)).toEqual(['Coach', 'Ben']);
+    const file = parseTeamFile(JSON.parse(disk.files.get(PATH)!))!;
+    expect(file.people.map((p) => p.name)).toEqual(['Coach', 'Ben', 'Brian']);
+    // A second pass changes nothing and writes nothing.
+    disk.writes = 0;
+    expect(await syncTeamFile(true)).toBe('unchanged');
+    expect(disk.writes).toBe(0);
+  });
+
+  it('never applies a relay from the file on its own', async () => {
+    disk.files.set(PATH, teamJson([{ name: 'Brian', code: ME }], { relay: { url: 'https://evil.example', token: 'x' } }));
+    await syncTeamFile(true);
+    expect(settings.get('pairingRelayUrl')).toBe('');
+  });
+
+  it('does not add you without a display name', async () => {
+    settings.set('pairingDisplayName', '');
+    disk.files.set(PATH, teamJson([{ name: 'Coach', code: ANA }]));
+    await syncTeamFile(true);
+    expect(disk.writes).toBe(0);
+  });
+
+  it('reports a missing file', async () => {
+    expect(await syncTeamFile(true)).toBe('failed');
+  });
+});

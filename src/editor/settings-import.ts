@@ -31,6 +31,7 @@ const KEEP_CURRENT = [
   'pairingOwnCode', // your address — taking someone's would receive their cards
   'pairingDisplayName', // the name your cards are stamped with
   'contactsAutoExportPath', // a path on THIS machine
+  'teamFileSyncPath', // a path on THIS machine
   'pairingConnectedUntil',
   'pairingStarred', // points at one of your own contacts/groups
   'externalAppConsents', // which apps may talk to THIS install

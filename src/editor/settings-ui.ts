@@ -2531,8 +2531,49 @@ function buildTeamFileSection(rerender: () => void): HTMLElement {
   importBtn.addEventListener('click', () => void importTeamFile().then((changed) => changed && rerender()));
   actions.append(exportBtn, importBtn);
   section.appendChild(actions);
-  if (getElectronHost()) section.appendChild(buildContactsAutoExportRow(rerender));
+  if (getElectronHost()) {
+    section.appendChild(buildTeamFileSyncRow(rerender));
+    section.appendChild(buildContactsAutoExportRow(rerender));
+  }
   return section;
+}
+
+/** "Synced with team file …" — shown once a team file was imported on this
+ *  machine: Sync now, Stop syncing. */
+function buildTeamFileSyncRow(rerender: () => void): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'pmd-settings-contacts-autoexport';
+  const desc = document.createElement('div');
+  desc.className = 'pmd-settings-row-desc';
+  const path = settings.get('teamFileSyncPath');
+  desc.textContent = path
+    ? `Synced with ${path}: new teammates, groups and sessions are added as the file changes, and you\u2019re added to it if you\u2019re missing. A changed relay still needs Import team.`
+    : 'Import team… keeps you synced with that file: new teammates, groups and sessions are picked up as it changes, and your code and name are added to it.';
+  wrap.appendChild(desc);
+  if (path) {
+    const actions = document.createElement('div');
+    actions.className = 'pmd-settings-backup-actions';
+    const now = document.createElement('button');
+    now.type = 'button';
+    now.className = 'pmd-settings-backup-btn';
+    now.textContent = 'Sync now';
+    now.addEventListener('click', () => {
+      void import('./pairing/team-file-sync.js').then(async (m) => {
+        if ((await m.syncTeamFile(true)) === 'unchanged') showToast('Up to date with the team file.');
+      });
+    });
+    const stop = document.createElement('button');
+    stop.type = 'button';
+    stop.className = 'pmd-settings-backup-btn';
+    stop.textContent = 'Stop syncing';
+    stop.addEventListener('click', () => {
+      settings.set('teamFileSyncPath', '');
+      rerender();
+    });
+    actions.append(now, stop);
+    wrap.appendChild(actions);
+  }
+  return wrap;
 }
 
 /** Team file → keep a file updated: pick a .cmteam once, and every change
@@ -2702,12 +2743,25 @@ export async function importTeamFile(): Promise<boolean> {
     partners: settings.get('pairingPartners'),
     groups: settings.get('pairingGroups'),
   });
+  // Desktop: the picked path, to add yourself to the file and keep it synced.
+  const sync = await import('./pairing/team-file-sync.js');
+  const syncPath =
+    typeof opened.handle === 'string' && getElectronHost()?.readTeamFile ? opened.handle : null;
+  const addYou = !!syncPath && sync.teamFileMissesYou(file);
+  const newSync = !!syncPath && syncPath !== settings.get('teamFileSyncPath');
+  const myName = settings.get('pairingDisplayName').trim();
   const lines = [
     merged.addedPeople ? `\u2022 ${merged.addedPeople} ${merged.addedPeople === 1 ? 'person' : 'people'} to send to` : '',
     merged.addedGroups ? `\u2022 ${merged.addedGroups} new group${merged.addedGroups === 1 ? '' : 's'}` : '',
     merged.updatedGroups ? `\u2022 new members in ${merged.updatedGroups} existing group${merged.updatedGroups === 1 ? '' : 's'}` : '',
     file.sessions ? `\u2022 ${file.sessions.length} collaboration session${file.sessions.length === 1 ? '' : 's'} to join` : '',
     !settings.get('pairingEnabled') ? '\u2022 turns on collaboration (card sharing and co-editing)' : '',
+    addYou
+      ? myName
+        ? `\u2022 adds you (\u201c${myName}\u201d) to this file, so teammates can send to you`
+        : '\u2022 adds you to this file, so teammates can send to you (you\u2019ll pick the name)'
+      : '',
+    newSync ? '\u2022 keeps your contacts in sync with this file as teammates join' : '',
   ].filter(Boolean);
   const relayDiffers =
     !!file.relay &&
@@ -2750,6 +2804,11 @@ export async function importTeamFile(): Promise<boolean> {
       settings.set('pairingRelayToken', file!.relay.token);
     }
     if (!settings.get('pairingEnabled')) settings.set('pairingEnabled', true);
+    if (syncPath) {
+      if (addYou) await addYouToFile(syncPath);
+      sync.markTeamSessionsSeen(file!);
+      settings.set('teamFileSyncPath', syncPath);
+    }
     if (file!.sessions) {
       try {
         const store = await import('./collab/collab-store.js');
@@ -2769,6 +2828,25 @@ export async function importTeamFile(): Promise<boolean> {
     }
     showToast(`Imported team \u201c${file!.name}\u201d.`);
     return true;
+  }
+
+  async function addYouToFile(path: string): Promise<void> {
+    if (!settings.get('pairingDisplayName').trim()) {
+      const name = await promptForText({
+        message: 'Your name in the team file',
+        detail: 'Teammates see this name when they send to you. It also becomes your display name.',
+        initial: '',
+        placeholder: 'Name',
+        okLabel: 'Add me',
+      });
+      if (!name?.trim()) return;
+      settings.set('pairingDisplayName', name.trim());
+    }
+    try {
+      await sync.addYourselfToTeamFile(path);
+    } catch {
+      showToast(`Couldn\u2019t add you to \u201c${opened!.name}\u201d \u2014 it may be read-only. Teammates can still add your code by hand.`);
+    }
   }
 }
 
