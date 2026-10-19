@@ -5,6 +5,21 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.21 — 2026-10-19
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Improved
+
+- **Find and Replace is easier to reach.**
+  - On macOS it's now ⌥⌘F. Its old shortcut, ⌘H, is macOS's "Hide
+    CardMirror", so it hid the app instead.
+  - The find bar has a chevron at its left edge that shows or hides the
+    Replace row, so you can switch to Replace from a plain Find.
+  - Find… and Find and Replace… are now in the Edit menu on macOS.
+  - Ctrl+H still works on Windows and Linux.
+
 ## 1.15.20 — 2026-10-17
 
 BCai's (@brian-cai) build of CardMirror, updating from

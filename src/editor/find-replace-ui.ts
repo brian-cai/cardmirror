@@ -130,6 +130,9 @@ export class FindReplaceBar {
   private prevBtn: HTMLButtonElement;
   private nextBtn: HTMLButtonElement;
   private replaceBtn: HTMLButtonElement;
+  /** Chevron at the start of the find row: shows / hides the replace
+   *  row, so Replace is reachable from a plain Find (VS Code idiom). */
+  private replaceToggleBtn: HTMLButtonElement;
   private replaceAllBtn: HTMLButtonElement;
   private closeBtn: HTMLButtonElement;
   private expandBtn: HTMLButtonElement;
@@ -180,6 +183,10 @@ export class FindReplaceBar {
     // Row 1: find input + toggles + count + nav + close.
     const findRow = document.createElement('div');
     findRow.className = 'pmd-find-row';
+
+    this.replaceToggleBtn = this.buildIconButton(findRow, 'chevron-right', 'Show Replace');
+    this.replaceToggleBtn.classList.add('pmd-find-replace-toggle');
+    this.replaceToggleBtn.setAttribute('aria-expanded', 'false');
 
     this.findInput = document.createElement('input');
     this.findInput.type = 'text';
@@ -311,6 +318,7 @@ export class FindReplaceBar {
     this.caseSensitiveCheckbox.addEventListener('change', () => this.applyQueryNow());
     this.wholeWordCheckbox.addEventListener('change', () => this.applyQueryNow());
     this.scopeCheckbox.addEventListener('change', () => this.applyScopeFromToggle());
+    this.replaceToggleBtn.addEventListener('click', () => this.toggleReplace());
 
     this.findInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -473,6 +481,24 @@ export class FindReplaceBar {
     }
   }
 
+  /** Show / hide the replace row to match `this.mode`. */
+  private applyMode(): void {
+    const replacing = this.mode === 'replace';
+    this.replaceRow.hidden = !replacing;
+    setIcon(this.replaceToggleBtn, replacing ? 'chevron-down' : 'chevron-right');
+    this.replaceToggleBtn.setAttribute('aria-expanded', String(replacing));
+    const label = replacing ? 'Hide Replace' : 'Show Replace';
+    this.replaceToggleBtn.title = label;
+    this.replaceToggleBtn.setAttribute('aria-label', label);
+  }
+
+  /** The chevron: flip between Find and Find + Replace in place. */
+  private toggleReplace(): void {
+    this.mode = this.mode === 'replace' ? 'find' : 'replace';
+    this.applyMode();
+    (this.mode === 'replace' ? this.replaceInput : this.findInput).focus();
+  }
+
   open(opts: FindBarOpenOptions): void {
     this.mode = opts.mode;
     this.sortMode = opts.sortMode;
@@ -481,7 +507,7 @@ export class FindReplaceBar {
     // (e.g. Ctrl-F → Ctrl-H to switch modes) must keep what's typed.
     const wasClosed = this.root.hidden;
     this.root.hidden = false;
-    this.replaceRow.hidden = opts.mode === 'find';
+    this.applyMode();
     this.sortLabel.textContent =
       opts.sortMode === 'uncategorized' ? 'uncategorized' : 'categorized';
     this.sortLabel.title =

@@ -3428,6 +3428,19 @@ function buildMenu(): Menu {
           : [{ role: 'delete' as const }]),
         { type: 'separator' as const },
         { role: 'selectAll' as const },
+        { type: 'separator' as const },
+        // Find / Replace live here too so they're discoverable, and so
+        // Find and Replace shows its key (⌥⌘F on macOS — ⌘H is Hide).
+        {
+          label: 'Find…',
+          accelerator: menuAccelerator('openFind'),
+          click: () => dispatchMenuCommand('openFind'),
+        },
+        {
+          label: 'Find and Replace…',
+          accelerator: menuAccelerator('openFindReplace'),
+          click: () => dispatchMenuCommand('openFindReplace'),
+        },
       ],
     },
     viewMenu,

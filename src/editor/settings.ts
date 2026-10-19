@@ -2726,7 +2726,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'findRememberLastQuery',
     label: 'Find: remember the last search query',
     description:
-      "When on, reopening the find bar (Ctrl-F / Ctrl-H / Alt-F) pre-fills the input with whatever you last searched for. Off by default — the bar opens empty so each search is a clean slate.",
+      "When on, reopening the find bar (Find, Find and Replace, or Find by Proximity) pre-fills the input with whatever you last searched for. Off by default — the bar opens empty so each search is a clean slate.",
     kind: 'toggle',
     category: 'search',
     section: 'Find',

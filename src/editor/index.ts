@@ -9894,6 +9894,9 @@ const NATIVE_MENU_COMMANDS: RibbonCommandId[] = [
   'navTextBigger',
   'navTextSmaller',
   'navTextReset',
+  // Edit
+  'openFind',
+  'openFindReplace',
   // Window
   'minimizeWindow',
   // Help

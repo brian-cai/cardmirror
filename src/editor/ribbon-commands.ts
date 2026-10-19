@@ -5442,6 +5442,8 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
  * win where they exist; Word's Mod-B / Mod-I / Mod-U cover the
  * inline marks.
  */
+const IS_MAC_PLATFORM = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform ?? '');
+
 export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   undo: 'Mod-z',
   redo: ['Mod-y', 'Mod-Shift-z'],
@@ -5647,7 +5649,9 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   // intercept (we drive our own bar); the web edition may see the
   // browser's UI also pop up. Documented + user-rebindable.
   openFind: 'Mod-f',
-  openFindReplace: 'Mod-h',
+  // ⌘H is macOS's Hide CardMirror (the app menu takes it before the
+  // page sees it), so the Mac default is the platform's own ⌥⌘F.
+  openFindReplace: IS_MAC_PLATFORM ? 'Mod-Alt-f' : 'Mod-h',
   openFindByProximity: 'Alt-f',
   // No default — pickable in Settings → Keyboard shortcuts. Hiding the
   // nav pane is a personal-workflow toggle that's already on the
