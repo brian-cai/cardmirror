@@ -305,12 +305,23 @@ describe('offer and Not now', () => {
     expect(seen).toEqual(['17:2', null, '18:3']);
   });
 
-  it('does not offer when nobody is missing', async () => {
+  it('does not offer when nobody is missing and you are listed', async () => {
     settings.set('pairingPartners', [
       { code: ANA, name: 'Ana' },
       { code: BEN, name: 'Ben' },
     ]);
-    await refreshTeamDirectory(fakeRelay().ctx, { now: clock });
+    await refreshTeamDirectory(fakeRelay({ directory: () => ({ ...DOC, people: [...DOC.people, { code: ME, name: 'Sam', self: true }] }) }).ctx, { now: clock });
+    expect(currentOffer()).toBeNull();
+  });
+
+  it('offers "add yourself" when nobody is missing but you are not listed (a new team)', async () => {
+    await refreshTeamDirectory(fakeRelay({ directory: () => ({ ...DOC, people: [], groups: [] }) }).ctx, { now: clock });
+    expect(currentOffer()).toMatchObject({ missing: 0, listed: false });
+  });
+
+  it('no "add yourself" offer without a valid send code', async () => {
+    settings.set('pairingOwnCode', 'cmk1.short');
+    await refreshTeamDirectory(fakeRelay({ directory: () => ({ ...DOC, people: [], groups: [] }) }).ctx, { now: clock });
     expect(currentOffer()).toBeNull();
   });
 

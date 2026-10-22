@@ -81,6 +81,10 @@ export interface TeamDirectoryOffer {
   directory: TeamDirectory;
   /** People this install doesn't have yet. */
   missing: number;
+  /** This install is already on the list (by its send code). With nobody
+   *  missing and not listed, the offer is "add yourself" (a new team's
+   *  first members have nothing to import). */
+  listed: boolean;
 }
 
 // --- parsing ----------------------------------------------------------
@@ -169,8 +173,15 @@ export function missingPeople(dir: TeamDirectory, ownCode: string, partners: rea
   return dir.people.filter((p) => p.code !== own && !known.has(p.code)).length;
 }
 
+/** Is this install on the list? (Only a valid send code can be.) */
+export function isListed(dir: TeamDirectory, ownCode: string): boolean {
+  const own = normalizePairingCode(ownCode);
+  return dir.people.some((p) => p.code === own);
+}
+
 /** Offer the import? Not once imported, not on the revision the user said
- *  "Not now" to, and only when someone is missing. */
+ *  "Not now" to; then when someone is missing, or when this install (with
+ *  a send code) isn't listed yet, so the first teammates can add themselves. */
 export function shouldOffer(
   dir: TeamDirectory,
   state: Pick<TeamDirectoryRelayState, 'imported' | 'dismissedRevision'>,
@@ -178,7 +189,8 @@ export function shouldOffer(
   partners: readonly PairingPartner[],
 ): boolean {
   if (state.imported || state.dismissedRevision === dir.revision) return false;
-  return missingPeople(dir, ownCode, partners) > 0;
+  if (missingPeople(dir, ownCode, partners) > 0) return true;
+  return isDirectorySendCode(normalizePairingCode(ownCode)) && !isListed(dir, ownCode);
 }
 
 // --- per relay + team state (settings.teamDirectoryRelays) -------------
@@ -253,7 +265,12 @@ export function onTeamDirectoryOffer(fn: (o: TeamDirectoryOffer | null) => void)
 function publishOffer(next: TeamDirectoryOffer | null): void {
   const same =
     (offer === null && next === null) ||
-    (!!offer && !!next && offer.key === next.key && offer.directory.revision === next.directory.revision && offer.missing === next.missing);
+    (!!offer &&
+      !!next &&
+      offer.key === next.key &&
+      offer.directory.revision === next.directory.revision &&
+      offer.missing === next.missing &&
+      offer.listed === next.listed);
   offer = next;
   if (!same) for (const fn of offerListeners) fn(next);
 }
@@ -379,7 +396,8 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
     return dir;
   }
   if (dir && shouldOffer(dir, state, settings.get('pairingOwnCode'), settings.get('pairingPartners'))) {
-    publishOffer({ key, directory: dir, missing: missingPeople(dir, settings.get('pairingOwnCode'), settings.get('pairingPartners')) });
+    const own = settings.get('pairingOwnCode');
+    publishOffer({ key, directory: dir, missing: missingPeople(dir, own, settings.get('pairingPartners')), listed: isListed(dir, own) });
   } else {
     publishOffer(null);
   }

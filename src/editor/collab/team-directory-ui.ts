@@ -128,8 +128,16 @@ function element(): HTMLElement | null {
 }
 
 /** The offer's sentence. */
+/** Nobody to import, only this install to add: a new team's first members. */
+const addOnly = (o: TeamDirectoryOffer): boolean => o.missing === 0 && !o.listed;
+
 export function offerText(o: TeamDirectoryOffer): string {
   const name = o.directory.name.trim();
+  if (addOnly(o)) {
+    return name
+      ? `Add yourself to your team’s list (${name}) on this relay?`
+      : 'Add yourself to your team’s list on this relay? Teammates who connect get you as a contact.';
+  }
   return name ? `Your team (${name}) is set up on this relay. Import it?` : 'Your team is set up on this relay. Import it?';
 }
 
@@ -166,7 +174,7 @@ export function renderOffer(o: TeamDirectoryOffer | null = currentOffer()): void
     });
     return b;
   };
-  el.appendChild(act('Import', async () => void (await runImport(o)), true));
+  el.appendChild(act(addOnly(o) ? 'Add me' : 'Import', async () => void (await runImport(o)), true));
   el.appendChild(act('Not now', async () => dismissOffer(o.key, o.directory.revision), false));
 }
 
@@ -178,14 +186,16 @@ export async function runImport(o: TeamDirectoryOffer): Promise<boolean> {
   const groups = dir.groups.length;
   const typed = await promptForText({
     message: 'Your display name',
-    detail:
-      `Importing ${team} adds ${o.missing} ${o.missing === 1 ? 'teammate' : 'teammates'}` +
+    detail: addOnly(o)
+      ? 'This lists you on the relay’s team list under this name with your send code, so teammates who connect get you as a ' +
+        'contact (and you get them as they join). You can change your name later in Settings → Collaboration.'
+      : `Importing ${team} adds ${o.missing} ${o.missing === 1 ? 'teammate' : 'teammates'}` +
       (groups ? ` and ${groups === 1 ? 'its group' : `its ${groups} groups`}` : '') +
       ' to your contacts, and lists you on the relay’s team list under this name with your send code. ' +
       'Nothing you already have is removed. You can change your name later in Settings → Collaboration.',
     initial: settings.get('pairingDisplayName').trim(),
     placeholder: 'e.g. Ana Lopez',
-    okLabel: 'Import',
+    okLabel: addOnly(o) ? 'Add me' : 'Import',
   });
   if (typed == null) return false;
   const ctx = await teamDirectoryContext();
@@ -205,7 +215,9 @@ export async function runImport(o: TeamDirectoryOffer): Promise<boolean> {
   }
   const label = dir.name.trim() ? `“${dir.name.trim()}”` : 'your team';
   showToast(
-    out.addedPeople > 0
+    addOnly(o)
+      ? 'You’re on your team’s list. Teammates who connect will get you as a contact.'
+      : out.addedPeople > 0
       ? `Imported ${label}: added ${out.addedPeople} ${out.addedPeople === 1 ? 'teammate' : 'teammates'}.`
       : `Imported ${label}.`,
   );
