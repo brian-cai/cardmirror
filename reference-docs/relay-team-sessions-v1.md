@@ -1,7 +1,6 @@
 # Relay extension: team sessions, v1
 
-A small, optional extension to the CardMirror relay protocol (see `RELAY_PROTOCOL.md` in the
-xtgg repo for the base protocol). It lets a team see the co-editing sessions its members have
+A small, optional extension to the CardMirror relay protocol (the relay endpoints the CardMirror desktop app already uses). It lets a team see the co-editing sessions its members have
 started and ask to join them, without the relay ever learning what a session is or how to open
 it. Any relay may implement it; clients must treat it as optional. This document is meant to be
 public: nothing in it is specific to one operator.
