@@ -854,6 +854,8 @@ class SettingsModal {
       // relay info (a no-op without a custom relay; folded when repeated).
       if (this.activeCategory === 'pairing' && panels['pairing'] && settings.get('pairingRelayUrl').trim()) {
         void import('./collab/relay-info-ui.js').then((m) => m.refreshRelayInfoNow(true));
+        // Team directory v1: pick up new teammates (If-None-Match; folded).
+        void import('./collab/team-directory-ui.js').then((m) => m.refreshTeamDirectoryNow(true));
       }
       // If the newly-active tab is clipped by the scroll viewport
       // (clicked at the edge of view, or activated programmatically

@@ -115,6 +115,9 @@ export function initPairingWiring(): void {
   const startRelayInfo = (): boolean => {
     if (!settings.get('pairingRelayUrl').trim()) return false;
     void import('../collab/relay-info-ui.js').then((m) => m.startRelayInfo());
+    // Team directory v1: offer the relay's team list once, then keep in
+    // step with it (quiet unless the relay supports it).
+    void import('../collab/team-directory-ui.js').then((m) => m.startTeamDirectory());
     return true;
   };
   if (!startRelayInfo()) {

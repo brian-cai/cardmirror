@@ -34,6 +34,7 @@ const KEEP_CURRENT = [
   'teamFileSyncPath', // a path on THIS machine
   'teamSessionsKey', // comes only from a team file, and is never replaced
   'relayInfoDismissedNotices', // notices THIS install already dismissed
+  'teamDirectoryRelays', // what THIS install imported from / dismissed on its relay
   'pairingConnectedUntil',
   'pairingStarred', // points at one of your own contacts/groups
   'externalAppConsents', // which apps may talk to THIS install

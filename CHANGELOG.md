@@ -5,6 +5,25 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## Unreleased
+
+### Added
+
+- **Import your team from your relay.** On a custom relay that keeps
+  your team's list, CardMirror offers once, in the status bar: "Your
+  team (name) is set up on this relay. Import it?" Import confirms your
+  display name, lists you on the team (your name and send code only),
+  and adds your teammates and groups exactly like importing a team file:
+  contacts you already have keep their names, groups with the same name
+  gain the new members, and your team key is never replaced. "Not now"
+  hides the offer until the team list changes.
+- **Your team stays in step.** After importing, new teammates and groups
+  from the relay are added on start, when you open Settings →
+  Collaboration, and at most hourly ("Added 2 teammates from your
+  relay"). Changing your display name updates your entry, and the team
+  key is shared through the relay so everyone sees the team's sessions.
+  Relays without a team list show nothing new.
+
 ## 1.15.23 — 2026-10-22
 
 BCai's (@brian-cai) build of CardMirror, updating from

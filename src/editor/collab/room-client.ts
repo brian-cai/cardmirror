@@ -193,7 +193,14 @@ export class RoomsClient {
     st.lastErrorAt = Date.now();
   }
 
-  private async request(path: string, init?: RequestInit, timeoutMs?: number): Promise<Response> {
+  /** `accept`: non-2xx statuses handed back as a Response instead of
+   *  thrown (a conditional GET's 304, a first-write-wins PUT's 409). */
+  private async request(
+    path: string,
+    init?: RequestInit,
+    timeoutMs?: number,
+    accept?: readonly number[],
+  ): Promise<Response> {
     // No credential at all (web: an expired entitlement resolves to ''
     // by design) — fail locally instead of sending `Bearer ` to be
     // 401'd all night (2026-09-01 review, T5). The retry backoff still
@@ -222,7 +229,7 @@ export class RoomsClient {
       this.noteFailure(e);
       throw e;
     }
-    if (!res.ok) {
+    if (!res.ok && !accept?.includes(res.status)) {
       // Fold the relay's own detail into the error: its 413 alone covers
       // both 'update too large' and 'room storage cap reached', and pool
       // exhaustion is a distinct 503 — a bare status was undiagnosable in
@@ -387,6 +394,74 @@ export class RoomsClient {
     const path = '/ext/relay-info/v1';
     const res = await this.request(path, { headers: this.headers() });
     return this.readJson(res, path);
+  }
+
+  // --- Team directory extension (team-directory.ts; optional per relay) ---
+
+  /** `GET /ext/team-directory/v1` — discovery. Throws on any non-2xx
+   *  (404 = unsupported); the caller decides. */
+  async teamDirectoryInfo(): Promise<unknown> {
+    const path = '/ext/team-directory/v1';
+    const res = await this.request(path, { headers: this.headers() });
+    return this.readJson(res, path);
+  }
+
+  /** `GET /team-directory`, conditional on `revision` (If-None-Match):
+   *  null = unchanged (304), else the raw directory. */
+  async getTeamDirectory(revision?: number): Promise<unknown | null> {
+    const path = '/team-directory';
+    const cond = revision !== undefined && revision >= 0 ? { 'If-None-Match': `"${revision}"` } : undefined;
+    const res = await this.request(path, { headers: this.headers(cond) }, undefined, [304]);
+    if (res.status === 304) {
+      await res.body?.cancel().catch(() => {});
+      return null;
+    }
+    return this.readJson(res, path);
+  }
+
+  /** `PUT /team-directory/me` — this install's own entry. Resolves the
+   *  directory's new revision (-1 when the relay didn't say). */
+  async putTeamDirectoryMe(code: string, name: string): Promise<number> {
+    const path = '/team-directory/me';
+    const res = await this.request(path, {
+      method: 'PUT',
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ code, name }),
+    });
+    const body = await this.readJson<{ revision?: unknown }>(res, path);
+    return typeof body?.revision === 'number' ? body.revision : -1;
+  }
+
+  /** `DELETE /team-directory/me?code=` — remove this install's own entry.
+   *  The code is always passed (a token shared by many people needs it). */
+  async deleteTeamDirectoryMe(code: string): Promise<void> {
+    await this.request(`/team-directory/me?code=${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+      headers: this.headers(),
+    });
+  }
+
+  /** `PUT /team-directory/team-key` — first write wins. Resolves null
+   *  when ours was stored (201), else the key the team already has (409;
+   *  '' if the relay sent none). */
+  async putTeamDirectoryKey(teamKey: string): Promise<string | null> {
+    const path = '/team-directory/team-key';
+    const res = await this.request(
+      path,
+      {
+        method: 'PUT',
+        headers: this.headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ teamKey }),
+      },
+      undefined,
+      [409],
+    );
+    if (res.status !== 409) {
+      await res.body?.cancel().catch(() => {});
+      return null;
+    }
+    const body = await this.readJson<{ teamKey?: unknown }>(res, path).catch(() => ({ teamKey: '' }));
+    return typeof body?.teamKey === 'string' ? body.teamKey : '';
   }
 
   async putListing(roomId: string, blob: string): Promise<void> {

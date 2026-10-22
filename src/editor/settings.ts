@@ -1738,6 +1738,12 @@ export interface Settings {
   /** Relay info v1: notice ids the user dismissed (a dismissed notice
    *  never shows again). Newest last, capped. Not a user-facing row. */
   relayInfoDismissedNotices: string[];
+  /** Team directory v1 (collab/team-directory.ts): per relay + team (a
+   *  fingerprint, never the token itself) — whether this install imported
+   *  the relay's team list, the revision "Not now" was pressed on, the
+   *  last revision seen, and whether the relay holds a team key. Capped.
+   *  Not a user-facing row. */
+  teamDirectoryRelays: TeamDirectoryRelayState[];
   /** Pairing: display mirror of the blog-account entitlement expiry
    *  (epoch ms; 0 = not connected). The entitlement itself lives in
    *  Electron main; this mirror only drives the settings row's status
@@ -2155,6 +2161,7 @@ const DEFAULTS: Settings = {
   pairingRelayToken: '',
   relayShowInstallName: true,
   relayInfoDismissedNotices: [],
+  teamDirectoryRelays: [],
   pairingConnectedUntil: 0,
   pairingOwnCode: '',
   pairingDisplayName: '',
@@ -5105,6 +5112,40 @@ function sanitizeVoiceProfiles(raw: unknown): Record<string, VoiceCalibrationPro
   return out;
 }
 
+/** Team directory v1: what this install remembers about one relay's team
+ *  list (collab/team-directory.ts). */
+export interface TeamDirectoryRelayState {
+  /** Relay base URL + a short fingerprint of the token (the team). */
+  key: string;
+  imported: boolean;
+  /** Revision "Not now" was pressed on; -1 = never. */
+  dismissedRevision: number;
+  /** Last revision seen (sent as If-None-Match); -1 = none. */
+  revision: number;
+  /** The directory carried a team key at `revision`. */
+  hasKey: boolean;
+}
+
+function sanitizeTeamDirectoryRelays(v: unknown): TeamDirectoryRelayState[] {
+  if (!Array.isArray(v)) return [];
+  const rev = (x: unknown): number => (typeof x === 'number' && Number.isInteger(x) && x >= 0 ? x : -1);
+  const out: TeamDirectoryRelayState[] = [];
+  for (const e of v) {
+    if (!e || typeof e !== 'object') continue;
+    const r = e as Record<string, unknown>;
+    const key = typeof r['key'] === 'string' ? r['key'] : '';
+    if (!key || key.length > 600) continue;
+    out.push({
+      key,
+      imported: r['imported'] === true,
+      dismissedRevision: rev(r['dismissedRevision']),
+      revision: rev(r['revision']),
+      hasKey: r['hasKey'] === true,
+    });
+  }
+  return out.slice(-20);
+}
+
 function sanitize(s: Settings): Settings {
   return {
     navWidth: clamp(s.navWidth, 150, 800),
@@ -5671,6 +5712,7 @@ function sanitize(s: Settings): Settings {
     relayInfoDismissedNotices: Array.isArray(s.relayInfoDismissedNotices)
       ? s.relayInfoDismissedNotices.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 200).slice(-50)
       : [],
+    teamDirectoryRelays: sanitizeTeamDirectoryRelays(s.teamDirectoryRelays),
     pairingPollSeconds: Number.isFinite(Number(s.pairingPollSeconds))
       ? clamp(Math.round(Number(s.pairingPollSeconds)), 5, 3600)
       : 30,
