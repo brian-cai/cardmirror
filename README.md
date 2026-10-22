@@ -2,9 +2,9 @@
   <img src="./logo.png" alt="CardMirror" width="280" />
 </p>
 
-# CardMirror — XTGG build
+# CardMirror — BCai's build
 
-**This is BCai's (XTGG) build of CardMirror**, a debate text editor
+**This is BCai's build of CardMirror**, a debate text editor
 focused on high school and college policy debate. It's a standalone
 replacement for the editor side of
 **[Verbatim](https://github.com/ashtarcommunications/verbatim)**, the
@@ -14,9 +14,9 @@ workflow, same Word-compatible `.docx` files — but with no Word, no
 macros, and no add-in. That keeps it fast on the multi-megabyte
 evidence files debaters work in.
 
-It's built from the original open-source CardMirror and adds its own
-features and fixes on top (team files, search-to-send, document frames,
-faster file opening and co-editing, signed updates, and more — see
+It's built from the original open-source CardMirror, includes its fixes,
+and adds its own features on top (see
+[how it differs](#how-this-build-differs-from-the-original) and
 [`CHANGELOG.md`](./CHANGELOG.md)). **Download it from this repo's
 [Releases page](https://github.com/brian-cai/cardmirror/releases/latest)**
 and it updates itself from here.
@@ -40,13 +40,63 @@ manual; [`PRIVACY.md`](./PRIVACY.md) for how CardMirror handles your data;
 [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design;
 [`PROJECT.md`](./PROJECT.md) for project orientation.
 
-## Sharing relay status
+## How this build differs from the original
 
-Card sharing and co-editing sessions go through a small relay server. If
-sharing seems broken, check the relay's live status at
-**[cardmirror.extinction.gg](https://cardmirror.extinction.gg/)** before
-troubleshooting on your end. Everything else in CardMirror works offline
-and doesn't depend on it.
+The original is [CardMirror](https://github.com/ant981228/cardmirror) by
+Truf (Debate Decoded). This build follows it and adds to it.
+
+**Compatible with the original**
+
+- Opens and saves the same `.docx` files.
+- Installs over the original and keeps your settings, documents and send
+  codes.
+- Shares cards and co-edits with people on the original app when you're
+  on the same relay.
+- Includes the original's fixes; the most recent merge covers everything
+  through October 17, 2026.
+
+**Faster on big files**
+
+- `.docx` opens about twice as fast (a purpose-built Word parser), and
+  reopening a big file you've opened before skips the conversion.
+- Saving runs in the background, so the editor doesn't freeze on large
+  files.
+- Typing and co-editing don't slow down as a document grows: a partner's
+  edit no longer costs time per block, and word counts and the navigation
+  pane only redo the part you changed.
+- Idle windows free their memory and wake where they left off.
+
+**Features the original doesn't include**
+
+- **Open debate PDFs** (Verbatim or CardMirror exports) back into
+  documents, and Save As PDF from the ribbon.
+- **Signed updates.** Updates install only with a valid signature from a
+  trusted key, and you can go back to an earlier signed release from
+  Settings.
+- **Team features for custom relays.** See the sessions your teammates
+  start and ask to join (team sessions), and see your relay's details,
+  notices and your access in Settings → Collaboration. Both are
+  documented in `reference-docs/` so any relay can support them.
+- **Team files** that hold your team's send codes, groups, relay and live
+  sessions, stay synced, and add you when you import them; contacts that
+  export themselves to a team file.
+- **Sending:** a search-to-send pill (most-sent first, Enter sends), and
+  adding the people in a session to your contacts.
+- **Windows and documents:** colored frames around shared and speech-doc
+  windows, Switch Window by name (Ctrl+Tab), your documents reopened at
+  launch with unsaved changes restored, and a badge when any open file
+  changes on disk.
+- **Ribbon and settings:** ribbon button and nav-pane text sizes in
+  Settings → Appearance, and a settings import that merges instead of
+  wiping.
+
+**Removed on purpose**
+
+- The web edition, the Lite installers and the three-pane workspace. This
+  build is desktop-only (macOS, Windows, Linux) with one window per
+  document.
+
+The full list, release by release, is in [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Install
 
@@ -56,12 +106,6 @@ Desktop builds live on this repo's
 file for your operating system, run the installer, and launch
 CardMirror like any other app. Installing over an existing CardMirror
 replaces it and keeps your settings.
-
-Each release also has **CardMirror Lite** files (`CardMirror-Lite-…`),
-a separate edition for school-managed devices that can't allow AI
-features or internet access: no AI, no card sharing or co-editing, and no
-update checks (so it doesn't update itself). It installs alongside the
-regular app. Most people want the regular build.
 
 ### macOS
 
@@ -265,15 +309,7 @@ Downloads everything CardMirror needs. Takes 30 seconds to a couple
 of minutes. Deprecation warnings are normal; only red `error` lines
 indicate trouble.
 
-### 5. Run the web edition
-
-```sh
-npm run dev
-```
-
-After a few seconds, open `http://localhost:5173/` in your browser.
-
-### Run the desktop edition (from source)
+### 5. Run it
 
 ```sh
 npm run desktop:dev
@@ -285,8 +321,7 @@ a native window with file-system access.
 
 ### Coming back later
 
-Open a terminal in the same folder; run `npm run dev` (or
-`npm run desktop:dev`) again. To pick up newer code, download a
+Open a terminal in the same folder; run `npm run desktop:dev` again. To pick up newer code, download a
 fresh ZIP and rerun `npm install` in it.
 
 ## Other commands
