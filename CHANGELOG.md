@@ -5,6 +5,19 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.26 — 2026-10-22
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Add yourself to your team's list.** On a custom relay with a team
+  list that doesn't have you yet, the status bar offers "Add me": confirm
+  your display name and you're listed, so teammates who connect get you
+  as a contact. A new team's first members no longer wait for a coach to
+  add them.
+
 ## 1.15.25 — 2026-10-22
 
 BCai's (@brian-cai) build of CardMirror, updating from
