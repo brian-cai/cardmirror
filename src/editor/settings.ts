@@ -1744,6 +1744,16 @@ export interface Settings {
    *  last revision seen, and whether the relay holds a team key. Capped.
    *  Not a user-facing row. */
   teamDirectoryRelays: TeamDirectoryRelayState[];
+  /** Saved relays (collab/relay-profiles.ts): every custom relay this
+   *  install connected to, so switching between them (a coach's team
+   *  relay, your own team's) is one click. Each keeps its own team key;
+   *  the active one's key is `teamSessionsKey`. The token sits here like
+   *  `pairingRelayToken`. Not a plain row (Settings → Collaboration →
+   *  Saved relays edits it). */
+  relayProfiles: RelayProfile[];
+  /** The team key to restore when switching back to the built-in relay
+   *  (saved from `teamSessionsKey` when switching away from it). */
+  relayBuiltinTeamKey: string;
   /** Pairing: display mirror of the blog-account entitlement expiry
    *  (epoch ms; 0 = not connected). The entitlement itself lives in
    *  Electron main; this mirror only drives the settings row's status
@@ -2162,6 +2172,8 @@ const DEFAULTS: Settings = {
   relayShowInstallName: true,
   relayInfoDismissedNotices: [],
   teamDirectoryRelays: [],
+  relayProfiles: [],
+  relayBuiltinTeamKey: '',
   pairingConnectedUntil: 0,
   pairingOwnCode: '',
   pairingDisplayName: '',
@@ -5126,6 +5138,48 @@ export interface TeamDirectoryRelayState {
   hasKey: boolean;
 }
 
+/** A saved custom relay (collab/relay-profiles.ts). */
+export interface RelayProfile {
+  id: string;
+  label: string;
+  /** The user renamed it: never replaced by the relay's own name. */
+  labelCustom: boolean;
+  url: string;
+  token: string;
+  /** This relay's team key ('' = none); the active one lives in teamSessionsKey. */
+  teamKey: string;
+  /** Epoch ms of the last switch to / connect with it. */
+  lastUsed: number;
+}
+
+export const MAX_RELAY_PROFILES = 20;
+
+function sanitizeRelayProfiles(v: unknown): RelayProfile[] {
+  if (!Array.isArray(v)) return [];
+  const out: RelayProfile[] = [];
+  const ids = new Set<string>();
+  for (const e of v) {
+    if (!e || typeof e !== 'object') continue;
+    const r = e as Record<string, unknown>;
+    const id = typeof r['id'] === 'string' ? r['id'].slice(0, 64) : '';
+    const url = typeof r['url'] === 'string' ? r['url'].trim().replace(/\/+$/, '').slice(0, 500) : '';
+    if (!id || !url || ids.has(id)) continue;
+    ids.add(id);
+    const key = typeof r['teamKey'] === 'string' && /^[A-Za-z0-9_-]{43}$/.test(r['teamKey']) ? r['teamKey'] : '';
+    const used = Number(r['lastUsed']);
+    out.push({
+      id,
+      label: typeof r['label'] === 'string' ? r['label'].trim().slice(0, 80) : '',
+      labelCustom: r['labelCustom'] === true,
+      url,
+      token: typeof r['token'] === 'string' ? r['token'].slice(0, 500) : '',
+      teamKey: key,
+      lastUsed: Number.isFinite(used) && used > 0 ? used : 0,
+    });
+  }
+  return out.slice(0, MAX_RELAY_PROFILES);
+}
+
 function sanitizeTeamDirectoryRelays(v: unknown): TeamDirectoryRelayState[] {
   if (!Array.isArray(v)) return [];
   const rev = (x: unknown): number => (typeof x === 'number' && Number.isInteger(x) && x >= 0 ? x : -1);
@@ -5713,6 +5767,11 @@ function sanitize(s: Settings): Settings {
       ? s.relayInfoDismissedNotices.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 200).slice(-50)
       : [],
     teamDirectoryRelays: sanitizeTeamDirectoryRelays(s.teamDirectoryRelays),
+    relayProfiles: sanitizeRelayProfiles(s.relayProfiles),
+    relayBuiltinTeamKey:
+      typeof s.relayBuiltinTeamKey === 'string' && /^[A-Za-z0-9_-]{43}$/.test(s.relayBuiltinTeamKey)
+        ? s.relayBuiltinTeamKey
+        : '',
     pairingPollSeconds: Number.isFinite(Number(s.pairingPollSeconds))
       ? clamp(Math.round(Number(s.pairingPollSeconds)), 5, 3600)
       : 30,

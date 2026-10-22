@@ -27,6 +27,7 @@ import { ReceivePillController } from './receive-pill-ui.js';
 import { installContactsAutoExport } from './contacts-auto-export.js';
 import { installTeamFileSync } from './team-file-sync.js';
 import { customRelayExtHeaders } from '../collab/relay-info.js';
+import { startRelayProfiles } from '../collab/relay-profiles-ui.js';
 
 /** Build + mount the Send and Receive pills into the tray (after the
  *  dropzone, so they sit to its right). */
@@ -109,6 +110,9 @@ export function initPairingWiring(): void {
   // Desktop: keep the chosen contacts file (if any) in step with edits.
   installContactsAutoExport();
   installTeamFileSync();
+  // Saved relays: save a custom relay once it connects, keep each relay's
+  // team key, and show the relay chip once there's one to switch to.
+  startRelayProfiles();
   // Relay info v1: on a custom relay, learn who runs it, this access's
   // standing and any notice (on start, then at most hourly). Loaded only
   // once a custom relay is set; the built-in relay never sees it.

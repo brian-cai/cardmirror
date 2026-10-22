@@ -4695,6 +4695,7 @@ export type RibbonCommandId =
   | 'collabCopyInviteLink'
   | 'collabInviteStarred'
   | 'collabEndSession'
+  | 'collabSwitchRelay'
   | 'insertImage'
   | 'openDevConsole'
   | 'zoomIn'
@@ -4963,6 +4964,7 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'collabCopyInviteLink',
   'collabInviteStarred',
   'collabEndSession',
+  'collabSwitchRelay',
   'insertImage',
   'openDevConsole',
   'zoomIn',
@@ -5183,6 +5185,7 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   collabCopyInviteLink: 'Copy Session Invite Link',
   collabInviteStarred: 'Invite Starred Partner to Session',
   collabEndSession: 'End or Leave Collaboration Session',
+  collabSwitchRelay: 'Switch Relay…',
   insertImage: 'Insert Image at Cursor',
   openDevConsole: 'Open Developer Console',
   zoomIn: 'Zoom In',
@@ -5280,6 +5283,7 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
   collabInviteStarred: ['invite partner', 'session invite', 'invite to session'],
   openDevConsole: ['devtools', 'dev console', 'debug console', 'inspect', 'developer tools'],
   collabEndSession: ['leave session', 'stop session', 'stop collaborating'],
+  collabSwitchRelay: ['saved relays', 'change relay', 'custom relay', 'relay profile'],
   repairParagraphIntegrity: [
     'paragraph integrity',
     'split paragraphs',
@@ -5615,6 +5619,7 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   collabCopyInviteLink: '',
   collabInviteStarred: '',
   collabEndSession: '',
+  collabSwitchRelay: '',
   newSpeechDocument: '',
   markActiveAsSpeech: '',
   insertImage: '',
@@ -5909,6 +5914,7 @@ export interface RibbonContext {
   collabCopyInviteLink: () => void;
   collabInviteStarred: () => void;
   collabEndSession: () => void;
+  collabSwitchRelay: () => void;
   /** Open the file picker that prompts for an image to insert at
    *  the editor's current cursor. Pasting an image from the
    *  clipboard goes through paste-plugin instead — no ctx hook
@@ -6093,6 +6099,7 @@ const DEFAULT_RIBBON_CONTEXT: RibbonContext = {
   collabCopyInviteLink: () => {},
   collabInviteStarred: () => {},
   collabEndSession: () => {},
+  collabSwitchRelay: () => {},
   insertImage: () => {},
   openDevConsole: () => {},
   zoomIn: () => {},
@@ -6857,6 +6864,12 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
       return (_state, dispatch) => {
         if (!dispatch) return true;
         ctx.collabEndSession();
+        return true;
+      };
+    case 'collabSwitchRelay':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.collabSwitchRelay();
         return true;
       };
     case 'insertImage':

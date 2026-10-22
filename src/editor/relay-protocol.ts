@@ -135,3 +135,23 @@ export function relayExtHeaders(o: { version: string; installName?: string }): R
     ...(name ? { [RELAY_EXT_INSTALL_NAME_HEADER]: name } : {}),
   };
 }
+
+// --- saved relays / per-relay state ----------------------------------
+
+/** A short, non-reversible fingerprint of a relay token (FNV-1a, 32
+ *  bits): enough to tell two credentials on one relay apart, useless as
+ *  a credential. */
+export function tokenFingerprint(token: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < token.length; i++) {
+    h ^= token.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+/** One custom relay + credential: the URL (no trailing slash) and the
+ *  token's fingerprint. Keys saved relays and team directory state. */
+export function relayMatchKey(url: string, token: string): string {
+  return `${url.trim().replace(/\/+$/, '')}#${tokenFingerprint(token.trim())}`;
+}

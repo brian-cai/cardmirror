@@ -230,6 +230,7 @@ import {
   collabRoomIsLive,
   collabRoomClaimKey,
   notifyCollabFocusChange,
+  setCollabRelaySwitchLeaver,
 } from './collab/collab-hooks.js';
 import { learnHighlightPlugin, flashcardRangeAt } from './learn-highlight-plugin.js';
 import { repairHighlightPlugin } from './repair-highlight-plugin.js';
@@ -1631,6 +1632,10 @@ const collabDeps = {
     return true;
   },
 };
+// Relay switch (Saved relays): leave this window's live sessions first,
+// keeping them resumable. Only reached when a session is live, so the
+// collab chunk is already loaded.
+setCollabRelaySwitchLeaver(() => loadCollabUi().then((m) => m.leaveAllSessionsForRelaySwitch(collabDeps)));
 
 /** Deps for joining/resuming a session in the multi-pane workspace. The
  *  session doc is created in a slot the user picks, and every hook resolves
@@ -1724,6 +1729,9 @@ const ribbonContext: RibbonContext = {
   },
   collabEndSession: () => {
     void loadCollabUi().then((m) => m.endSessionFlow(collabDeps));
+  },
+  collabSwitchRelay: () => {
+    void import('./collab/relay-profiles-ui.js').then((m) => m.toggleRelayMenu());
   },
   clearFormattingOnNamedStyleToggleOff: () =>
     settings.get('clearFormattingOnNamedStyleToggleOff'),
@@ -4798,6 +4806,7 @@ const VIEWLESS_RIBBON_COMMANDS = new Set<AnyCommandId>([
   'collabCopyInviteLink',
   'collabInviteStarred',
   'collabEndSession',
+  'collabSwitchRelay',
   'openDevConsole',
 ]);
 
@@ -4839,6 +4848,7 @@ function runViewlessRibbon(id: AnyCommandId): void {
     case 'collabInviteStarred': ribbonContext.collabInviteStarred(); return;
     case 'openDevConsole': ribbonContext.openDevConsole(); return;
     case 'collabEndSession': ribbonContext.collabEndSession(); return;
+    case 'collabSwitchRelay': ribbonContext.collabSwitchRelay(); return;
     // Multi-pane workspace navigation. Each dispatches into the
     // shell via dynamic import — keeps single-doc bundles free
     // of the shell's deps. All no-op in single-doc mode (the

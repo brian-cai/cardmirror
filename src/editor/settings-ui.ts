@@ -771,6 +771,12 @@ class SettingsModal {
           this.dependentRows.push({ row, dependsOn: meta.dependsOn });
         }
         if (meta.revealWhen) this.revealRows.push({ row, revealWhen: meta.revealWhen });
+        // Saved relays: one-click switching, above the custom relay fields.
+        if (meta.key === 'pairingRelayUrl' && !isLiteBuild()) {
+          const saved = buildSavedRelaysSlot();
+          this.dependentRows.push({ row: saved, dependsOn: 'pairingEnabled' });
+          panel.appendChild(saved);
+        }
         panel.appendChild(row);
         // Relay info v1: "About this relay" under the custom relay fields
         // (hidden unless a custom relay answers the info call).
@@ -2145,6 +2151,20 @@ function buildColorsEditor(): HTMLElement {
   registerRowCleanup(wrap, () => unsubscribe());
 
   return wrap;
+}
+
+/** Placeholder for the lazily loaded "Saved relays" list (keeps the
+ *  collab modules out of the settings chunk). */
+function buildSavedRelaysSlot(): HTMLElement {
+  const slot = document.createElement('div');
+  slot.className = 'pmd-saved-relays-slot';
+  // Anchor + search words on the slot: present before the list loads.
+  slot.dataset['anchor'] = 'saved-relays';
+  slot.dataset['searchAliases'] = 'saved relays switch relay profiles custom relay coach team relay reconnect';
+  void import('./collab/relay-profiles-ui.js').then((m) => {
+    slot.appendChild(m.buildSavedRelaysSection((fn) => registerRowCleanup(slot, fn)));
+  });
+  return slot;
 }
 
 /** Placeholder for the lazily loaded "About this relay" block (keeps the

@@ -17151,3 +17151,93 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Saved relays: the status-bar relay chip, its quick-switch menu, and the
+   list in Settings → Collaboration. */
+.pmd-relay-chip {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pmd-relay-menu {
+  position: fixed;
+  right: 8px;
+  bottom: calc(var(--status-bar-height, 28px) + 6px);
+  min-width: 14rem;
+  max-width: min(24rem, calc(100vw - 16px));
+  max-height: min(24rem, 60vh);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0.25rem;
+  background: var(--pmd-c-bg);
+  color: var(--pmd-c-text);
+  border: 1px solid var(--pmd-c-border-soft);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  z-index: 1200;
+}
+.pmd-relay-menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font: inherit;
+  font-size: 0.9em;
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.pmd-relay-menu-item:hover,
+.pmd-relay-menu-item:focus-visible {
+  background: var(--pmd-c-hover);
+  outline: none;
+}
+.pmd-relay-menu-check {
+  width: 1em;
+  flex: none;
+  color: var(--pmd-c-accent);
+}
+.pmd-relay-menu-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pmd-relay-menu-detail {
+  color: var(--pmd-c-text-muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.pmd-relay-menu-sep {
+  height: 1px;
+  margin: 0.25rem 0;
+  background: var(--pmd-c-border-soft);
+}
+.pmd-saved-relays {
+  margin: 0.5rem 0 0.75rem;
+}
+.pmd-saved-relays-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+.pmd-saved-relay {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.pmd-saved-relay-info {
+  min-width: 0;
+}
+.pmd-saved-relay-label {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

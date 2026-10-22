@@ -24,7 +24,8 @@
 import type { PairingGroup, PairingPartner, Settings } from './settings.js';
 import { mergeTeamFile, TEAM_FILE_KIND } from './pairing/team-file.js';
 import { normalizePairingCode } from './pairing/pairing-ids.js';
-import { MAX_RIBBON_CUSTOM_BUTTONS } from './settings.js';
+import { MAX_RELAY_PROFILES, MAX_RIBBON_CUSTOM_BUTTONS } from './settings.js';
+import { relayMatchKey } from './relay-protocol.js';
 
 /** Never taken from an imported file. */
 const KEEP_CURRENT = [
@@ -35,6 +36,7 @@ const KEEP_CURRENT = [
   'teamSessionsKey', // comes only from a team file, and is never replaced
   'relayInfoDismissedNotices', // notices THIS install already dismissed
   'teamDirectoryRelays', // what THIS install imported from / dismissed on its relay
+  'relayBuiltinTeamKey', // a team key, which comes only from a team file or relay
   'pairingConnectedUntil',
   'pairingStarred', // points at one of your own contacts/groups
   'externalAppConsents', // which apps may talk to THIS install
@@ -174,6 +176,29 @@ export async function mergeImportedSettings(
   for (const key of ['pairingRelayUrl', 'pairingRelayToken'] as const) {
     const v = incoming[key];
     if (typeof v !== 'string' || !v.trim()) merged[key] = cur[key];
+  }
+
+  // Saved relays: yours all stay (with their team keys); the file's new
+  // ones are added like the single relay is — URL and token — but without
+  // a team key (keys come only from a team file or the relay, as with
+  // teamSessionsKey) and never as the active relay.
+  if ('relayProfiles' in incoming) {
+    const mine = arr(cur['relayProfiles']).filter(isObj);
+    const key = (p: Record<string, unknown>): string => relayMatchKey(String(p['url'] ?? ''), String(p['token'] ?? ''));
+    const seen = new Set(mine.map(key));
+    const ids = new Set(mine.map((p) => String(p['id'])));
+    const out = [...mine];
+    for (const raw of arr(incoming['relayProfiles'])) {
+      if (!isObj(raw) || typeof raw['url'] !== 'string' || !raw['url'].trim()) continue;
+      const k = key(raw);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      let id = String(raw['id'] ?? '');
+      while (!id || ids.has(id)) id = `rp-${Math.random().toString(36).slice(2, 10)}`;
+      ids.add(id);
+      out.push({ ...raw, id, teamKey: '' });
+    }
+    merged['relayProfiles'] = out.slice(0, MAX_RELAY_PROFILES);
   }
 
   // Things you've made: keep all of yours, add the file's new ones.

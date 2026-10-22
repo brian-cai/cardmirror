@@ -347,3 +347,21 @@ export function notifyCollabFocusChange(): void {
 export function collabRoomClaimKey(roomId: string): string {
   return `cardmirror-collab-room://${roomId}`;
 }
+
+/** Relay switch (collab/relay-profiles.ts): leave every live session in this
+ *  window before the relay changes under it — disconnect, persist (unsynced
+ *  edits included) and unbind, keeping each one resumable from the Sessions
+ *  list once the user is back on that relay. Provided by collab-ui (index.ts
+ *  registers it with the window's deps); resolves true when nothing is live.
+ *  False = a record write couldn't be verified: that session stays live and
+ *  the switch must not happen. */
+let relaySwitchLeaver: (() => Promise<boolean>) | null = null;
+
+export function setCollabRelaySwitchLeaver(fn: (() => Promise<boolean>) | null): void {
+  relaySwitchLeaver = fn;
+}
+
+export function collabLeaveAllForRelaySwitch(): Promise<boolean> {
+  if (!anyCollabSessionActive()) return Promise.resolve(true);
+  return relaySwitchLeaver?.() ?? Promise.resolve(true);
+}

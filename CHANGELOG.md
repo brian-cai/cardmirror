@@ -5,6 +5,23 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## Unreleased
+
+### Added
+
+- **Saved relays.** Every custom relay you connect to is saved, so you
+  can coach on one team's relay and compete on your own without pasting
+  addresses and tokens again. Settings → Collaboration lists them under
+  "Saved relays" (rename or remove any, and "Built-in relay" to go back
+  to the default). Each saved relay keeps its own team key and its own
+  team list, and your contacts and groups stay the same on every relay.
+- **Switch relays from the status bar.** Once you have a saved relay,
+  its name shows in the status bar; click it (or run "Switch Relay…")
+  to pick another. Card sharing, team sessions and the relay's team
+  list follow right away. If you're in a co-editing session, CardMirror
+  asks first, then leaves it with your copy kept, and you can rejoin
+  after switching back.
+
 ## 1.15.24 — 2026-10-22
 
 BCai's (@brian-cai) build of CardMirror, updating from

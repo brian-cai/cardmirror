@@ -35,6 +35,7 @@ import { mergeTeamFile, TEAM_FILE_KIND, type TeamFile, type TeamMergeResult } fr
 import { isTeamKey, mergeTeamKey } from '../pairing/team-key.js';
 import { applyTeamKeyFromFile } from '../pairing/team-file-sync.js';
 import { showToast } from '../toast.js';
+import { relayMatchKey, tokenFingerprint } from '../relay-protocol.js';
 
 /** Background refresh cadence (spec: at most hourly). */
 export const TEAM_DIRECTORY_REFRESH_MS = 60 * 60_000;
@@ -182,19 +183,11 @@ export function shouldOffer(
 
 // --- per relay + team state (settings.teamDirectoryRelays) -------------
 
-/** A short, non-reversible fingerprint of the token (FNV-1a, 32 bits):
- *  enough to tell two teams on one relay apart, useless as a credential. */
-export function tokenFingerprint(token: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < token.length; i++) {
-    h ^= token.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h.toString(16).padStart(8, '0');
-}
+export { tokenFingerprint };
 
+/** Per relay + team: the same key saved relays use (relay-protocol.ts). */
 export function directoryKey(baseUrl: string, token: string): string {
-  return `${baseUrl.trim().replace(/\/+$/, '')}#${tokenFingerprint(token.trim())}`;
+  return relayMatchKey(baseUrl, token);
 }
 
 const blankState = (key: string): TeamDirectoryRelayState => ({

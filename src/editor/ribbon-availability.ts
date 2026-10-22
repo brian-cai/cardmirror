@@ -44,6 +44,7 @@ const COLLAB_COMMANDS = new Set<RibbonCommandId>([
   'collabCopyInviteLink',
   'collabInviteStarred',
   'collabEndSession',
+  'collabSwitchRelay',
 ]);
 
 /** The card-cutter experiment's commands — every one of them, not just the

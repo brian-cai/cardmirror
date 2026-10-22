@@ -1996,6 +1996,20 @@ async function closeKeepResumableSession(uid: string): Promise<boolean> {
   return true;
 }
 
+/** Relay switch: leave every live session in this window, keeping each one
+ *  resumable (the room stays on its relay; the doc stays open as this
+ *  copy). Same steps as closing a doc but keeping its session, plus the
+ *  owner's plugin rebuild. False = a record couldn't be verified; that
+ *  session (and any not reached yet) stays live. */
+export async function leaveAllSessionsForRelaySwitch(deps: CollabUiDeps): Promise<boolean> {
+  for (const sess of [...sessions.values()]) {
+    if (!(await closeKeepResumableSession(sess.ownerUid))) return false;
+    if (deps.refreshPluginsForUid) deps.refreshPluginsForUid(sess.ownerUid);
+    else deps.refreshPlugins();
+  }
+  return true;
+}
+
 /** Close a co-edited doc by ending/leaving its session (clears the record).
  *  False = a host End failed to tombstone; nothing was torn down. */
 async function closeEndOrLeaveSession(uid: string): Promise<boolean> {
