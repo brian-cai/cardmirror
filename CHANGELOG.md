@@ -5,6 +5,48 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.22 — 2026-10-22
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### New
+
+- **Team sessions.** On a custom relay that supports them, the sessions
+  your teammates start show up under **Join session → Team sessions**,
+  with who started each one, how many people are in it and when it was
+  last active.
+  - Click **Request to join**. Someone in the session sees "*Name* wants
+    to join" in the status bar with **Approve** and **Deny**; approving
+    sends you the normal session invite.
+  - Turn on **Let teammates join my sessions without asking** (Settings →
+    Collaboration) and teammates can **Join** your sessions directly.
+  - Tick **Don't list this session for my team** when you start a session
+    to keep it off the list.
+  - Your team needs a team key, which lives in the team file. **Export
+    team** writes one, and a shared team file without one gets one the
+    next time it syncs. Teammates pick it up when they import or sync the
+    file. Listings are encrypted with that key: the relay can't read
+    session names, and only your team sees them.
+- **About this relay.** On a custom relay that supports it, Settings →
+  Collaboration shows who runs the relay, its support email, status and
+  manage links, your access (plan, end date, installs in use), and
+  "Update available" when a newer version of this build is out. Notices
+  from the relay (maintenance, say) show once in the status bar.
+- **Show my name to the people who manage this relay access** (Settings →
+  Collaboration, on by default, custom relays only). Sends your display
+  name so whoever manages your team's relay access can tell installs
+  apart. Turn it off and the relay sees no name.
+
+### Improved
+
+- When a custom relay refuses a new install (for example, its install
+  limit is reached), the status bar shows the relay's whole message,
+  including what to do about it.
+
+Nothing changes on the built-in relay, or on a relay without these
+features.
+
 ## 1.15.21 — 2026-10-19
 
 BCai's (@brian-cai) build of CardMirror, updating from
