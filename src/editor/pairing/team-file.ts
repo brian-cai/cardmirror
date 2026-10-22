@@ -13,10 +13,15 @@
  * (`"members": ["Ana Lopez", "Ben Wu"]`), so moving someone between groups
  * is a one-line edit. (Older files listing `memberCodes` still import.)
  *
+ * The file also carries the team key (`teamKey`, team-key.ts): the shared
+ * secret team sessions are sealed with. Importing never replaces a key
+ * this machine already has (mergeTeamKey).
+ *
  * Pure module (no settings / DOM): build + merge + parse, unit-tested.
  */
 import type { PairingGroup, PairingPartner } from '../settings.js';
 import { generateGroupId, normalizePairingCode } from './pairing-ids.js';
+import { isTeamKey } from './team-key.js';
 
 export const TEAM_FILE_KIND = 'cardmirror-team';
 export const TEAM_FILE_EXTENSION = 'cmteam';
@@ -40,6 +45,8 @@ export interface TeamFile {
   relay?: { url: string; token: string };
   /** Live collaboration rooms to offer under Join session. */
   sessions?: TeamFileSession[];
+  /** Team sessions key (team-key.ts): base64url, 32 bytes. */
+  teamKey?: string;
 }
 
 export function buildTeamFile(opts: {
@@ -50,6 +57,7 @@ export function buildTeamFile(opts: {
   groups: readonly PairingGroup[];
   relay?: { url: string; token: string } | null;
   sessions?: readonly TeamFileSession[];
+  teamKey?: string | null;
 }): TeamFile {
   const people = new Map<string, string>();
   const own = normalizePairingCode(opts.ownCode);
@@ -82,6 +90,7 @@ export function buildTeamFile(opts: {
       docTitle: s.docTitle,
     }));
   }
+  if (isTeamKey(opts.teamKey)) file.teamKey = opts.teamKey;
   return file;
 }
 
@@ -100,6 +109,7 @@ export function serializeTeamFile(file: TeamFile): string {
     })),
     ...(file.relay ? { relay: file.relay } : {}),
     ...(file.sessions ? { sessions: file.sessions } : {}),
+    ...(file.teamKey ? { teamKey: file.teamKey } : {}),
   };
   return JSON.stringify(out, null, 2) + '\n';
 }
@@ -152,6 +162,8 @@ export function parseTeamFile(raw: unknown): TeamFile | null {
       .filter((s) => s.roomId && s.shareCode);
     if (sessions.length > 0) file.sessions = sessions;
   }
+  const teamKey = (r as { teamKey?: unknown }).teamKey;
+  if (isTeamKey(teamKey)) file.teamKey = teamKey;
   return file;
 }
 
@@ -219,4 +231,13 @@ export function addPersonToTeamFileJson(
   );
   if (listed) return null;
   return { ...obj, people: [...people, { name, code }] };
+}
+
+/** The team file's raw JSON with `teamKey` set, or null when it already
+ *  has a valid one (never replaced) or `raw` isn't a team file. Every
+ *  other field is kept as it was, like addPersonToTeamFileJson. */
+export function addTeamKeyToTeamFileJson(raw: unknown, teamKey: string): Record<string, unknown> | null {
+  const file = parseTeamFile(raw);
+  if (!file || file.teamKey || !isTeamKey(teamKey)) return null;
+  return { ...(raw as Record<string, unknown>), teamKey };
 }

@@ -12491,6 +12491,80 @@ body.pmd-multi-nav-empty.pmd-multi-doc #status-bar {
   justify-content: flex-end;
 }
 .pmd-rejoin-footer .pmd-route-cancel { align-self: center; }
+/* Team sessions section (collab/team-sessions.ts): the info half isn't a
+   button (the action is), so no hover fill or pointer on it. */
+.pmd-rejoin-team-info,
+.pmd-rejoin-team-info:hover {
+  cursor: default;
+  background: transparent;
+}
+.pmd-rejoin-team-btn {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 6px;
+  background: var(--pmd-c-bg);
+  color: var(--pmd-c-text);
+  cursor: pointer;
+}
+.pmd-rejoin-team-btn:hover:not(:disabled) {
+  border-color: var(--pmd-c-accent);
+  background: var(--pmd-c-hover);
+}
+.pmd-rejoin-team-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.pmd-rejoin-team-note {
+  font-size: 0.82rem;
+  color: var(--pmd-c-text-muted);
+  margin: 0.3rem 0.6rem 0;
+}
+.pmd-rejoin-team-note[hidden] {
+  display: none;
+}
+
+/* Team sessions: "Alex wants to join: Approve / Deny" in the status bar,
+   next to the session chip (collab/team-sessions-ui.ts). */
+.pmd-team-join-requests {
+  gap: 0.35rem;
+}
+.pmd-team-join-requests-btn {
+  font: inherit;
+  font-size: 0.8em;
+  padding: 0 0.5rem;
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 999px;
+  background: var(--pmd-c-bg);
+  color: var(--pmd-c-text);
+  cursor: pointer;
+}
+.pmd-team-join-requests-approve {
+  border-color: var(--pmd-c-accent);
+  color: var(--pmd-c-accent);
+}
+.pmd-team-join-requests-btn:hover:not(:disabled) {
+  background: var(--pmd-c-hover);
+}
+.pmd-team-join-requests-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.pmd-team-join-requests-more {
+  color: var(--pmd-c-text-muted);
+}
+.pmd-team-join-requests-floating {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 50;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--pmd-c-border);
+  border-radius: 6px;
+  background: var(--pmd-c-bg);
+}
 
 /* In the create-flashcard dialog, size the Cancel button to match the manage
    screen's New card / Import / Export buttons (.pmd-learn-manage-new), so it
@@ -12512,6 +12586,17 @@ body.pmd-multi-nav-empty.pmd-multi-doc #status-bar {
    overwrite dialog. */
 .pmd-text-prompt-dialog {
   min-width: 420px;
+}
+/* Optional checkbox under the prompt's input (Start session's "Don't list
+   this session for my team"). */
+.pmd-text-prompt-check {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--pmd-c-text-muted);
+  cursor: pointer;
 }
 /* Optional second line under the prompt message — context or an error
    (e.g. the password-prompt's "Incorrect password — try again"). */

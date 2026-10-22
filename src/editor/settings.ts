@@ -1768,6 +1768,15 @@ export interface Settings {
    *  and sessions, and to add this machine's own code + display name to it
    *  when missing. Empty = not syncing. A path on THIS machine. */
   teamFileSyncPath: string;
+  /** Team sessions (relay extension, collab/team-sessions.ts): the team
+   *  key from the team file — base64url, 32 bytes; '' = none, and the
+   *  feature is off. Set only by Import team / team file sync / Export
+   *  team, and never replaced once set (team-key.ts mergeTeamKey). */
+  teamSessionsKey: string;
+  /** Team sessions: list new sessions as OPEN (the listing carries the
+   *  share code, so any teammate joins directly) instead of the default
+   *  "request" (teammates ask, someone in the session approves). */
+  teamSessionsOpen: boolean;
   /** Clean: style names the .docx style cleaner must never prune, remove, or
    *  reassign away from (their basedOn/linked dependencies are kept too).
    *  Managed from the Clean utility's protected-styles panel. */
@@ -2143,6 +2152,8 @@ const DEFAULTS: Settings = {
   pairingReceiveFlash: 'once',
   contactsAutoExportPath: '',
   teamFileSyncPath: '',
+  teamSessionsKey: '',
+  teamSessionsOpen: false,
   cleanProtectedStyles: [],
 };
 
@@ -4469,6 +4480,17 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     dependsOn: 'pairingEnabled',
   },
   {
+    key: 'teamSessionsOpen',
+    label: 'Let teammates join my sessions without asking',
+    description:
+      'With a team file that has a team key, the sessions you start are listed under Join session for your team (you can turn this off per session when you start one). Off: a teammate asks to join and anyone in the session approves. On: the listing carries the share code, so any teammate can join directly.',
+    kind: 'toggle',
+    category: 'pairing',
+    electronOnly: true,
+    dependsOn: 'pairingEnabled',
+    aliases: ['team sessions', 'join request', 'list session', 'open session'],
+  },
+  {
     key: 'pairingReceiveFlash',
     label: 'Flash the Receive pill on a new card',
     description:
@@ -5615,6 +5637,9 @@ function sanitize(s: Settings): Settings {
     contactsAutoExportPath:
       typeof s.contactsAutoExportPath === 'string' ? s.contactsAutoExportPath.trim() : '',
     teamFileSyncPath: typeof s.teamFileSyncPath === 'string' ? s.teamFileSyncPath.trim() : '',
+    teamSessionsKey:
+      typeof s.teamSessionsKey === 'string' && /^[A-Za-z0-9_-]{43}$/.test(s.teamSessionsKey) ? s.teamSessionsKey : '',
+    teamSessionsOpen: s.teamSessionsOpen === true,
     collabShowCursors: s.collabShowCursors !== false,
     pairingPartners: sanitizePairingPartners(s.pairingPartners),
     pairingGroups: sanitizePairingGroups(s.pairingGroups, s.pairingPartners),

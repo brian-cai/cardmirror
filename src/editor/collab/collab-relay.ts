@@ -12,6 +12,7 @@ import { collabDevRelay } from './collab-gate.js';
 import { webEntitlementToken, webRoutingCodeSync } from './web-account.js';
 import { RoomsClient, RoomsError } from './room-client.js';
 import { WEB_DEFAULT_RELAY_URL } from './relay-endpoint.js';
+import { unlistRoom } from './team-sessions.js';
 
 /** Baked relay endpoint from the desktop main process — resolved once,
  *  used as the LAST fallback so packaged builds work with zero setup.
@@ -145,6 +146,10 @@ export async function endRoomOnRelay(roomId: string): Promise<void> {
   await ensureBakedRelay();
   const client = relayClient();
   if (!client) throw new Error('no relay configured');
+  // Team sessions: take down our listing first (the room's end removes it
+  // on the relay too; after the end this DELETE would only 410). No-op —
+  // no request — for a room this machine never listed.
+  await unlistRoom(client, roomId);
   try {
     await client.deleteRoom(roomId);
   } catch (err) {

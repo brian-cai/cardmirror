@@ -13,6 +13,11 @@
  * Invite transport: the share code (clipboard) and, on desktop, sealed
  * pairing-mailbox invites (inviteStarredFlow / joinSessionWithCode via
  * the Receive pill's Join).
+ *
+ * Team sessions (desktop, relay extension — team-sessions.ts): with a
+ * team key and a relay that supports it, a started session is listed for
+ * the team, Join session shows the team's listings, and a participant in
+ * a listed session approves join requests by sending the invite card.
  */
 
 import type { EditorView } from 'prosemirror-view';
@@ -45,7 +50,24 @@ import {
 } from './collab-hooks.js';
 import { RoomsError } from './room-client.js';
 import { getElectronHost } from '../host/index.js';
-import { ensureBakedRelay, relayClient, relayClientWithGuestPass, endRoomOnRelay } from './collab-relay.js';
+import { ensureBakedRelay, relayClient, relayClientWithGuestPass, endRoomOnRelay, relayBaseUrl } from './collab-relay.js';
+import {
+  alreadyRequested,
+  approveJoinRequest,
+  denyJoinRequest,
+  listRoom,
+  listedMode,
+  loadTeamSessions,
+  requestToJoin,
+  teamSessionsSupportWithin,
+  watchJoinRequests,
+  type PendingJoinRequest,
+  type TeamContext,
+} from './team-sessions.js';
+import { clearJoinRequests, setJoinRequests, unhideJoinRequest } from './team-sessions-ui.js';
+import { TEAM_REQUEST_SENT_MESSAGE, type TeamSessionsSource } from './rejoin-picker.js';
+import { isTeamKey } from '../pairing/team-key.js';
+import { looksLikePairingCode, normalizePairingCode } from '../pairing/pairing-ids.js';
 import { buildJoinLink, parseJoinLinkHash } from './join-link.js';
 import { relayClient as pairingRelayClient } from '../pairing/relay-client.js';
 import { resolveStarredTarget } from '../pairing/send-to-starred.js';
@@ -143,6 +165,9 @@ interface ActiveSession {
   offlineTimer: ReturnType<typeof setTimeout> | null;
   /** Container-safe undo ledger (undo-guard.ts); disposed at teardown. */
   undoGuardDispose: () => void;
+  /** Stops this room's team-sessions join-request watcher (no-op when the
+   *  feature is off). */
+  teamWatchStop: () => void;
 }
 
 const sessions = new Map<string, ActiveSession>();
@@ -664,6 +689,7 @@ function installSeams(
     offlineSince: null,
     offlineTimer: null,
     undoGuardDispose: () => undoGuard.dispose(),
+    teamWatchStop: startTeamWatch(session, shareCode, ownerUid),
   };
   sessions.set(ownerUid, sess);
   // Cross-window live-session claim: while this session is live, other
@@ -743,6 +769,7 @@ function teardownSession(
   sess.cursors.farewell(); // departure frame needs the stream — before stop()
   if (sess.offlineTimer !== null) clearTimeout(sess.offlineTimer);
   sess.undoGuardDispose();
+  sess.teamWatchStop();
   clearNotice('collab-offline');
   clearNotice('collab-send-stuck');
   void sess.session.stop().catch(() => {});
@@ -1089,6 +1116,11 @@ async function startSessionFlowInner(
   // Name"; cleared, the same default (never "Untitled").
   const docName = namedDocTitle(startName);
   const fallbackName = defaultSessionName(docName, settings.get('pairingDisplayName'));
+  // Team sessions: offer the per-session opt-out only when this session
+  // would be listed (team key + a relay that answers discovery quickly).
+  const teamCtx = teamContext();
+  const teamListable = !!teamCtx && !!(await teamSessionsSupportWithin(teamCtx, 3000));
+  let dontList = false;
   const typed = await promptForText({
     message: 'Start a co-editing session',
     detail:
@@ -1097,6 +1129,17 @@ async function startSessionFlowInner(
     initial: fallbackName,
     placeholder: fallbackName,
     okLabel: 'Start Session',
+    ...(teamListable
+      ? {
+          checkbox: {
+            label: 'Don\u2019t list this session for my team',
+            checked: false,
+            onChange: (v: boolean) => {
+              dontList = v;
+            },
+          },
+        }
+      : {}),
   });
   if (typed === null) return;
   const sessionName = typed.trim() || fallbackName;
@@ -1158,6 +1201,7 @@ async function startSessionFlowInner(
     }
     sess.lastStatus = { connected: true, queuedUpdates: 0 };
     updateChip({ connected: true, queuedUpdates: 0 });
+    if (teamListable && !dontList) listStartedSession(session.roomId, sessionName, shareCode);
     // Web hosts copy the INVITE LINK (their partner most likely joins in
     // a browser; the link carries the guest pass so an account-less
     // joiner works). Desktop keeps the bare code — its partners are
@@ -1197,7 +1241,7 @@ export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
   const candidates = listed.filter((_, i) => !elsewhere[i]);
   // One dialog: the paste box on top (focused — a new join is paste and
   // Enter), the sessions to get back into below it.
-  const pick = await pickSessionToJoin(candidates);
+  const pick = await pickSessionToJoin(candidates, teamJoinSource());
   if (!pick) return;
   if (pick.kind === 'rejoin') {
     await joinSessionWithCode(deps, pick.shareCode, { guestPass: pick.guestPass });
@@ -1628,6 +1672,7 @@ export function republishSessionTitle(uid: string | null): void {
   if (name === sharedDocTitle(sess.session)) return;
   sess.session.loroDoc.getMap('meta').set('title', name);
   sess.session.loroDoc.commit({ origin: META_COMMIT_ORIGIN });
+  relistSession(sess.session.roomId, name, sess.shareCode);
 }
 
 /** The host-published doc title from the room's meta map ('' when the
@@ -1696,7 +1741,7 @@ async function sendInviteTo(
   target: { codes: string[]; label: string; via?: string },
   shareCode: string,
   ownerUid: string | null | undefined,
-): Promise<void> {
+): Promise<boolean> {
   const item = buildRoomInviteItem({
     shareCode,
     title: (() => {
@@ -1706,8 +1751,10 @@ async function sendInviteTo(
   });
   // Movable-format rooms carry the higher floor: a pre-movable build
   // joining one couldn't read its containers at all, so it must get
-  // the decline-with-update-toast instead of a broken join.
-  const format = actionSession()?.session.childrenFormat() ?? 'list';
+  // the decline-with-update-toast instead of a broken join. (The
+  // invite's OWN session when known — a join-request approval can be
+  // for a session other than the focused one.)
+  const format = (sessionFor(ownerUid) ?? actionSession())?.session.childrenFormat() ?? 'list';
   const res = await pairingRelayClient.send(target.codes, item, {
     via: target.via,
     minReceiverVersion: roomInviteFloor(format),
@@ -1715,6 +1762,120 @@ async function sendInviteTo(
   if (res.fail === 0) showToast(`Invited ${target.label} ✓`);
   else if (res.ok === 0) showToast(`Couldn't reach ${target.label}`);
   else showToast(`Invited ${target.label} (${res.fail} failed)`);
+  return res.ok > 0;
+}
+
+// ── Team sessions (relay extension; see team-sessions.ts) ──────────────
+
+/** What a team-sessions call needs, or null when the feature is off here:
+ *  desktop only, a team key from the team file, and a relay client. */
+function teamContext(): TeamContext | null {
+  if (!getElectronHost() || !collabEnabled()) return null;
+  const teamKey = settings.get('teamSessionsKey');
+  if (!isTeamKey(teamKey)) return null;
+  const client = relayClient();
+  if (!client) return null;
+  return { client, baseUrl: relayBaseUrl(), teamKey };
+}
+
+/** This machine's pairing code when it can receive an invite. */
+function ownPairingCode(): string {
+  const code = normalizePairingCode(settings.get('pairingOwnCode'));
+  return looksLikePairingCode(code) ? code : '';
+}
+
+/** List a just-started session for the team (best-effort, never blocks). */
+function listStartedSession(roomId: string, name: string, shareCode: string): void {
+  const ctx = teamContext();
+  if (!ctx) return;
+  void listRoom(ctx, {
+    roomId,
+    name,
+    startedBy: settings.get('pairingDisplayName'),
+    mode: settings.get('teamSessionsOpen') ? 'open' : 'request',
+    shareCode,
+  });
+}
+
+/** Re-PUT a listing this machine made (a rename, a host resume), keeping
+ *  the mode it was listed with. No-op for an unlisted room. */
+function relistSession(roomId: string, name: string, shareCode: string): void {
+  const mode = listedMode(roomId);
+  const ctx = mode ? teamContext() : null;
+  if (!ctx || !mode) return;
+  void listRoom(ctx, { roomId, name, startedBy: settings.get('pairingDisplayName'), mode, shareCode });
+}
+
+/** Watch a live session's join requests and drive the approval prompt.
+ *  Returns the stop function (a no-op stub when the feature is off). */
+function startTeamWatch(session: CollabSession, shareCode: string, ownerUid: string): () => void {
+  if (!teamContext()) return () => {};
+  const roomId = session.roomId;
+  // A resumed host refreshes its listing (name may have changed while
+  // the app was closed). A fresh start lists after start() instead.
+  if (session.role === 'host') relistSession(roomId, sessionLabel(ownerUid, session), shareCode);
+  const handlers = {
+    sessionName: () => sessionLabel(ownerUid, session),
+    approve: async (req: PendingJoinRequest): Promise<void> => {
+      const ctx = teamContext();
+      if (!ctx) return;
+      const res = await approveJoinRequest(ctx.client, req, (publicKey, name) =>
+        sendInviteTo({ codes: [publicKey], label: name }, shareCode, ownerUid),
+      );
+      if (res === 'mismatch') {
+        showToast(`Couldn\u2019t approve ${req.name}: their request is malformed. Ask them to request again.`);
+        await denyJoinRequest(ctx.client, roomId, req.requestId);
+      } else if (res === 'failed') {
+        // sendInviteTo already toasted why; offer the request again.
+        unhideJoinRequest(req.requestId);
+      }
+    },
+    deny: async (req: PendingJoinRequest): Promise<void> => {
+      const ctx = teamContext();
+      if (ctx) await denyJoinRequest(ctx.client, roomId, req.requestId);
+    },
+  };
+  const watcher = watchJoinRequests({
+    roomId,
+    role: session.role,
+    context: teamContext,
+    ownCode: ownPairingCode,
+    onRequests: (reqs) => setJoinRequests(roomId, reqs, handlers),
+  });
+  return () => {
+    watcher.stop();
+    clearJoinRequests(roomId);
+  };
+}
+
+/** The Join dialog's Team sessions section, or undefined when the feature
+ *  is off (then the dialog never shows it). */
+function teamJoinSource(): TeamSessionsSource | undefined {
+  if (!teamContext()) return undefined;
+  return {
+    load: async () => {
+      const ctx = teamContext();
+      if (!ctx) return null;
+      const rows = await loadTeamSessions(ctx);
+      // A session already open in this window is not one to join.
+      return rows ? rows.filter((r) => !roomLiveInWindow(r.roomId)) : null;
+    },
+    alreadyRequested,
+    request: async (row) => {
+      const ctx = teamContext();
+      const code = ownPairingCode();
+      if (!ctx) return { ok: false, message: 'Team sessions aren\u2019t available right now.' };
+      if (!code || !settings.get('pairingEnabled')) {
+        void offerSharingSetup('Asking to join a session');
+        return { ok: false, message: 'Turn on card sharing first, so the invite can reach you.' };
+      }
+      const name = settings.get('pairingDisplayName').trim() || 'A teammate';
+      const res = await requestToJoin(ctx, row.roomId, { name, publicCode: code });
+      if (res === 'sent') return { ok: true, message: TEAM_REQUEST_SENT_MESSAGE };
+      if (res === 'gone') return { ok: false, message: 'That session has ended or isn\u2019t listed anymore.' };
+      return { ok: false, message: 'Couldn\u2019t send the request. Check your connection and try again.' };
+    },
+  };
 }
 
 /** Send a session invite to the starred partner/group. */

@@ -2692,6 +2692,10 @@ async function exportTeamFile(): Promise<void> {
     groups: settings.get('pairingGroups'),
     relay: includeRelay ? { url: relayUrl, token: settings.get('pairingRelayToken') } : null,
     sessions,
+    // Team sessions key: every exported team file carries one (minted
+    // now when this machine has none), so importers can see and ask to
+    // join each other's listed sessions.
+    teamKey: (await import('./pairing/team-file-sync.js')).ensureLocalTeamKey(),
   });
   const safe = file.name.replace(/[\\/:*?"<>|]+/g, '-');
   await getHost().saveAs(`${safe}.${TEAM_FILE_EXTENSION}`, new TextEncoder().encode(serializeTeamFile(file)), {
@@ -2777,11 +2781,15 @@ export async function importTeamFile(): Promise<boolean> {
         : '\u2022 adds you to this file, so teammates can send to you (you\u2019ll pick the name)'
       : '',
     newSync ? '\u2022 keeps your contacts in sync with this file as teammates join' : '',
+    file.teamKey && !settings.get('teamSessionsKey')
+      ? '\u2022 lists your team\u2019s co-editing sessions under Join session'
+      : '',
   ].filter(Boolean);
   const relayDiffers =
     !!file.relay &&
     (file.relay.url !== settings.get('pairingRelayUrl').trim() || file.relay.token !== settings.get('pairingRelayToken'));
   if (lines.length === 0 && !relayDiffers) {
+    sync.applyTeamKeyFromFile(file); // a differing key still gets its notice
     showToast(`Already up to date with \u201c${file.name}\u201d.`);
     return false;
   }
@@ -2819,6 +2827,9 @@ export async function importTeamFile(): Promise<boolean> {
       settings.set('pairingRelayToken', file!.relay.token);
     }
     if (!settings.get('pairingEnabled')) settings.set('pairingEnabled', true);
+    // Team key: taken when this machine has none; a different one never
+    // replaces yours (quiet notice instead).
+    sync.applyTeamKeyFromFile(file!);
     if (syncPath) {
       if (addYou) await addYouToFile(syncPath);
       sync.markTeamSessionsSeen(file!);

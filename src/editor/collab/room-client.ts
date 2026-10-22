@@ -361,6 +361,80 @@ export class RoomsClient {
   async deleteRoom(roomId: string): Promise<void> {
     await this.request(`/rooms/${roomId}`, { method: 'DELETE', headers: this.headers() });
   }
+
+  // --- Team sessions extension (team-sessions.ts; optional per relay) ---
+  // Blobs here are team-key-sealed base64url strings (team-key.ts); the
+  // relay never reads them. Errors are the usual RoomsError.
+
+  /** `GET /ext/team-sessions/v1` — the extension's discovery document.
+   *  Throws on any non-2xx (404 = unsupported); the caller decides. */
+  async teamSessionsInfo(): Promise<{ v?: unknown; maxBlobBytes?: unknown; requestTtlSeconds?: unknown }> {
+    const path = '/ext/team-sessions/v1';
+    const res = await this.request(path, { headers: this.headers() });
+    return this.readJson(res, path);
+  }
+
+  async putListing(roomId: string, blob: string): Promise<void> {
+    await this.request(`/rooms/${roomId}/listing`, {
+      method: 'PUT',
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ blob }),
+    });
+  }
+
+  async deleteListing(roomId: string): Promise<void> {
+    await this.request(`/rooms/${roomId}/listing`, { method: 'DELETE', headers: this.headers() });
+  }
+
+  async listTeamSessions(): Promise<
+    Array<{ roomId: string; blob: string; updatedAt: number; lastActivity: number; participants: number }>
+  > {
+    const path = '/team-sessions';
+    const res = await this.request(path, { headers: this.headers() });
+    const body = await this.readJson<{ sessions?: unknown }>(res, path);
+    return (Array.isArray(body.sessions) ? body.sessions : [])
+      .map((x) => x as Record<string, unknown>)
+      .filter((x) => typeof x['roomId'] === 'string' && typeof x['blob'] === 'string')
+      .map((x) => ({
+        roomId: x['roomId'] as string,
+        blob: x['blob'] as string,
+        updatedAt: Number(x['updatedAt']) || 0,
+        lastActivity: Number(x['lastActivity']) || 0,
+        participants: Number(x['participants']) || 0,
+      }));
+  }
+
+  async postJoinRequest(roomId: string, blob: string): Promise<string> {
+    const path = `/rooms/${roomId}/join-requests`;
+    const res = await this.request(path, {
+      method: 'POST',
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ blob }),
+    });
+    const body = await this.readJson<{ requestId?: unknown }>(res, path);
+    return typeof body.requestId === 'string' ? body.requestId : '';
+  }
+
+  async listJoinRequests(roomId: string): Promise<Array<{ requestId: string; blob: string; createdAt: number }>> {
+    const path = `/rooms/${roomId}/join-requests`;
+    const res = await this.request(path, { headers: this.headers() });
+    const body = await this.readJson<{ requests?: unknown }>(res, path);
+    return (Array.isArray(body.requests) ? body.requests : [])
+      .map((x) => x as Record<string, unknown>)
+      .filter((x) => typeof x['requestId'] === 'string' && typeof x['blob'] === 'string')
+      .map((x) => ({
+        requestId: x['requestId'] as string,
+        blob: x['blob'] as string,
+        createdAt: Number(x['createdAt']) || 0,
+      }));
+  }
+
+  async deleteJoinRequest(roomId: string, requestId: string): Promise<void> {
+    await this.request(`/rooms/${roomId}/join-requests/${encodeURIComponent(requestId)}`, {
+      method: 'DELETE',
+      headers: this.headers(),
+    });
+  }
 }
 
 // --- SSE stream ---

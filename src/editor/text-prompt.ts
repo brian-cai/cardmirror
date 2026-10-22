@@ -127,6 +127,10 @@ export interface TextPromptOptions {
   /** Optional second line under the message — context or an error
    *  (e.g. "Incorrect password — try again"). Rendered read-only. */
   detail?: string;
+  /** Optional checkbox under the input (e.g. Start session's "Don't list
+   *  this session"). `onChange` reports each toggle; read the final value
+   *  from it once the prompt resolves with a value. */
+  checkbox?: { label: string; checked?: boolean; onChange: (checked: boolean) => void };
 }
 
 export function promptForText(opts: TextPromptOptions): Promise<string | null> {
@@ -160,6 +164,18 @@ export function promptForText(opts: TextPromptOptions): Promise<string | null> {
     input.autocomplete = 'off';
     input.spellcheck = false;
     dialog.appendChild(input);
+
+    if (opts.checkbox) {
+      const cb = opts.checkbox;
+      const label = document.createElement('label');
+      label.className = 'pmd-text-prompt-check';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = !!cb.checked;
+      box.addEventListener('change', () => cb.onChange(box.checked));
+      label.append(box, document.createTextNode(` ${cb.label}`));
+      dialog.appendChild(label);
+    }
 
     const buttons = document.createElement('div');
     buttons.className = 'pmd-text-prompt-buttons';

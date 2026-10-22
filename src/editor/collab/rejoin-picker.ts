@@ -13,6 +13,12 @@
  *    is still alive on the relay.
  * Rooms already live in this window are left out. Either kind rejoins
  * through joinSessionWithCode, which resumes when a record exists.
+ *
+ * With team sessions (team-sessions.ts) on, a third section lists the
+ * team's listed sessions: Join for an open one (its share code is in
+ * the listing), Request to join for the rest. It loads after the dialog
+ * opens and refreshes while it stays open; with the feature off it never
+ * appears.
  */
 
 import { relativeTime } from '../disk-conflict.js';
@@ -36,6 +42,35 @@ export interface RejoinCandidate {
   /** 'saved': a local copy to resume; 'left': a remembered room to rejoin. */
   kind: 'saved' | 'left';
   at: number;
+}
+
+/** A team session row for the dialog (team-sessions.ts TeamSessionEntry). */
+export interface TeamSessionRow {
+  roomId: string;
+  name: string;
+  startedBy: string;
+  participants: number;
+  lastActivity: number;
+  mode: 'open' | 'request';
+  shareCode: string | null;
+}
+
+/** Where the Team sessions section comes from. `load` resolves null when
+ *  the feature is off (no section); `request` resolves a line to show. */
+export interface TeamSessionsSource {
+  load(): Promise<TeamSessionRow[] | null>;
+  request(row: TeamSessionRow): Promise<{ ok: boolean; message: string }>;
+  alreadyRequested(roomId: string): boolean;
+  /** Refresh period while the dialog is open (default 15 s). */
+  refreshMs?: number;
+}
+
+export const TEAM_REQUEST_SENT_MESSAGE = 'Request sent; you\u2019ll get an invite when someone approves';
+
+function teamMeta(row: TeamSessionRow): string {
+  const who = row.participants === 1 ? '1 person' : `${row.participants} people`;
+  const at = row.lastActivity > 0 ? ` \u00b7 active ${relativeTime(row.lastActivity)}` : '';
+  return `${row.startedBy} \u00b7 ${who}${at}`;
 }
 
 export type RejoinPick =
@@ -93,7 +128,10 @@ function describe(c: RejoinCandidate): string {
 
 /** The dialog. Resolves with a session to rejoin, the text entered in the
  *  box, or null on cancel. With no candidates it is just the box. */
-export function pickSessionToJoin(candidates: RejoinCandidate[]): Promise<RejoinPick | null> {
+export function pickSessionToJoin(
+  candidates: RejoinCandidate[],
+  team?: TeamSessionsSource,
+): Promise<RejoinPick | null> {
   return new Promise((resolve) => {
     const restoreFocus = captureFocusForDialog();
     const overlayToken = pushOverlay();
@@ -109,9 +147,11 @@ export function pickSessionToJoin(candidates: RejoinCandidate[]): Promise<Rejoin
 
     let settled = false;
     let removeKeys = (): void => {};
+    let teamTimer: ReturnType<typeof setInterval> | null = null;
     const finish = (value: RejoinPick | null): void => {
       if (settled) return;
       settled = true;
+      if (teamTimer !== null) clearInterval(teamTimer);
       popOverlay(overlayToken);
       overlay.remove();
       removeKeys();
@@ -216,6 +256,86 @@ export function pickSessionToJoin(candidates: RejoinCandidate[]): Promise<Rejoin
       }
     };
     renderRows();
+
+    // ── Team sessions (relay extension; absent when off) ──────────────
+    if (team) {
+      const teamSection = document.createElement('div');
+      teamSection.className = 'pmd-rejoin-section pmd-rejoin-team';
+      teamSection.hidden = true;
+      const teamHeading = document.createElement('div');
+      teamHeading.className = 'pmd-rejoin-heading';
+      teamHeading.textContent = 'Team sessions';
+      teamSection.appendChild(teamHeading);
+      const teamList = document.createElement('div');
+      teamList.className = 'pmd-home-sessions pmd-rejoin-list';
+      teamList.setAttribute('role', 'list');
+      teamSection.appendChild(teamList);
+      const teamNote = document.createElement('div');
+      teamNote.className = 'pmd-rejoin-team-note';
+      teamNote.hidden = true;
+      teamSection.appendChild(teamNote);
+      dialog.appendChild(teamSection);
+
+      const sent = new Set<string>();
+      const renderTeam = (rows: TeamSessionRow[]): void => {
+        teamList.innerHTML = '';
+        teamSection.hidden = rows.length === 0;
+        for (const r of rows) {
+          const wrap = document.createElement('div');
+          wrap.className = 'pmd-home-session pmd-rejoin-row';
+          wrap.setAttribute('role', 'listitem');
+          const info = document.createElement('div');
+          info.className = 'pmd-home-session-open pmd-rejoin-team-info';
+          const name = document.createElement('span');
+          name.className = 'pmd-home-recent-name';
+          name.textContent = r.name;
+          name.title = r.name;
+          info.appendChild(name);
+          const meta = document.createElement('span');
+          meta.className = 'pmd-home-recent-path';
+          meta.textContent = teamMeta(r);
+          info.appendChild(meta);
+          wrap.appendChild(info);
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'pmd-rejoin-team-btn';
+          if (r.mode === 'open' && r.shareCode) {
+            btn.textContent = 'Join';
+            const code = r.shareCode;
+            btn.addEventListener('click', () => finish({ kind: 'rejoin', shareCode: code, guestPass: null }));
+          } else if (sent.has(r.roomId) || team.alreadyRequested(r.roomId)) {
+            btn.textContent = 'Request sent';
+            btn.disabled = true;
+          } else {
+            btn.textContent = 'Request to join';
+            btn.addEventListener('click', () => {
+              btn.disabled = true;
+              btn.textContent = 'Sending\u2026';
+              void team.request(r).then((res) => {
+                if (res.ok) sent.add(r.roomId);
+                btn.textContent = res.ok ? 'Request sent' : 'Request to join';
+                btn.disabled = res.ok;
+                teamNote.hidden = false;
+                teamNote.textContent = res.message;
+              });
+            });
+          }
+          wrap.appendChild(btn);
+          teamList.appendChild(wrap);
+        }
+      };
+      const loadTeam = (): void => {
+        void team.load().then(
+          (rows) => {
+            if (settled || !rows) return;
+            renderTeam(rows);
+          },
+          () => {},
+        );
+      };
+      loadTeam();
+      teamTimer = setInterval(loadTeam, team.refreshMs ?? 15_000);
+    }
 
     const footer = document.createElement('div');
     footer.className = 'pmd-rejoin-footer';

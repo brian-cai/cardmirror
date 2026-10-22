@@ -32,6 +32,7 @@ const KEEP_CURRENT = [
   'pairingDisplayName', // the name your cards are stamped with
   'contactsAutoExportPath', // a path on THIS machine
   'teamFileSyncPath', // a path on THIS machine
+  'teamSessionsKey', // comes only from a team file, and is never replaced
   'pairingConnectedUntil',
   'pairingStarred', // points at one of your own contacts/groups
   'externalAppConsents', // which apps may talk to THIS install

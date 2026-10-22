@@ -10,6 +10,11 @@
  * - Add yourself: when your code isn't in the file, your pairing code and
  *   display name are appended (every other field kept as it was), so the
  *   file collects the whole team as each person imports it.
+ * - Team key (team sessions): a file with a key gives it to a machine
+ *   that has none; a machine's own key is never replaced — a file with a
+ *   different one gets a quiet notice. A file without a key gets this
+ *   machine's (minted here if it has none), so a team that started before
+ *   team sessions picks one up without re-exporting.
  *
  * Desktop only (reads / writes a path). Windows coordinate through a
  * localStorage timestamp so only one of them syncs at a time.
@@ -18,7 +23,15 @@ import { settings } from '../settings.js';
 import { getElectronHost } from '../host/index.js';
 import { showToast } from '../toast.js';
 import { looksLikePairingCode, normalizePairingCode } from './pairing-ids.js';
-import { addPersonToTeamFileJson, mergeTeamFile, parseTeamFile, type TeamFile } from './team-file.js';
+import {
+  addPersonToTeamFileJson,
+  addTeamKeyToTeamFileJson,
+  mergeTeamFile,
+  parseTeamFile,
+  type TeamFile,
+} from './team-file.js';
+import { generateTeamKey, isTeamKey, mergeTeamKey } from './team-key.js';
+import { postNotice } from '../status-notices.js';
 
 const POLL_MS = 5 * 60_000;
 const FOCUS_MIN_GAP_MS = 60_000;
@@ -90,6 +103,61 @@ export async function addYourselfToTeamFile(path: string): Promise<boolean> {
   return true;
 }
 
+/** Take the team key from `file` under the merge rule (team-key.ts): a
+ *  machine with no key adopts the file's; one with a different key keeps
+ *  its own and gets a quiet notice (no toast — it's not urgent, and a
+ *  synced file would repeat it every few minutes; the key coalesces). */
+export function applyTeamKeyFromFile(file: TeamFile): 'adopted' | 'conflict' | 'unchanged' {
+  const m = mergeTeamKey(settings.get('teamSessionsKey'), file.teamKey);
+  if (m.adopted) {
+    settings.set('teamSessionsKey', m.key);
+    return 'adopted';
+  }
+  if (m.conflict) {
+    postNotice({
+      severity: 'info',
+      title: 'Team file has a different team key',
+      body:
+        `\u201c${file.name}\u201d carries a different team sessions key from the one on this computer, so ` +
+        'yours was kept. Teammates using the file\u2019s key won\u2019t see your listed sessions (or you theirs) ' +
+        'until you all share one file.',
+      key: 'team-key-conflict',
+      toast: false,
+    });
+    return 'conflict';
+  }
+  return 'unchanged';
+}
+
+/** This machine's team key, minted (and kept) when it has none. */
+export function ensureLocalTeamKey(): string {
+  const have = settings.get('teamSessionsKey');
+  if (isTeamKey(have)) return have;
+  const key = generateTeamKey();
+  settings.set('teamSessionsKey', key);
+  return key;
+}
+
+/** Write this machine's team key into the file at `path` when the file has
+ *  none (re-read just before writing; every other field kept). Resolves
+ *  true when written. */
+export async function addTeamKeyToFile(path: string): Promise<boolean> {
+  const electron = getElectronHost();
+  if (!electron?.readTeamFile) return false;
+  const fresh = await electron.readTeamFile(path);
+  if (!fresh) return false;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(new TextDecoder().decode(fresh.bytes));
+  } catch {
+    return false;
+  }
+  const next = addTeamKeyToTeamFileJson(raw, ensureLocalTeamKey());
+  if (!next) return false;
+  await electron.writeFileAtPath(path, new TextEncoder().encode(JSON.stringify(next, null, 2) + '\n'));
+  return true;
+}
+
 /** One sync pass. `force` skips the cross-window lock (an explicit
  *  "Sync now" or a just-chosen file). Resolves 'changed' / 'unchanged',
  *  or 'failed' / 'skipped'. */
@@ -139,6 +207,17 @@ export async function syncTeamFile(force = false): Promise<'changed' | 'unchange
     if (merged.addedPeople || merged.addedGroups || merged.updatedGroups) {
       settings.set('pairingPartners', merged.partners);
       settings.set('pairingGroups', merged.groups);
+    }
+
+    // Team key: adopt the file's, or give the file ours (quietly — a key
+    // isn't news to the user, it just turns team sessions on).
+    applyTeamKeyFromFile(file);
+    if (!file.teamKey) {
+      try {
+        await addTeamKeyToFile(path);
+      } catch (err) {
+        console.warn('[team-sync] could not add the team key to the team file:', err);
+      }
     }
 
     const newRooms = await addNewSessions(file);
