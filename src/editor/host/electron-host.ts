@@ -88,6 +88,9 @@ export interface PairingConfigIpc {
   relayUrl?: string;
   /** Bearer for a self-hosted relay ('' = the baked official token). */
   relayToken?: string;
+  /** Relay info v1 headers (collab/relay-info.ts customRelayExtHeaders):
+   *  main sends them on mailbox requests while a custom relay is set. */
+  relayExtHeaders?: Record<string, string>;
 }
 export interface PairingSendItemIpc {
   label: string;
@@ -416,8 +419,9 @@ interface ElectronAPI {
       requiredVersion: string;
     }) => void,
   ): () => void;
-  /** Relay rejected our credentials (401) — throttled in main. */
-  onPairingUnauthorized?(handler: () => void): () => void;
+  /** Relay rejected our credentials (401) — throttled in main. `detail`
+   *  is a custom relay's own reason (e.g. the install limit), if any. */
+  onPairingUnauthorized?(handler: (info: { detail?: string }) => void): () => void;
   pairingConnectAccount?(payload: {
     connectCode: string;
     confirmEvict?: boolean;
@@ -1307,7 +1311,7 @@ export class ElectronHost implements Host {
     return api().onPairingVersionMismatch?.(handler) ?? (() => {});
   }
 
-  onPairingUnauthorized(handler: () => void): () => void {
+  onPairingUnauthorized(handler: (info: { detail?: string }) => void): () => void {
     return api().onPairingUnauthorized?.(handler) ?? (() => {});
   }
 

@@ -1727,6 +1727,13 @@ export interface Settings {
   /** Pairing: bearer token for a self-hosted relay (its RELAY_TOKEN).
    *  Empty (default) = the official build token. Stored locally. */
   pairingRelayToken: string;
+  /** Relay info v1 (collab/relay-info.ts): on a custom relay, send your
+   *  display name as `X-Relay-Install-Name` so whoever manages the relay
+   *  access can tell your install apart. No display name = nothing sent. */
+  relayShowInstallName: boolean;
+  /** Relay info v1: notice ids the user dismissed (a dismissed notice
+   *  never shows again). Newest last, capped. Not a user-facing row. */
+  relayInfoDismissedNotices: string[];
   /** Pairing: display mirror of the blog-account entitlement expiry
    *  (epoch ms; 0 = not connected). The entitlement itself lives in
    *  Electron main; this mirror only drives the settings row's status
@@ -2141,6 +2148,8 @@ const DEFAULTS: Settings = {
   pairingPollSeconds: 30,
   pairingRelayUrl: '',
   pairingRelayToken: '',
+  relayShowInstallName: true,
+  relayInfoDismissedNotices: [],
   pairingConnectedUntil: 0,
   pairingOwnCode: '',
   pairingDisplayName: '',
@@ -4532,6 +4541,16 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     aliases: ['relay token', 'relay password'],
   },
   {
+    key: 'relayShowInstallName',
+    label: 'Show my name to the people who manage this relay access',
+    description:
+      'Only with a custom relay. Sends your display name with this install\u2019s requests, so whoever manages the relay access you use can tell your install apart from others on the same access. Off, or with no display name, the relay sees no name.',
+    kind: 'toggle',
+    category: 'pairing',
+    dependsOn: 'pairingEnabled',
+    aliases: ['install name', 'relay access', 'about this relay'],
+  },
+  {
     key: 'pairingConnectedUntil',
     label: 'Debate Decoded account',
     description:
@@ -5628,6 +5647,10 @@ function sanitize(s: Settings): Settings {
       typeof s.pairingRelayUrl === 'string' ? s.pairingRelayUrl : DEFAULTS.pairingRelayUrl,
     pairingRelayToken:
       typeof s.pairingRelayToken === 'string' ? s.pairingRelayToken : DEFAULTS.pairingRelayToken,
+    relayShowInstallName: s.relayShowInstallName !== false,
+    relayInfoDismissedNotices: Array.isArray(s.relayInfoDismissedNotices)
+      ? s.relayInfoDismissedNotices.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 200).slice(-50)
+      : [],
     pairingPollSeconds: Number.isFinite(Number(s.pairingPollSeconds))
       ? clamp(Math.round(Number(s.pairingPollSeconds)), 5, 3600)
       : 30,

@@ -13,6 +13,7 @@ import { webEntitlementToken, webRoutingCodeSync } from './web-account.js';
 import { RoomsClient, RoomsError } from './room-client.js';
 import { WEB_DEFAULT_RELAY_URL } from './relay-endpoint.js';
 import { unlistRoom } from './team-sessions.js';
+import { customRelayExtHeaders } from './relay-info.js';
 
 /** Baked relay endpoint from the desktop main process — resolved once,
  *  used as the LAST fallback so packaged builds work with zero setup.
@@ -85,6 +86,7 @@ export function relayClientWithGuestPass(pass: string): RoomsClient | null {
     token: () => pass,
     routingCode: () => '',
     guestAuth: true,
+    extHeaders: () => customRelayExtHeaders(),
   });
 }
 
@@ -132,6 +134,9 @@ export function relayClient(): RoomsClient | null {
     // rates on the typing thread (2026-09-01 review, T13). Still
     // re-read per request: no memo, no staleness.
     credentials: () => resolveCredential(),
+    // Relay info v1: name this build (and, if allowed, this install) to
+    // a relay the user configured; {} on the built-in relay.
+    extHeaders: () => customRelayExtHeaders(),
   });
 }
 

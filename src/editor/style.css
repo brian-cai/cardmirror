@@ -17138,3 +17138,16 @@ html.pmd-frame-speech-off:not(.pmd-frame-shared-off) .pmd-qcs-row-speech.pmd-qcs
 html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs-row-shared {
   box-shadow: inset 4px 0 0 var(--pmd-frame-speech-color);
 }
+
+/* Relay info v1: "About this relay" under the custom relay fields. */
+.pmd-relay-info-section {
+  margin: 0.5rem 0 1rem 0;
+}
+.pmd-relay-info-section[hidden] {
+  display: none;
+}
+.pmd-relay-info-link {
+  color: var(--pmd-c-accent, inherit);
+  text-decoration: underline;
+  cursor: pointer;
+}

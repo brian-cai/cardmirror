@@ -772,6 +772,9 @@ class SettingsModal {
         }
         if (meta.revealWhen) this.revealRows.push({ row, revealWhen: meta.revealWhen });
         panel.appendChild(row);
+        // Relay info v1: "About this relay" under the custom relay fields
+        // (hidden unless a custom relay answers the info call).
+        if (meta.key === 'relayShowInstallName') panel.appendChild(buildRelayInfoSlot());
       }
       if (entries.length === 0) {
         const empty = document.createElement('p');
@@ -846,6 +849,11 @@ class SettingsModal {
           btn.tabIndex = isActive ? 0 : -1;
         }
         if (panel) panel.hidden = !isActive;
+      }
+      // Relay info v1: opening Settings → Collaboration fetches fresh
+      // relay info (a no-op without a custom relay; folded when repeated).
+      if (this.activeCategory === 'pairing' && panels['pairing'] && settings.get('pairingRelayUrl').trim()) {
+        void import('./collab/relay-info-ui.js').then((m) => m.refreshRelayInfoNow(true));
       }
       // If the newly-active tab is clipped by the scroll viewport
       // (clicked at the edge of view, or activated programmatically
@@ -2135,6 +2143,31 @@ function buildColorsEditor(): HTMLElement {
   registerRowCleanup(wrap, () => unsubscribe());
 
   return wrap;
+}
+
+/** Placeholder for the lazily loaded "About this relay" block (keeps the
+ *  relay client out of the settings chunk). Loaded once a custom relay is
+ *  set — now, or later while the dialog is open. */
+function buildRelayInfoSlot(): HTMLElement {
+  const slot = document.createElement('div');
+  slot.className = 'pmd-relay-info-slot';
+  let loaded = false;
+  const load = (): void => {
+    if (loaded || !settings.get('pairingRelayUrl').trim()) return;
+    loaded = true;
+    void import('./collab/relay-info-ui.js').then((m) => {
+      slot.appendChild(m.buildRelayInfoSection((fn) => registerRowCleanup(slot, fn)));
+    });
+  };
+  load();
+  if (!loaded) {
+    const unsub = settings.subscribe(() => {
+      load();
+      if (loaded) unsub();
+    });
+    registerRowCleanup(slot, unsub);
+  }
+  return slot;
 }
 
 /** Read-only "About this install" diagnostic block. Lives at the

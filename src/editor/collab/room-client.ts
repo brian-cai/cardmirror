@@ -34,7 +34,9 @@ const boundFetch: RoomsFetch = (input, init) => fetch(input, init);
  *  short trimmed prefix). Never throws; at most 512 bytes read. */
 async function errorDetail(res: Response): Promise<string> {
   try {
-    const text = (await res.text()).slice(0, 512).trim();
+    // 4 KB: enough for a relay's full sentence (an install-limit refusal
+    // carries the instructions — relay info v1), still bounded.
+    const text = (await res.text()).slice(0, 4096).trim();
     if (!text) return '';
     try {
       const parsed = JSON.parse(text) as { detail?: unknown; error?: unknown };
@@ -112,6 +114,10 @@ export interface RoomsClientOptions {
    *  + routing code with ONE call instead of one each (the resolution
    *  behind them is not free). Same per-request liveness contract. */
   credentials?: () => { token: string; routingCode: string };
+  /** Extra request headers, re-read per request: the relay-info v1
+   *  `X-Relay-Client` / `X-Relay-Install-Name` pair on a custom relay
+   *  (collab/relay-info.ts). Absent or {} = none. */
+  extHeaders?: () => Record<string, string>;
   /** True when the bearer is a room GUEST PASS — an immutable,
    *  room-scoped credential the client can never refresh (re-minting is
    *  a host-only endpoint). Lets the session treat a relay-confirmed
@@ -159,6 +165,7 @@ export class RoomsClient {
       Authorization: `Bearer ${token}`,
       [RELAY_CLIENT_VERSION_HEADER]: appVersion,
       ...(routing ? { [RELAY_CLIENT_ROUTING_HEADER]: routing } : {}),
+      ...this.opts.extHeaders?.(),
       ...extra,
     };
   }
@@ -374,6 +381,14 @@ export class RoomsClient {
     return this.readJson(res, path);
   }
 
+  /** Relay info v1 (reference-docs/relay-info-v1.md): the relay's info
+   *  document. Throws RoomsError like every call (404 = unsupported). */
+  async relayInfo(): Promise<unknown> {
+    const path = '/ext/relay-info/v1';
+    const res = await this.request(path, { headers: this.headers() });
+    return this.readJson(res, path);
+  }
+
   async putListing(roomId: string, blob: string): Promise<void> {
     await this.request(`/rooms/${roomId}/listing`, {
       method: 'PUT',
@@ -483,6 +498,8 @@ export interface RoomStreamOptions {
   fetchImpl?: RoomsFetch;
   /** Optional combined credential supplier (see RoomsClientOptions). */
   credentials?: () => { token: string; routingCode: string };
+  /** See RoomsClientOptions.extHeaders. */
+  extHeaders?: () => Record<string, string>;
   /** Backoff bounds, injectable for tests. */
   minBackoffMs?: number;
   maxBackoffMs?: number;
@@ -736,6 +753,7 @@ export class RoomStream {
           Authorization: `Bearer ${token}`,
           [RELAY_CLIENT_VERSION_HEADER]: appVersion,
           ...(routing ? { [RELAY_CLIENT_ROUTING_HEADER]: routing } : {}),
+          ...this.opts.extHeaders?.(),
         },
         signal: this.controller.signal,
       });

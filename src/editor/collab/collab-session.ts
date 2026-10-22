@@ -757,6 +757,7 @@ export class CollabSession {
       token: this.client.opts.token,
       routingCode: this.client.opts.routingCode,
       credentials: this.client.opts.credentials,
+      extHeaders: this.client.opts.extHeaders,
       fetchImpl: this.client.opts.fetchImpl,
       roomId: this.roomId,
       sid: this.streamSid,

@@ -33,6 +33,7 @@ const KEEP_CURRENT = [
   'contactsAutoExportPath', // a path on THIS machine
   'teamFileSyncPath', // a path on THIS machine
   'teamSessionsKey', // comes only from a team file, and is never replaced
+  'relayInfoDismissedNotices', // notices THIS install already dismissed
   'pairingConnectedUntil',
   'pairingStarred', // points at one of your own contacts/groups
   'externalAppConsents', // which apps may talk to THIS install

@@ -26,6 +26,7 @@ import { SendPillController } from './send-pill-ui.js';
 import { ReceivePillController } from './receive-pill-ui.js';
 import { installContactsAutoExport } from './contacts-auto-export.js';
 import { installTeamFileSync } from './team-file-sync.js';
+import { customRelayExtHeaders } from '../collab/relay-info.js';
 
 /** Build + mount the Send and Receive pills into the tray (after the
  *  dropzone, so they sit to its right). */
@@ -55,6 +56,8 @@ function applyConfig(): void {
     pollSeconds: settings.get('pairingPollSeconds'),
     relayUrl: settings.get('pairingRelayUrl'),
     relayToken: settings.get('pairingRelayToken'),
+    // Relay info v1: {} unless a custom relay is set.
+    relayExtHeaders: customRelayExtHeaders(),
   };
   const mirrorOwnCode = ({ ownCode }: { ownCode: string }): void => {
     // Setting it re-fires the subscriber, but the value is now unchanged so
@@ -106,6 +109,19 @@ export function initPairingWiring(): void {
   // Desktop: keep the chosen contacts file (if any) in step with edits.
   installContactsAutoExport();
   installTeamFileSync();
+  // Relay info v1: on a custom relay, learn who runs it, this access's
+  // standing and any notice (on start, then at most hourly). Loaded only
+  // once a custom relay is set; the built-in relay never sees it.
+  const startRelayInfo = (): boolean => {
+    if (!settings.get('pairingRelayUrl').trim()) return false;
+    void import('../collab/relay-info-ui.js').then((m) => m.startRelayInfo());
+    return true;
+  };
+  if (!startRelayInfo()) {
+    const off = settings.subscribe(() => {
+      if (startRelayInfo()) off();
+    });
+  }
 
   const electron = getElectronHost();
   // Coming back to the app is when you're looking for an invite: check
@@ -157,12 +173,19 @@ export function initPairingWiring(): void {
   // context, since the ungated official relay shouldn't 401 at all
   // (a wrong custom-relay token or a stale build is the likely cause).
   if (electron?.onPairingUnauthorized) {
-    electron.onPairingUnauthorized(() => {
+    electron.onPairingUnauthorized((info) => {
+      // A custom relay that explains itself (the install limit: how many
+      // installs are in use, when idle ones stop counting, whom to ask)
+      // gets its sentence shown whole — it, not us, knows the fix.
+      const detail = info?.detail?.trim() ?? '';
       postNotice({
         severity: 'error',
-        title: 'Card sharing needs credentials',
-        body: 'Card sharing: the relay rejected your credentials. ' + RELAY_FIX_PATH,
+        title: detail ? 'Your relay refused this install' : 'Card sharing needs credentials',
+        body: detail
+          ? `Card sharing: the relay refused this install: ${detail}`
+          : 'Card sharing: the relay rejected your credentials. ' + RELAY_FIX_PATH,
         key: 'pairing-401',
+        full: true,
       });
     });
   }

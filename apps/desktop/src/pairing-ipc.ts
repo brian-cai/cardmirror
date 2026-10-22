@@ -41,7 +41,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createPairingKeystore, routingId, type PairingKeystore, type SealedBundle } from './pairing-crypto.js';
 import { BUILT_IN_RELAY_TOKEN } from './pairing-build.js';
-import { RelayStream } from './relay-stream.js';
+import { readRelayDetail, RelayStream } from './relay-stream.js';
 import {
   entitlementIfValid,
   interpretConnectResponse,
@@ -60,6 +60,9 @@ import {
 // file-index-core.ts). Parity is pinned by relay-version-header.test.ts.
 const RELAY_CLIENT_VERSION_HEADER = 'X-CardMirror-Version';
 const RELAY_CLIENT_ROUTING_HEADER = 'X-CardMirror-Routing';
+/** Relay info v1 (reference-docs/relay-info-v1.md): the only extra
+ *  headers the renderer may hand us to send. */
+const RELAY_EXT_HEADER_NAMES = ['X-Relay-Client', 'X-Relay-Install-Name'];
 
 /** Relay endpoint defaults. Resolution order (see relayUrl()/relayToken()):
  *  user settings (self-hosted relay) → env override → baked default. Env
@@ -93,6 +96,28 @@ interface PairingConfig {
   relayUrl: string;
   /** Bearer for a self-hosted relay ('' = the baked official token). */
   relayToken: string;
+  /** Relay info v1 headers, built by the renderer (it owns the client id,
+   *  the display name and the "show my name" setting). Sent only while a
+   *  custom relay is set — see extHeaders(). */
+  relayExtHeaders: Record<string, string>;
+}
+
+/** Keep only the relay-info header names, with printable-ASCII values
+ *  (both are ASCII by construction: the install name is percent-encoded). */
+function sanitizeExtHeaders(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const name of RELAY_EXT_HEADER_NAMES) {
+    const v = (raw as Record<string, unknown>)[name];
+    if (typeof v === 'string' && /^[\x21-\x7e]{1,200}$/.test(v)) out[name] = v;
+  }
+  return out;
+}
+
+/** The relay-info headers for a request: only to a relay the user
+ *  configured, never the built-in one. */
+function extHeaders(): Record<string, string> {
+  return config.relayUrl.trim() ? config.relayExtHeaders : {};
 }
 
 /** Effective relay base URL: settings override → env/baked default.
@@ -171,6 +196,7 @@ let config: PairingConfig = {
   pollSeconds: 30,
   relayUrl: '',
   relayToken: '',
+  relayExtHeaders: {},
 };
 /** Interval poller — legacy-relay fallback mode only. */
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -466,12 +492,16 @@ function broadcastInbox(): void {
 }
 
 let lastUnauthorizedBroadcast = 0;
-function broadcastUnauthorized(): void {
+/** `detail`: the relay's own sentence, passed on only for a custom relay
+ *  (an install-limit refusal says what to do — relay info v1); the
+ *  built-in relay keeps the renderer's standard fix-path text. */
+function broadcastUnauthorized(detail = ''): void {
   const now = Date.now();
   if (now - lastUnauthorizedBroadcast < 60_000) return; // at most once a minute
   lastUnauthorizedBroadcast = now;
+  const info = config.relayUrl.trim() && detail ? { detail } : {};
   for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.isDestroyed()) w.webContents.send('pairing:unauthorized');
+    if (!w.isDestroyed()) w.webContents.send('pairing:unauthorized', info);
   }
 }
 
@@ -545,6 +575,7 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
     Authorization: `Bearer ${relayToken()}`,
     [RELAY_CLIENT_VERSION_HEADER]: app.getVersion(),
     ...(usingEntitlement ? { [RELAY_CLIENT_ROUTING_HEADER]: ks().ownRoutingId() } : {}),
+    ...extHeaders(),
     ...extra,
   };
 }
@@ -575,6 +606,13 @@ async function pollOnce(): Promise<void> {
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
     if (res.status === 304) return; // empty poll — bodyless (capacity, 2026-08-18)
+    if (res.status === 401) {
+      // Same surface as the stream's 401, with the relay's reason.
+      const detail = await readRelayDetail(res);
+      console.warn(`[pairing] GET inbox returned 401${detail ? `: ${detail}` : ''}`);
+      broadcastUnauthorized(detail);
+      return;
+    }
     if (!res.ok) {
       console.warn(`[pairing] GET inbox returned ${res.status}`);
       return;
@@ -737,14 +775,14 @@ function applyDelivery(): void {
         streamUnsupportedUrl = relayUrl();
         startFallbackPolling();
       },
-      onUnauthorized: () => {
+      onUnauthorized: (detail) => {
         // A 401 means the relay rejected our credentials — a wrong
         // self-host token today, or (once gating enforces) a missing
         // subscription. Surface it to the user, throttled, so it never
         // spams: the two paths forward are connect an account or run
         // your own relay.
-        console.warn('[pairing] relay rejected our token (401)');
-        broadcastUnauthorized();
+        console.warn(`[pairing] relay rejected our token (401)${detail ? `: ${detail}` : ''}`);
+        broadcastUnauthorized(detail);
       },
     },
   });
@@ -836,6 +874,7 @@ export function registerPairingIpc(): void {
             : 30,
         relayUrl: typeof cfg?.relayUrl === 'string' ? cfg.relayUrl : '',
         relayToken: typeof cfg?.relayToken === 'string' ? cfg.relayToken : '',
+        relayExtHeaders: sanitizeExtHeaders(cfg?.relayExtHeaders),
       };
       // Only materialize a keypair once the user actually turns sharing on,
       // so a fresh install that never enables it writes no key file.
@@ -932,7 +971,11 @@ export function registerPairingIpc(): void {
       try {
         const res = await fetch(`${url}/messages?recipient=${encodeURIComponent(ks().ownRoutingId())}`, {
           method: 'GET',
-          headers: { Authorization: `Bearer ${token}`, [RELAY_CLIENT_VERSION_HEADER]: app.getVersion() },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            [RELAY_CLIENT_VERSION_HEADER]: app.getVersion(),
+            ...config.relayExtHeaders, // always a custom relay here
+          },
           signal: AbortSignal.timeout(8000),
         });
         void res.body?.cancel().catch(() => {});

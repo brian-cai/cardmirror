@@ -78,6 +78,7 @@ interface PairingConfigIpc {
   pollSeconds: number;
   relayUrl?: string;
   relayToken?: string;
+  relayExtHeaders?: Record<string, string>;
 }
 interface PairingSendIpc {
   recipientCodes: string[];
@@ -829,8 +830,8 @@ interface PairingInboxItemIpc {
     ipcRenderer.on('pairing:version-mismatch', listener);
     return () => ipcRenderer.removeListener('pairing:version-mismatch', listener);
   },
-  onPairingUnauthorized(handler: () => void) {
-    const listener = () => handler();
+  onPairingUnauthorized(handler: (info: { detail?: string }) => void) {
+    const listener = (_e: unknown, info?: { detail?: string }) => handler(info ?? {});
     ipcRenderer.on('pairing:unauthorized', listener);
     return () => ipcRenderer.removeListener('pairing:unauthorized', listener);
   },

@@ -62,6 +62,7 @@ describe('Collaboration tab on web', () => {
       'pairingReceiveFlash',
       'pairingRelayUrl',
       'pairingRelayToken',
+      'relayShowInstallName',
       'pairingConnectedUntil',
     ]);
   });

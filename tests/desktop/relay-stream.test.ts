@@ -69,11 +69,15 @@ function collect(_: object) {
     messages: [] as unknown[],
     unsupported: 0,
     unauthorized: 0,
+    details: [] as string[],
     callbacks: {
       onConnected: () => void events.connected++,
       onMessage: (d: unknown) => void events.messages.push(d),
       onUnsupported: () => void events.unsupported++,
-      onUnauthorized: () => void events.unauthorized++,
+      onUnauthorized: (detail: string) => {
+        events.unauthorized++;
+        events.details.push(detail);
+      },
     },
   };
   return events;
@@ -154,6 +158,34 @@ describe('RelayStream', () => {
     await until(() => events.unauthorized >= 2, 5000);
     expect(stream.running).toBe(true);
     expect(hits).toBeGreaterThanOrEqual(2);
+  });
+
+  it("401 passes the relay's detail through whole (install-limit instructions)", async () => {
+    const detail =
+      'this subscription is already used on 4 installs; an install unused for 30 days stops counting. ' +
+      'For more installs, email help@relay.example. ' +
+      'x'.repeat(300);
+    const url = await serve((_req, res) => {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ detail }));
+    });
+    const { stream, events } = makeStream(url);
+    stream.start();
+    await until(() => events.unauthorized >= 1, 5000);
+    stream.stop();
+    expect(events.details[0]).toBe(detail);
+  });
+
+  it('401 without a JSON detail reports an empty detail', async () => {
+    const url = await serve((_req, res) => {
+      res.writeHead(401, { 'Content-Type': 'text/html' });
+      res.end('<html>nope</html>');
+    });
+    const { stream, events } = makeStream(url);
+    stream.start();
+    await until(() => events.unauthorized >= 1, 5000);
+    stream.stop();
+    expect(events.details[0]).toBe('');
   });
 
   it('stop() aborts a live connection and prevents reconnects', async () => {

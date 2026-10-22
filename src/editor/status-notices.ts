@@ -30,6 +30,13 @@ export interface NoticeInput {
   key?: string;
   /** Companion toast (default true; repeats never toast). */
   toast?: boolean;
+  /** Show the whole body in the panel instead of clamping it behind
+   *  "Show more" — for text the user must act on (a relay's own
+   *  instructions). */
+  full?: boolean;
+  /** Called when the USER dismisses it (Dismiss / Dismiss all) — not on
+   *  clearNotice. Lets a caller remember "don't show this again". */
+  onDismiss?: () => void;
 }
 
 interface Notice {
@@ -40,6 +47,8 @@ interface Notice {
   body: string;
   count: number;
   lastAt: number;
+  full: boolean;
+  onDismiss: (() => void) | null;
 }
 
 const MAX_NOTICES = 50;
@@ -59,6 +68,7 @@ export function postNotice(input: NoticeInput): void {
     existing.lastAt = Date.now();
     existing.body = input.body;
     existing.severity = input.severity;
+    existing.full = input.full === true;
     notices = [existing, ...notices.filter((n) => n !== existing)];
     // A repeat never toasts — this is what turns the save-heal
     // heartbeat into a counter instead of a once-a-minute nag.
@@ -71,6 +81,8 @@ export function postNotice(input: NoticeInput): void {
       body: input.body,
       count: 1,
       lastAt: Date.now(),
+      full: input.full === true,
+      onDismiss: input.onDismiss ?? null,
     });
     if (notices.length > MAX_NOTICES) notices.length = MAX_NOTICES;
     if (input.toast !== false) showToast(input.body);
@@ -87,13 +99,28 @@ export function clearNotice(key: string): void {
 }
 
 function dismiss(id: number): void {
+  const gone = notices.filter((n) => n.id === id);
   notices = notices.filter((n) => n.id !== id);
   render();
+  for (const n of gone) n.onDismiss?.();
 }
 
 function dismissAll(): void {
+  const gone = notices;
   notices = [];
   render();
+  for (const n of gone) n.onDismiss?.();
+}
+
+/** Test hook: dismiss a keyed notice as the user would (fires onDismiss). */
+export function __dismissNoticeForTests(key: string): void {
+  const n = notices.find((x) => x.key === key);
+  if (n) dismiss(n.id);
+}
+
+/** Test hook: the current notices, newest first. */
+export function __noticesForTests(): ReadonlyArray<{ key: string | null; title: string; body: string; count: number }> {
+  return notices;
 }
 
 /** Test hook: reset module state between cases. */
@@ -207,7 +234,7 @@ function renderPanel(): void {
 
     const body = document.createElement('div');
     body.className = 'pmd-notice-body';
-    if (n.body.length > BODY_CLAMP) {
+    if (!n.full && n.body.length > BODY_CLAMP) {
       body.textContent = n.body.slice(0, BODY_CLAMP) + '…';
       const more = document.createElement('button');
       more.type = 'button';

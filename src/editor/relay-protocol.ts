@@ -75,3 +75,63 @@ export function compareAppVersions(a: string, b: string): number {
   }
   return 0;
 }
+
+// --- relay info v1 (reference-docs/relay-info-v1.md) -------------------
+
+/** This build's client id for the optional relay extensions. The only
+ *  built-in identity: everything about the relay itself (operator,
+ *  links, plan) comes from the relay's own info document. */
+export const RELAY_CLIENT_ID = 'cardmirror-xtgg';
+
+/** `<client id>/<version>` — which build is calling (relay info v1). */
+export const RELAY_EXT_CLIENT_HEADER = 'X-Relay-Client';
+
+/** A name for this install the user agreed to show the people who manage
+ *  the relay credential (relay info v1). Percent-encoded UTF-8. */
+export const RELAY_EXT_INSTALL_NAME_HEADER = 'X-Relay-Install-Name';
+
+/** Both headers are capped at 64 bytes by the spec (the install name
+ *  measured after decoding). */
+export const RELAY_EXT_HEADER_MAX_BYTES = 64;
+
+/** `cardmirror-xtgg/<version>`, restricted to the spec's alphabet
+ *  (`[A-Za-z0-9._-]` and one `/`) and 64 bytes. A version that can't be
+ *  expressed sends just the id. */
+export function relayClientHeaderValue(version: string, clientId: string = RELAY_CLIENT_ID): string {
+  const v = version.replace(/[^A-Za-z0-9._-]/g, '');
+  const value = v ? `${clientId}/${v}` : clientId;
+  return value.slice(0, RELAY_EXT_HEADER_MAX_BYTES);
+}
+
+/** The install-name header value: trimmed, control characters and runs
+ *  of whitespace folded, cut to 64 UTF-8 bytes on a character boundary,
+ *  then percent-encoded (every byte outside `[A-Za-z0-9._~-]`, so `'`
+ *  becomes `%27` as in the spec's example). '' = send nothing. */
+export function encodeInstallName(name: string): string {
+  const clean = name
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean) return '';
+  const enc = new TextEncoder();
+  let out = '';
+  let bytes = 0;
+  for (const ch of clean) {
+    const n = enc.encode(ch).length;
+    if (bytes + n > RELAY_EXT_HEADER_MAX_BYTES) break;
+    out += ch;
+    bytes += n;
+  }
+  return encodeURIComponent(out.trimEnd()).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+/** The relay-info request headers for one request: always the client
+ *  header, plus the install name when there is one to send. Callers send
+ *  these only to a relay the user configured (never the built-in one). */
+export function relayExtHeaders(o: { version: string; installName?: string }): Record<string, string> {
+  const name = encodeInstallName(o.installName ?? '');
+  return {
+    [RELAY_EXT_CLIENT_HEADER]: relayClientHeaderValue(o.version),
+    ...(name ? { [RELAY_EXT_INSTALL_NAME_HEADER]: name } : {}),
+  };
+}

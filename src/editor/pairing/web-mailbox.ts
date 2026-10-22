@@ -34,6 +34,7 @@ import {
 import { webEntitlementToken, webRoutingCodeSync, onWebAccountChanged } from '../collab/web-account.js';
 import { settings } from '../settings.js';
 import { relayBaseUrl } from '../collab/collab-relay.js';
+import { customRelayExtHeaders } from '../collab/relay-info.js';
 import {
   RELAY_CLIENT_ROUTING_HEADER,
   RELAY_CLIENT_VERSION_HEADER,
@@ -102,6 +103,8 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     [RELAY_CLIENT_VERSION_HEADER]: appVersion,
+    // Relay info v1 headers: only on a relay the user configured.
+    ...customRelayExtHeaders(),
     ...extra,
   };
   // The routing header is bound to the ENTITLEMENT; a self-host token

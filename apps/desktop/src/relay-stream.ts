@@ -41,8 +41,23 @@ export interface RelayStreamCallbacks {
   onMessage: (data: unknown) => void;
   /** Server has no /stream endpoint; the stream has stopped itself. */
   onUnsupported: () => void;
-  /** Bearer rejected; the stream keeps retrying slowly. */
-  onUnauthorized: () => void;
+  /** Bearer rejected; the stream keeps retrying slowly. `detail` is the
+   *  relay's own explanation ('' when it sent none) — an install-limit
+   *  refusal carries what to do there (relay info v1). */
+  onUnauthorized: (detail: string) => void;
+}
+
+/** The relay's `{"detail": "..."}` sentence from an error response, read
+ *  whole (bounded at 4 KB; not shortened further), or ''. Releases the
+ *  body either way. */
+export async function readRelayDetail(res: Response): Promise<string> {
+  try {
+    const text = (await res.text()).slice(0, 4096).trim();
+    const parsed = JSON.parse(text) as { detail?: unknown };
+    return typeof parsed.detail === 'string' ? parsed.detail.trim() : '';
+  } catch {
+    return '';
+  }
 }
 
 export interface RelayStreamOptions {
@@ -176,7 +191,7 @@ export class RelayStream {
         return;
       }
       if (res.status === 401) {
-        this.opts.callbacks.onUnauthorized();
+        this.opts.callbacks.onUnauthorized(await readRelayDetail(res));
         this.backoffMs = this.opts.maxBackoffMs ?? 60_000;
         this.scheduleRetry();
         return;
