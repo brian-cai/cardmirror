@@ -477,5 +477,11 @@ organizations); commercial use requires a separate license. This build
 is distributed under the same license. See
 [`LICENSE`](./LICENSE) for the full terms.
 
+Copyright (c) 2026 Brian Cai for the modifications in this build (the
+commits on top of upstream CardMirror). They ship as part of this build
+under the same PolyForm Noncommercial License, and Brian Cai reserves
+all other rights in them. Anthony Trufanov's notice above still covers
+the original code.
+
 Underlying dependencies (ProseMirror and friends) ship under their
 own permissive licenses, preserved in `node_modules/`.
