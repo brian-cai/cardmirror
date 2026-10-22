@@ -247,6 +247,8 @@ interface ElectronAPI {
   focusWindow?(windowId: number): Promise<boolean>;
   htmlToPdf?(html: string): Promise<Uint8Array>;
   syncLibraryRoots?(roots: string[]): Promise<void>;
+  syncWriteFolders?(folders: string[]): Promise<void>;
+  syncWriteFiles?(files: string[]): Promise<void>;
   grantLegacyRecents?(paths: string[]): Promise<boolean>;
   readFileAtPath(filePath: string): Promise<{
     name: string;
@@ -867,6 +869,14 @@ export class ElectronHost implements Host {
   /** Read-scope plumbing — no-ops gracefully on an older preload. */
   async syncLibraryRoots(roots: string[]): Promise<void> {
     await api().syncLibraryRoots?.(roots);
+  }
+  /** Write-scope plumbing (main's isWriteAllowed) — same graceful no-op. */
+  async syncWriteFolders(folders: string[]): Promise<void> {
+    await api().syncWriteFolders?.(folders);
+  }
+  /** BCai's build: team-file paths main may rewrite (same no-op shape). */
+  async syncWriteFiles(files: string[]): Promise<void> {
+    await api().syncWriteFiles?.(files);
   }
   async grantLegacyRecents(paths: string[]): Promise<boolean> {
     return (await api().grantLegacyRecents?.(paths)) ?? false;

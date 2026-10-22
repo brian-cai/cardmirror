@@ -32,6 +32,7 @@ import {
   session,
   nativeImage,
 } from 'electron';
+import { decideNavigation, decideWindowOpen } from './navigation-guard.js';
 import { existsSync } from 'node:fs';
 import { autoUpdater } from 'electron-updater';
 import { bundlePathFromExe, launchSwapHelper, macBundleSelfUpdatable } from './mac-swap-update.js';
@@ -115,6 +116,9 @@ import {
   grantReadPath,
   grantReadDir,
   setLibraryRoots,
+  setWriteFolders,
+  setWriteFiles,
+  isWriteAllowed,
   grantLegacyRecents,
   isReadAllowed,
 } from './read-scope.js';
@@ -171,6 +175,37 @@ const APP_ORIGINS = {
   rendererDir: app.isPackaged ? path.join(process.resourcesPath, 'renderer') : path.join(__dirname, '..', '..', '..'),
 };
 installWebHardening(app, shell, APP_ORIGINS);
+
+/** Where the app's own pages come from: the Vite dev server in development,
+ *  the packaged renderer files otherwise. Used by the navigation guard. */
+function ownOrigins(): string[] {
+  return app.isPackaged ? ['file:'] : [new URL(DEV_SERVER_URL).origin];
+}
+
+/** Apply the window-open / navigation policy (navigation-guard.ts) to a
+ *  window: no renderer-spawned BrowserWindows, no leaving the app's own
+ *  origin; http(s)/mailto targets go to the OS browser instead. Every
+ *  BrowserWindow that loads renderer code must pass through here.
+ *
+ *  BCai's build: this is a second layer under installWebHardening, which
+ *  already guards every webContents (and is stricter: file: only inside
+ *  the renderer folder, redirects, <webview>, permissions). The window-open
+ *  handler set here replaces that one for this window with the same policy.
+ *  The will-navigate listener here only blocks; the web-hardening listener
+ *  (which runs too) is the one that hands http(s)/mailto to the browser,
+ *  so a blocked link opens once, not twice. */
+function hardenWindow(win: BrowserWindow): void {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    const d = decideWindowOpen(url, ownOrigins());
+    if (d.kind === 'external') void shell.openExternal(d.url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    const d = decideNavigation(url, ownOrigins());
+    if (d.kind === 'allow') return;
+    event.preventDefault();
+  });
+}
 
 // macOS scroll-perf tuning. Belt-and-suspenders: none of these
 // switches was the root fix for the historical scroll stalls (the
@@ -653,6 +688,7 @@ function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
     },
   });
 
+  hardenWindow(win);
   if (fillsByMaximizing) win.maximize();
 
   // Mirror tagged renderer console lines to the main-process stdout —
@@ -1222,6 +1258,17 @@ ipcMain.handle('host:plugin-pick-file', async (event) => {
 ipcMain.handle('host:sync-library-roots', async (_event, roots: unknown) => {
   setLibraryRoots(Array.isArray(roots) ? roots.map(String) : []);
 });
+// The speech-doc auto-save folder (a settings string) is the one place
+// write-file-at-path writes without a dialog in the same session; the
+// renderer mirrors it here (boot + on change) so the write scope knows it.
+ipcMain.handle('host:sync-write-folders', async (_event, folders: unknown) => {
+  setWriteFolders(Array.isArray(folders) ? folders.map(String) : []);
+});
+// BCai's build: the team file / contacts export file, rewritten in place
+// without a dialog (exact files only; read-scope.ts setWriteFiles).
+ipcMain.handle('host:sync-write-files', async (_event, files: unknown) => {
+  setWriteFiles(Array.isArray(files) ? files.map(String) : []);
+});
 // Fired by the preload's getPathForFile — a real dropped file resolved
 // by webUtils. Not on the exposed electronAPI surface.
 ipcMain.on('host:grant-dropped-path', (_event, p: unknown) => {
@@ -1674,6 +1721,11 @@ ipcMain.handle(
   ) => {
     if (typeof filePath !== 'string' || !filePath) {
       throw new Error('write-file-at-path: no path');
+    }
+    // Scoped like read-file-at-path: documents / zips only, inside a
+    // folder the user put in play (read-scope.ts isWriteAllowed).
+    if (!(await isWriteAllowed(filePath))) {
+      throw new Error('write-file-at-path: path not permitted');
     }
     // mkdir: bulk convert writes into a destination folder, preserving
     // the input's subfolder structure. failIfExists is opt-in — only
@@ -3966,6 +4018,7 @@ function openTimerWindow(popoutOpts?: TimerPopoutOpts): void {
     opts.y = Math.min(Math.max(timerWindowPos.y, area.y), area.y + area.height - height);
   }
   const win = new BrowserWindow(opts);
+  hardenWindow(win);
   timerWindowZoom = zoom;
   // 'floating' sits above normal windows without fighting system
   // panels. (Fullscreen spaces are explicitly out of scope — the

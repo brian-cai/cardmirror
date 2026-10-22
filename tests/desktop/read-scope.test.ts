@@ -14,6 +14,9 @@ import {
   setLibraryRoots,
   grantLegacyRecents,
   isReadAllowed,
+  isWriteAllowed,
+  setWriteFolders,
+  setWriteFiles,
   resetReadScopeForTests,
 } from '../../apps/desktop/src/read-scope.js';
 
@@ -98,5 +101,47 @@ describe('grantLegacyRecents (one-shot import)', () => {
     const g = await touch(path.join(dir, 'sneaky.cmir'));
     expect(await grantLegacyRecents([g])).toBe(false);
     expect(await isReadAllowed(g)).toBe(false);
+  });
+});
+
+describe('write scope (host:write-file-at-path)', () => {
+  it('refuses everything until a folder is in play', async () => {
+    expect(await isWriteAllowed(path.join(dir, 'out', 'a.cmir'))).toBe(false);
+  });
+  it('allows documents and zips inside a session-picked directory, library root, or speech-doc folder', async () => {
+    grantReadDir(path.join(dir, 'picked'));
+    setLibraryRoots([path.join(dir, 'lib')]);
+    setWriteFolders([path.join(dir, 'speech')]);
+    expect(await isWriteAllowed(path.join(dir, 'picked', 'sub', 'a.cmir'))).toBe(true);
+    expect(await isWriteAllowed(path.join(dir, 'lib', 'b.docx'))).toBe(true);
+    expect(await isWriteAllowed(path.join(dir, 'speech', '1NC.docx'))).toBe(true);
+    expect(await isWriteAllowed(path.join(dir, 'picked', 'bundle.zip'))).toBe(true);
+  });
+  it('refuses other extensions, paths outside the folders, and the folder itself', async () => {
+    grantReadDir(path.join(dir, 'picked'));
+    expect(await isWriteAllowed(path.join(dir, 'picked', 'evil.plist'))).toBe(false);
+    expect(await isWriteAllowed(path.join(dir, 'picked', 'x.sh'))).toBe(false);
+    expect(await isWriteAllowed(path.join(dir, 'elsewhere', 'a.cmir'))).toBe(false);
+    expect(await isWriteAllowed(path.join(dir, 'picked'))).toBe(false);
+    expect(await isWriteAllowed(path.join(dir, 'picked', '..', 'escape.cmir'))).toBe(false);
+  });
+  it('a granted FILE does not open its folder for writing', async () => {
+    grantReadPath(path.join(dir, 'docs', 'open.cmir'));
+    expect(await isWriteAllowed(path.join(dir, 'docs', 'other.cmir'))).toBe(false);
+  });
+  it('team files: only the exact synced / auto-export paths, only .cmteam / .json', async () => {
+    const team = path.join(dir, 'Dropbox', 'Squad.cmteam');
+    const contacts = path.join(dir, 'me', 'contacts.json');
+    expect(await isWriteAllowed(team)).toBe(false);
+    setWriteFiles([team, contacts]);
+    expect(await isWriteAllowed(team)).toBe(true);
+    expect(await isWriteAllowed(contacts)).toBe(true);
+    expect(await isWriteAllowed(path.join(dir, 'Dropbox', 'Other.cmteam'))).toBe(false);
+    expect(await isWriteAllowed(path.join(dir, 'me', 'other.json'))).toBe(false);
+    // A listed folder or library root doesn't open .json / .cmteam writes.
+    setWriteFolders([path.join(dir, 'speech')]);
+    expect(await isWriteAllowed(path.join(dir, 'speech', 'x.json'))).toBe(false);
+    setWriteFiles([]);
+    expect(await isWriteAllowed(team)).toBe(false);
   });
 });
