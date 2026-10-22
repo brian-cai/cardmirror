@@ -5,6 +5,89 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.23 — 2026-10-22
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+Includes the original CardMirror's fixes through October 17, 2026:
+
+### Security
+
+- **Pasted links keep only safe addresses.** A pasted or dropped link
+  that points to a script (`javascript:`) or embedded data (`data:`)
+  keeps its text but loses the link. Web, email and in-document links
+  are unchanged.
+- **Pasted HTML can't run code.** Formatting copied from a web page is
+  read in an isolated document, so a page that puts hostile HTML on your
+  clipboard can't run anything when you paste it.
+- **The app only writes files where you put it to work.** Writing a file
+  without a save dialog is limited to documents inside your File search
+  folders, a folder you picked this session (Bulk Convert and Clean
+  destinations), your speech doc folder, a file you're cleaning in
+  place, and the team file and contacts file you chose in Settings →
+  Collaboration.
+- **Every window blocks pop-ups and navigation away from the app**, as a
+  second check on top of this build's existing protection. Links still
+  open in your browser.
+
+### Saving and recovery
+
+- **A file that changes on disk while you save isn't overwritten.** If
+  the save has to wait and retry (a sync service like Dropbox holding the
+  file), it checks again before each retry that nobody changed the file
+  in the meantime, and keeps both versions if they did.
+- **Autosave and crash recovery keep up during long editing stretches.**
+  Constant typing, or a partner co-editing, used to keep pushing the
+  next autosave and recovery copy back. Now they happen at least every
+  30 seconds while edits are waiting.
+- **Recovery copies always match their document.** A recovery copy
+  taken just as the window switched documents could be filed under the
+  other document, so recovering it could write one document's text into
+  the other's file.
+- **Save As and "Keep mine as a copy" apply to the document you saved**,
+  even if the window moved to another document while a slow save was
+  running.
+- **Recovering a document as .docx keeps its live views.** They are
+  written out as real cards, the same as a normal .docx save, instead of
+  empty paragraphs.
+- **Bulk Convert never overwrites a file.** A file with the same name
+  already in the destination is left alone, and the result says how many
+  were skipped. Converting .cmir to .docx now also writes live views as
+  real cards.
+- **Version history previews snapshots of .docx files** (taken when you
+  save a .docx working file) instead of failing to open them.
+
+### Opening Word files
+
+- Text inside smart tags, content controls (from citation managers and
+  templates), custom XML and simple fields is no longer dropped.
+- Line breaks written as carriage returns, and symbols from Symbol-type
+  fonts (bullets, dashes), come through.
+- Images saved in Word's compatibility wrapper, and older VML pictures,
+  now import.
+
+### Smart quotes
+
+- **A digit typed right after an opening ‘ turns it into an
+  apostrophe**, so cite dates like '24 and '10-13 come out as ’24 and
+  ’10-13. Backspace right after the digit puts the opening quote back.
+  Turn it off with **Curl '24 as an apostrophe** (Settings → Editing,
+  under Smart quotes; on by default).
+
+### Find and Replace
+
+- **Replace All tells you when it stopped at 10,000 matches** and how
+  many are left, so you can run it again.
+
+### Other fixes
+
+- **Subscript no longer has ⌘= / Ctrl+= as its default shortcut.** That
+  key is Zoom In, which always won, so Subscript never got it. Bind
+  Subscript in Settings → Keyboard shortcuts if you want a key for it.
+- **AI requests time out when a reply stalls partway**, instead of
+  spinning until the connection gives up.
+
 ## 1.15.22 — 2026-10-22
 
 BCai's (@brian-cai) build of CardMirror, updating from
