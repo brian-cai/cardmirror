@@ -189,6 +189,15 @@ export async function isWriteAllowed(p: string): Promise<boolean> {
   bases.push(...grantedDirs);
   for (const c of candidates) {
     if (bases.some((b) => c !== b && within(c, b))) return true;
+    // BCai's build: Clean on a single file with no destination folder
+    // writes next to the input — over it, or as `cleaned_<name>` beside it.
+    // Allow exactly those two targets for a file the user picked (or
+    // opened) THIS session; its folder stays closed otherwise.
+    if (grantedFiles.has(c)) return true;
+    const base = path.basename(c);
+    if (base.startsWith('cleaned_') && grantedFiles.has(path.join(path.dirname(c), base.slice('cleaned_'.length)))) {
+      return true;
+    }
   }
   return false;
 }

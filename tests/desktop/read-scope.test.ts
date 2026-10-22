@@ -129,6 +129,14 @@ describe('write scope (host:write-file-at-path)', () => {
     grantReadPath(path.join(dir, 'docs', 'open.cmir'));
     expect(await isWriteAllowed(path.join(dir, 'docs', 'other.cmir'))).toBe(false);
   });
+  it('Clean in place: a file picked this session, or cleaned_<name> beside it', async () => {
+    const picked = path.join(dir, 'docs', 'Aff.docx');
+    grantReadPath(picked);
+    expect(await isWriteAllowed(picked)).toBe(true);
+    expect(await isWriteAllowed(path.join(dir, 'docs', 'cleaned_Aff.docx'))).toBe(true);
+    expect(await isWriteAllowed(path.join(dir, 'docs', 'cleaned_Neg.docx'))).toBe(false);
+    expect(await isWriteAllowed(path.join(dir, 'docs', 'Aff.docx.sh'))).toBe(false);
+  });
   it('team files: only the exact synced / auto-export paths, only .cmteam / .json', async () => {
     const team = path.join(dir, 'Dropbox', 'Squad.cmteam');
     const contacts = path.join(dir, 'me', 'contacts.json');
