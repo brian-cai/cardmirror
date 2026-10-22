@@ -69,6 +69,9 @@ import {
   deleteRecentRoom,
 } from './collab-store.js';
 import { loadRejoinCandidates, pickSessionToJoin } from './rejoin-picker.js';
+import { pickSessionsToShare } from './access-picker.js';
+import { buildRoomAccessRequestItem, ROOM_ACCESS_REQUEST_MIN_VERSION } from '../pairing/room-access.js';
+import { listRecipientChoices, pickRecipient } from '../pairing/send-to-recipient.js';
 import { importRoomKey, decryptBlob } from './collab-crypto.js';
 import { resetSessionCommentIds } from '../comments-plugin.js';
 import { collabEnabled } from './collab-gate.js';
@@ -1043,6 +1046,10 @@ export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
   // Enter), the sessions to get back into below it.
   const pick = await pickSessionToJoin(candidates);
   if (!pick) return;
+  if (pick.kind === 'request-access') {
+    await requestSessionAccessFlow();
+    return;
+  }
   if (pick.kind === 'rejoin') {
     await joinSessionWithCode(deps, pick.shareCode, { guestPass: pick.guestPass });
     return;
@@ -1057,6 +1064,50 @@ export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
     return;
   }
   await joinSessionWithCode(deps, entered);
+}
+
+/** Ask a teammate for access to their sessions. Sends only a request;
+ *  the teammate sees who asked and chooses which of their sessions (if
+ *  any) to invite you to. Contacts only: a request goes to one person. */
+export async function requestSessionAccessFlow(): Promise<void> {
+  if (!settings.get('pairingEnabled')) {
+    showToast('Card sharing is off — requests travel through it. Turn it on in Settings → Collaboration.');
+    return;
+  }
+  const choices = listRecipientChoices(settings.get('pairingPartners'), []);
+  const choice = await pickRecipient(choices, {
+    title: 'Ask for session access',
+    intro: 'Ask this teammate to share their sessions with you. They choose which ones.',
+  });
+  if (!choice) return;
+  const res = await pairingRelayClient.send([choice.ref], buildRoomAccessRequestItem(), {
+    minReceiverVersion: ROOM_ACCESS_REQUEST_MIN_VERSION,
+  });
+  if (res.fail === 0) showToast(`Asked ${choice.label} for access ✓`);
+  else showToast(`Couldn't reach ${choice.label}`);
+}
+
+/** Host side of an access request: pick which hosted sessions to share
+ *  with `senderCode`, then send each as a normal invite. Resolves true
+ *  when the request was dealt with (invites sent) so the Receive pill
+ *  clears it; false on cancel so it stays for later. Only sessions this
+ *  user HOSTS are offered — a participant can't hand out someone else's. */
+export async function answerAccessRequest(senderCode: string, senderLabel: string): Promise<boolean> {
+  if (!senderCode) {
+    showToast("That request has no return address, so it can't be answered");
+    return false;
+  }
+  const hosted = [...sessions.values()].filter((s) => s.session.role === 'host');
+  const picked = await pickSessionsToShare(
+    senderLabel,
+    hosted.map((s) => ({ key: s.shareCode, title: sessionDocTitle(s.ownerUid) })),
+  );
+  if (!picked) return false;
+  for (const s of hosted) {
+    if (!picked.includes(s.shareCode)) continue;
+    await sendInviteTo({ codes: [senderCode], label: senderLabel }, s.shareCode, s.ownerUid);
+  }
+  return true;
 }
 
 /** Join with a code in hand — the prompt flow above and the Receive

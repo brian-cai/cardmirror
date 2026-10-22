@@ -215,6 +215,7 @@ import {
   collabPluginsFor,
   setCollabInviteJoiner,
   setCollabInviter,
+  setCollabAccessResponder,
   collabCopresenceFor,
   collabCloseKeepResumable,
   collabEndOrLeaveSession,
@@ -1462,6 +1463,9 @@ setCollabInviteJoiner((code) =>
   loadCollabUi().then((m) =>
     m.joinSessionWithCode(multiDocActive ? makeMultiPaneSessionDeps() : collabDeps, code),
   ),
+);
+setCollabAccessResponder((code, label) =>
+  loadCollabUi().then((m) => m.answerAccessRequest(code, label)),
 );
 setCollabInviter((target) => {
   void loadCollabUi().then((m) => m.inviteTargetFlow(collabDeps, target));

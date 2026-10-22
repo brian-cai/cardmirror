@@ -41,7 +41,10 @@ export interface RejoinCandidate {
 export type RejoinPick =
   | { kind: 'rejoin'; shareCode: string; guestPass: string | null }
   /** What was typed or pasted into the box: a share code or an invite link. */
-  | { kind: 'code'; text: string };
+  | { kind: 'code'; text: string }
+  /** "Ask a teammate for access": send them a request; they choose
+   *  which of their sessions to share back. */
+  | { kind: 'request-access' };
 
 /** Saved sessions first-class (they hold local edits), then left rooms not
  *  already covered by a saved one; newest first; live rooms dropped. */
@@ -224,6 +227,15 @@ export function pickSessionToJoin(candidates: RejoinCandidate[]): Promise<Rejoin
     cancel.className = 'pmd-route-cancel';
     cancel.textContent = 'Cancel';
     cancel.addEventListener('click', () => finish(null));
+    // Always shown (sharing entry points are never hidden); the flow
+    // itself explains what's missing when no contacts are set up.
+    const ask = document.createElement('button');
+    ask.type = 'button';
+    ask.className = 'pmd-route-cancel pmd-rejoin-ask';
+    ask.textContent = 'Ask a teammate for access…';
+    ask.title = "Send a request; they choose which of their sessions to share with you";
+    ask.addEventListener('click', () => finish({ kind: 'request-access' }));
+    footer.appendChild(ask);
     footer.appendChild(cancel);
     dialog.appendChild(footer);
 

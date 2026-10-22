@@ -122,6 +122,22 @@ export function collabInviter(): ((target: CollabInviteTarget) => void) | null {
   return inviter;
 }
 
+/** Access-request seam: the Receive pill hands a teammate's "share your
+ *  sessions with me" request to the lazily-loaded collab module, which
+ *  lets the host pick sessions to invite them to. Resolves true when the
+ *  request was answered (the pill then clears the row). */
+let accessResponder: ((senderCode: string, senderLabel: string) => Promise<boolean>) | null = null;
+
+export function setCollabAccessResponder(
+  fn: ((senderCode: string, senderLabel: string) => Promise<boolean>) | null,
+): void {
+  accessResponder = fn;
+}
+
+export function collabAccessResponder(): typeof accessResponder {
+  return accessResponder;
+}
+
 /** Start-session seam: the Send pill's click mode triggers the same
  *  flow as the Start Collaboration Session command on the current doc.
  *  Null while the collab gate is closed. */

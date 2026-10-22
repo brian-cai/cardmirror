@@ -61,7 +61,13 @@ export function listRecipientChoices(
 /** Modal list of contacts and groups (the Select Speech Doc dialog's
  *  look, via the shared list-pick classes). Resolves to the chosen row,
  *  or null on Escape / overlay click / close. */
-export function pickRecipient(choices: RecipientChoice[]): Promise<RecipientChoice | null> {
+export function pickRecipient(
+  choices: RecipientChoice[],
+  wording: { title: string; intro: string } = {
+    title: 'Send to Recipient',
+    intro: 'Send the current card (or selection) to:',
+  },
+): Promise<RecipientChoice | null> {
   return new Promise((resolve) => {
     const restoreFocus = captureFocusForDialog();
     const token = pushOverlay();
@@ -88,7 +94,7 @@ export function pickRecipient(choices: RecipientChoice[]): Promise<RecipientChoi
     const header = document.createElement('header');
     header.className = 'pmd-list-pick-header';
     const title = document.createElement('h2');
-    title.textContent = 'Send to Recipient';
+    title.textContent = wording.title;
     header.appendChild(title);
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
@@ -101,7 +107,7 @@ export function pickRecipient(choices: RecipientChoice[]): Promise<RecipientChoi
 
     const intro = document.createElement('p');
     intro.className = 'pmd-list-pick-intro';
-    intro.textContent = 'Send the current card (or selection) to:';
+    intro.textContent = wording.intro;
     dialog.appendChild(intro);
 
     // Type-to-filter when the list is long enough to need it.
@@ -173,7 +179,7 @@ export function pickRecipient(choices: RecipientChoice[]): Promise<RecipientChoi
       return false;
     });
     document.body.appendChild(overlay);
-    armDialogFocus(dialog, 'dialog', 'Send to Recipient');
+    armDialogFocus(dialog, 'dialog', wording.title);
     (filter.isConnected ? filter : rows[0]?.el)?.focus();
   });
 }

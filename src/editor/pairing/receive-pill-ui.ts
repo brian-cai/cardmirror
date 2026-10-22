@@ -25,9 +25,10 @@ import {
 import { insertReceivedItem, RECEIVE_NEEDS_DOC_MESSAGE } from './inbox-insert.js';
 import { showToast } from '../toast.js';
 import { parseRoomInvite } from './room-invite.js';
+import { isRoomAccessRequest } from './room-access.js';
 import { collabEnabled } from '../collab/collab-gate.js';
 import { collabSettingsAvailable, collabSettingsButton } from './collab-settings-button.js';
-import { collabInviteJoiner, collabSessionJoinPrompt } from '../collab/collab-hooks.js';
+import { collabAccessResponder, collabInviteJoiner, collabSessionJoinPrompt } from '../collab/collab-hooks.js';
 import { deletePrefetch } from '../collab/collab-store.js';
 import { checkedSliceFromJSON } from '../../schema/slice-check.js';
 
@@ -306,6 +307,7 @@ export class ReceivePillController {
   private renderRow(item: InboxItem): HTMLLIElement {
     const invite = parseRoomInvite(item);
     if (invite) return this.renderInviteRow(item, invite);
+    if (isRoomAccessRequest(item)) return this.renderAccessRequestRow(item);
     const row = document.createElement('li');
     row.className = 'pmd-receive-row';
     if (!item.read) row.classList.add('pmd-receive-row-unread');
@@ -376,6 +378,61 @@ export class ReceivePillController {
       e.preventDefault();
     });
 
+    return row;
+  }
+
+  /** A teammate asking for access to your sessions. Nothing is shared
+   *  unless you pick sessions; Remove (✕) declines without telling them. */
+  private renderAccessRequestRow(item: InboxItem): HTMLLIElement {
+    const row = document.createElement('li');
+    row.className = 'pmd-receive-row pmd-receive-row-invite';
+    if (!item.read) row.classList.add('pmd-receive-row-unread');
+    const badge = document.createElement('span');
+    badge.className = 'pmd-dropzone-row-type pmd-dropzone-row-type-generic';
+    badge.textContent = SESSION_BADGE_LABEL;
+    row.appendChild(badge);
+
+    const main = document.createElement('span');
+    main.className = 'pmd-receive-row-main';
+    const sender = resolveSender(item);
+    const label = document.createElement('span');
+    label.className = 'pmd-receive-row-label';
+    label.textContent = `${sender} is asking to join your sessions`;
+    label.title = label.textContent;
+    main.appendChild(label);
+    const meta = document.createElement('span');
+    meta.className = 'pmd-receive-row-meta';
+    meta.textContent = relTime(item.receivedAt);
+    main.appendChild(meta);
+    row.appendChild(main);
+
+    const responder = collabEnabled() ? collabAccessResponder() : null;
+    if (responder) {
+      const review = document.createElement('button');
+      review.type = 'button';
+      review.className = 'pmd-receive-row-join';
+      review.textContent = 'Choose…';
+      review.title = 'Choose which of your sessions to share';
+      review.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void responder(item.senderCode, sender).then((answered) => {
+          if (answered) void inboxStore.remove(item.id);
+        });
+      });
+      row.appendChild(review);
+    }
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'pmd-dropzone-row-delete';
+    del.title = 'Decline';
+    del.setAttribute('aria-label', 'Decline');
+    setIcon(del, 'close');
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void inboxStore.remove(item.id);
+    });
+    row.appendChild(del);
     return row;
   }
 
