@@ -834,7 +834,7 @@ class SettingsModal {
           panel.appendChild(buildExternalAppsEditor());
         }
         moveRowToEnd('flowHostOnLaunch');
-        void import('./plugins-settings-ui.js').then((m) => m.renderPluginsPanel(section));
+        void import('./plugins-settings-ui.js').then((m) => m.renderPluginsPanel(section)).catch(() => {}); // closed before it loaded
       }
       this.dialog.appendChild(panel);
       panels[id] = panel;
@@ -862,9 +862,9 @@ class SettingsModal {
       // Relay info v1: opening Settings → Collaboration fetches fresh
       // relay info (a no-op without a custom relay; folded when repeated).
       if (this.activeCategory === 'pairing' && panels['pairing'] && settings.get('pairingRelayUrl').trim()) {
-        void import('./collab/relay-info-ui.js').then((m) => m.refreshRelayInfoNow(true));
+        void import('./collab/relay-info-ui.js').then((m) => m.refreshRelayInfoNow(true)).catch(() => {});
         // Team directory v1: pick up new teammates (If-None-Match; folded).
-        void import('./collab/team-directory-ui.js').then((m) => m.refreshTeamDirectoryNow(true));
+        void import('./collab/team-directory-ui.js').then((m) => m.refreshTeamDirectoryNow(true)).catch(() => {});
       }
       // If the newly-active tab is clipped by the scroll viewport
       // (clicked at the edge of view, or activated programmatically
@@ -2166,7 +2166,7 @@ function buildSavedRelaysSlot(): HTMLElement {
   slot.dataset['searchAliases'] = 'saved relays switch relay profiles custom relay coach team relay reconnect';
   void import('./collab/relay-profiles-ui.js').then((m) => {
     slot.appendChild(m.buildSavedRelaysSection((fn) => registerRowCleanup(slot, fn)));
-  });
+  }).catch(() => {});
   return slot;
 }
 
@@ -2176,9 +2176,13 @@ function buildSuggestedGroupsSlot(): HTMLElement {
   slot.className = 'pmd-suggested-groups-slot';
   slot.dataset['anchor'] = 'suggested-groups';
   slot.dataset['searchAliases'] = 'suggested groups team groups teammates';
-  void import('./collab/team-directory-ui.js').then((m) => {
-    slot.appendChild(m.buildSuggestedGroupsSection((fn) => registerRowCleanup(slot, fn)));
-  });
+  // A dialog closed before the chunk arrives (or a test torn down) leaves
+  // nothing to fill: swallow the late load instead of an unhandled error.
+  void import('./collab/team-directory-ui.js')
+    .then((m) => {
+      if (slot.isConnected) slot.appendChild(m.buildSuggestedGroupsSection((fn) => registerRowCleanup(slot, fn)));
+    })
+    .catch(() => {});
   return slot;
 }
 
@@ -2194,7 +2198,7 @@ function buildRelayInfoSlot(): HTMLElement {
     loaded = true;
     void import('./collab/relay-info-ui.js').then((m) => {
       slot.appendChild(m.buildRelayInfoSection((fn) => registerRowCleanup(slot, fn)));
-    });
+    }).catch(() => {});
   };
   load();
   if (!loaded) {
