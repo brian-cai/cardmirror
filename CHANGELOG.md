@@ -5,7 +5,7 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
-## 1.15.30 — 2026-10-23
+## 1.15.31 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
@@ -29,6 +29,10 @@ github.com/brian-cai/cardmirror.
 
 ### Changed
 
+- **Collaboration settings:** your display name comes first,
+  collaboration is on by default (nothing connects until you set up a
+  relay), "About this relay" is two short lines, and keeping a team file
+  updated automatically moved under Team file.
 - **A cleaner status bar.** Switching relays moved to a globe button in
   the Send and Receive popups, and the team-list offer is a short line
   at the top of the Send popup (with a dot on Send while it waits).
