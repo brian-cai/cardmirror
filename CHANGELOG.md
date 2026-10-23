@@ -5,7 +5,7 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
-## 1.15.31 — 2026-10-23
+## 1.15.32 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
