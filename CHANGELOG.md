@@ -5,6 +5,26 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.33 — 2026-10-23
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Join a session from the home screen.** The second tile is now "Join a
+  session" (New speech document is still in the ribbon and the command
+  palette).
+
+### Fixed
+
+- **You show up in sessions even with "Show partner cursors" off.** That
+  setting hid you from everyone else too; now it only hides others'
+  cursors and doesn't share yours, and people still see you're there.
+- **Join requests are easy to see.** "Alex wants to join" is a card above
+  the status bar instead of a small segment in it, with a desktop
+  notification when CardMirror isn't in front.
+
 ## 1.15.32 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
