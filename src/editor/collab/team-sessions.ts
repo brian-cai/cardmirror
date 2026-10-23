@@ -41,6 +41,9 @@ export interface ListingPayload {
   mode: ListingMode;
   /** Only when mode is open. */
   shareCode?: string;
+  /** Who's in it now (display names), refreshed by the host as people
+   *  come and go. Optional: older clients neither send nor read it. */
+  people?: string[];
   client: string;
 }
 
@@ -77,6 +80,8 @@ export interface TeamSessionEntry {
   shareCode: string | null;
   participants: number;
   lastActivity: number;
+  /** Who's in it, as the host last listed it ([] = not said). */
+  people: string[];
 }
 
 /** One decrypted pending join request. */
@@ -93,12 +98,16 @@ const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim
 
 // --- payloads ---------------------------------------------------------
 
+export const LISTING_MAX_PEOPLE = 20;
+
 export function buildListingPayload(o: {
   name: string;
   startedBy: string;
   mode: ListingMode;
   shareCode: string;
+  people?: readonly string[];
 }): ListingPayload {
+  const people = (o.people ?? []).map((n) => n.trim().slice(0, 60)).filter(Boolean).slice(0, LISTING_MAX_PEOPLE);
   return {
     v: 1,
     name: o.name.trim().slice(0, 200) || 'Collaboration session',
@@ -107,6 +116,7 @@ export function buildListingPayload(o: {
     // The share code IS the capability to join: only an open listing
     // carries it.
     ...(o.mode === 'open' ? { shareCode: o.shareCode } : {}),
+    ...(people.length ? { people } : {}),
     client: TEAM_SESSIONS_CLIENT,
   };
 }
@@ -125,6 +135,9 @@ export function parseListingPayload(raw: unknown): Omit<ListingPayload, 'client'
     startedBy: str(r['startedBy'], 80) || 'A teammate',
     mode,
     ...(mode === 'open' ? { shareCode } : {}),
+    ...(Array.isArray(r['people'])
+      ? { people: r['people'].map((n) => str(n, 60)).filter(Boolean).slice(0, LISTING_MAX_PEOPLE) }
+      : {}),
   };
 }
 
@@ -273,7 +286,7 @@ function forgetListed(roomId: string): void {
  *  never throws. A room the relay refuses (403/404/410) is forgotten. */
 export async function listRoom(
   ctx: TeamContext,
-  room: { roomId: string; name: string; startedBy: string; mode: ListingMode; shareCode: string },
+  room: { roomId: string; name: string; startedBy: string; mode: ListingMode; shareCode: string; people?: readonly string[] },
 ): Promise<boolean> {
   try {
     const support = await teamSessionsSupport(ctx.client, ctx.baseUrl);
@@ -328,6 +341,7 @@ export async function loadTeamSessions(ctx: TeamContext): Promise<TeamSessionEnt
         shareCode: listing.shareCode ?? null,
         participants: s.participants,
         lastActivity: s.lastActivity,
+        people: listing.people ?? [],
       });
     }
     return out;

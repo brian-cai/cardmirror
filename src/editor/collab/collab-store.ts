@@ -60,6 +60,8 @@ export interface PersistedSessionRecord {
    *  persistence manager diffs from here on the next write. */
   persistedVersion: Uint8Array;
   docTitle: string;
+  /** The relay the room lives on (contact-relays.ts tag); absent on older records. */
+  relay?: string;
   /** Persistent docId of the doc holding this session in THIS window,
    *  when known (stamped once the doc is saved). Lets the open-from-disk
    *  path detect "this file has a session" and offer rejoin-or-leave
@@ -81,6 +83,8 @@ export interface RecentRoomRecord {
   guestPass?: string | null;
   role: 'host' | 'participant';
   docTitle: string;
+  /** The relay the room lives on (contact-relays.ts tag); absent on older records. */
+  relay?: string;
   /** Last time this window was in the room (install, and again on
    *  teardown). */
   lastActiveAt: number;
@@ -232,8 +236,19 @@ async function all<T>(store: string): Promise<T[]> {
 
 // ── Session records ──────────────────────────────────────────────────
 
+/** The relay in use (loaded lazily: this module has no other dependencies). */
+async function relayNow(): Promise<string | undefined> {
+  try {
+    return (await import('../pairing/contact-relays.js')).currentRelayTag();
+  } catch {
+    return undefined;
+  }
+}
+
 export async function saveSessionRecord(record: PersistedSessionRecord): Promise<void> {
-  await put(SESSIONS, record);
+  // Which relay the room lives on (a session is only reachable there):
+  // the one in use while it's live, kept once known.
+  await put(SESSIONS, { ...record, relay: record.relay ?? (await relayNow()) });
   notify();
 }
 
@@ -276,6 +291,7 @@ export async function saveRecentRoom(record: RecentRoomRecord): Promise<void> {
     ...record,
     docTitle: record.docTitle || prev?.docTitle || '',
     guestPass: record.guestPass ?? prev?.guestPass ?? null,
+    relay: record.relay ?? prev?.relay ?? (await relayNow()),
   };
   if (record.leftAt === undefined) delete next.leftAt;
   await put(RECENT, next);

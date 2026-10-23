@@ -17256,3 +17256,8 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
 .pmd-send-pill.pmd-send-has-offer .pmd-send-bar { position: relative; }
 .pmd-send-pill.pmd-send-has-offer .pmd-send-bar::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px;
   border-radius: 50%; background: var(--pmd-accent, #2563eb); }
+
+/* Join or rejoin a session: roomier, and the lists scroll inside it. */
+.pmd-rejoin-dialog { width: min(42rem, 94vw); max-width: none; }
+.pmd-rejoin-dialog .pmd-rejoin-list { max-height: min(22rem, 40vh); overflow-y: auto; }
+.pmd-rejoin-row[hidden] { display: none; }

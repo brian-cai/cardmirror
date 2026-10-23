@@ -102,7 +102,7 @@ import { toggleSessionPeople } from './session-people.js';
 import { reportWindowShared } from './window-shared-report.js';
 import { compareAppVersions } from '../relay-protocol.js';
 import { appVersion } from '../install-info.js';
-import { partnersHere } from '../pairing/contact-relays.js';
+import { currentRelayTag, partnersHere, relayLabelForTag, relayProfileIdForTag } from '../pairing/contact-relays.js';
 
 export interface CollabUiDeps {
   getView(): EditorView | null;
@@ -1245,6 +1245,16 @@ export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
   const pick = await pickSessionToJoin(candidates, teamJoinSource());
   if (!pick) return;
   if (pick.kind === 'rejoin') {
+    // A session lives on one relay: switch to it first when it's elsewhere.
+    if (pick.relay && pick.relay !== currentRelayTag()) {
+      const target = relayProfileIdForTag(pick.relay);
+      if (!target) {
+        showToast(`That session is on ${relayLabelForTag(pick.relay)}, which isn’t saved here. Connect to it in Settings → Collaboration first.`);
+        return;
+      }
+      const { switchRelayNow } = await import('./relay-profiles-ui.js');
+      if ((await switchRelayNow(target)) !== 'switched') return;
+    }
     await joinSessionWithCode(deps, pick.shareCode, { guestPass: pick.guestPass });
     return;
   }
@@ -1800,11 +1810,11 @@ function listStartedSession(roomId: string, name: string, shareCode: string): vo
 
 /** Re-PUT a listing this machine made (a rename, a host resume), keeping
  *  the mode it was listed with. No-op for an unlisted room. */
-function relistSession(roomId: string, name: string, shareCode: string): void {
+function relistSession(roomId: string, name: string, shareCode: string, people?: string[]): void {
   const mode = listedMode(roomId);
   const ctx = mode ? teamContext() : null;
   if (!ctx || !mode) return;
-  void listRoom(ctx, { roomId, name, startedBy: settings.get('pairingDisplayName'), mode, shareCode });
+  void listRoom(ctx, { roomId, name, startedBy: settings.get('pairingDisplayName'), mode, shareCode, ...(people ? { people } : {}) });
 }
 
 /** Watch a live session's join requests and drive the approval prompt.
@@ -1843,8 +1853,22 @@ function startTeamWatch(session: CollabSession, shareCode: string, ownerUid: str
     ownCode: ownPairingCode,
     onRequests: (reqs) => setJoinRequests(roomId, reqs, handlers),
   });
+  // The host keeps its listing's "who's in it" current, so teammates see
+  // who they'd be joining. Only on a change, checked every 20 s.
+  let listedPeople = '';
+  const peopleTimer =
+    session.role === 'host'
+      ? setInterval(() => {
+          const names = (sessionFor(ownerUid)?.cursors.presence() ?? []).map((p) => p.name);
+          const sig = names.join('\n');
+          if (sig === listedPeople || !listedMode(roomId)) return;
+          listedPeople = sig;
+          relistSession(roomId, sessionLabel(ownerUid, session), shareCode, names);
+        }, 20_000)
+      : null;
   return () => {
     watcher.stop();
+    if (peopleTimer) clearInterval(peopleTimer);
     clearJoinRequests(roomId);
   };
 }

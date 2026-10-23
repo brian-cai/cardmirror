@@ -32,6 +32,7 @@ import {
   type PersistedSessionRecord,
   type RecentRoomRecord,
 } from './collab-store.js';
+import { currentRelayTag, relayLabelForTag } from '../pairing/contact-relays.js';
 
 export interface RejoinCandidate {
   roomId: string;
@@ -42,6 +43,8 @@ export interface RejoinCandidate {
   /** 'saved': a local copy to resume; 'left': a remembered room to rejoin. */
   kind: 'saved' | 'left';
   at: number;
+  /** The relay the room lives on (contact-relays.ts tag), when recorded. */
+  relay?: string;
 }
 
 /** A team session row for the dialog (team-sessions.ts TeamSessionEntry). */
@@ -53,6 +56,8 @@ export interface TeamSessionRow {
   lastActivity: number;
   mode: 'open' | 'request';
   shareCode: string | null;
+  /** Who's in it (the host's listing), when it says. */
+  people?: string[];
 }
 
 /** Where the Team sessions section comes from. `load` resolves null when
@@ -67,14 +72,24 @@ export interface TeamSessionsSource {
 
 export const TEAM_REQUEST_SENT_MESSAGE = 'Request sent; you\u2019ll get an invite when someone approves';
 
+/** "Ana, Ben and 2 others", or the head count when the listing names nobody. */
+export function whoIsIn(row: Pick<TeamSessionRow, 'participants' | 'people'>): string {
+  const names = row.people ?? [];
+  const n = Math.max(row.participants, names.length);
+  if (n === 0) return 'nobody in it now';
+  if (!names.length) return n === 1 ? '1 person in it' : `${n} people in it`;
+  const shown = names.slice(0, 3);
+  const rest = n - shown.length;
+  return rest > 0 ? `${shown.join(', ')} and ${rest} other${rest === 1 ? '' : 's'}` : shown.join(', ').replace(/, ([^,]*)$/, ' and $1');
+}
+
 function teamMeta(row: TeamSessionRow): string {
-  const who = row.participants === 1 ? '1 person' : `${row.participants} people`;
   const at = row.lastActivity > 0 ? ` \u00b7 active ${relativeTime(row.lastActivity)}` : '';
-  return `${row.startedBy} \u00b7 ${who}${at}`;
+  return `${whoIsIn(row)} \u00b7 started by ${row.startedBy}${at}`;
 }
 
 export type RejoinPick =
-  | { kind: 'rejoin'; shareCode: string; guestPass: string | null }
+  | { kind: 'rejoin'; shareCode: string; guestPass: string | null; relay?: string }
   /** What was typed or pasted into the box: a share code or an invite link. */
   | { kind: 'code'; text: string };
 
@@ -99,6 +114,7 @@ export function buildRejoinCandidates(
       title: r.docTitle || recent?.docTitle || '',
       kind: 'saved',
       at: r.updatedAt,
+      ...((r.relay ?? recent?.relay) ? { relay: r.relay ?? recent?.relay } : {}),
     });
   }
   for (const r of recents) {
@@ -111,6 +127,7 @@ export function buildRejoinCandidates(
       title: r.docTitle,
       kind: 'left',
       at: r.leftAt ?? r.lastActiveAt,
+      ...(r.relay ? { relay: r.relay } : {}),
     });
   }
   return out.sort((a, b) => b.at - a.at);
@@ -123,8 +140,14 @@ export async function loadRejoinCandidates(isLive: (roomId: string) => boolean):
 
 function describe(c: RejoinCandidate): string {
   // "last here", not "left": a crash records no leave time.
-  return c.kind === 'saved' ? `saved ${relativeTime(c.at)}` : `last here ${relativeTime(c.at)}`;
+  const when = c.kind === 'saved' ? `saved ${relativeTime(c.at)}` : `last here ${relativeTime(c.at)}`;
+  if (!c.relay) return when;
+  const here = c.relay === currentRelayTag();
+  return `${when} \u00b7 on ${relayLabelForTag(c.relay)}${here ? '' : ' (switches relay)'}`;
 }
+
+/** Typed text that is a code or link, not a search. */
+const looksLikeCode = (t: string): boolean => /^cmshare|#|^https?:/i.test(t.trim());
 
 /** The dialog. Resolves with a session to rejoin, the text entered in the
  *  box, or null on cancel. With no candidates it is just the box. */
@@ -165,7 +188,7 @@ export function pickSessionToJoin(
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'pmd-text-prompt-input pmd-rejoin-input';
-    input.placeholder = 'Paste a share code or invite link';
+    input.placeholder = 'Paste a share code or invite link, or type to search';
     input.setAttribute('aria-label', 'Share code or invite link');
     input.autocomplete = 'off';
     input.spellcheck = false;
@@ -180,6 +203,15 @@ export function pickSessionToJoin(
       else input.focus();
     };
     join.addEventListener('click', submit);
+    // Typing (not a code) filters every list below by name, people and relay.
+    const applyFilter = (): void => {
+      const t = input.value.trim().toLowerCase();
+      const q = t && !looksLikeCode(t) ? t : '';
+      for (const el of dialog.querySelectorAll<HTMLElement>('.pmd-rejoin-row')) {
+        el.hidden = q !== '' && !(el.dataset['search'] ?? '').includes(q);
+      }
+    };
+    input.addEventListener('input', applyFilter);
     entry.appendChild(join);
     dialog.appendChild(entry);
 
@@ -223,8 +255,9 @@ export function pickSessionToJoin(
         meta.textContent = describe(c);
         row.appendChild(meta);
         row.addEventListener('click', () =>
-          finish({ kind: 'rejoin', shareCode: c.shareCode, guestPass: c.guestPass }),
+          finish({ kind: 'rejoin', shareCode: c.shareCode, guestPass: c.guestPass, ...(c.relay ? { relay: c.relay } : {}) }),
         );
+        wrap.dataset['search'] = `${c.title} ${describe(c)}`.toLowerCase();
         wrap.appendChild(row);
 
         // Forgetting a LEFT room only drops its remembered credentials.
@@ -321,6 +354,7 @@ export function pickSessionToJoin(
             });
           }
           wrap.appendChild(btn);
+          wrap.dataset['search'] = `${r.name} ${teamMeta(r)}`.toLowerCase();
           teamList.appendChild(wrap);
         }
       };
@@ -329,6 +363,7 @@ export function pickSessionToJoin(
           (rows) => {
             if (settled || !rows) return;
             renderTeam(rows);
+            applyFilter();
           },
           () => {},
         );

@@ -94,3 +94,16 @@ export function tagImported(
     return { ...p, relays: [...prev.relays, tag].slice(-MAX_CONTACT_RELAYS) };
   });
 }
+
+/** A relay tag as people know it: the saved relay's name, else its address. */
+export function relayLabelForTag(tag: string): string {
+  if (tag === BUILTIN_RELAY_TAG) return 'Built-in relay';
+  const p = settings.get('relayProfiles').find((r) => relayTag(r.url) === tag);
+  return p?.label || tag.replace(/^https?:\/\//, '');
+}
+
+/** The saved relay (its id) a tag names: 'builtin' for the built-in one, null if not saved. */
+export function relayProfileIdForTag(tag: string): string | null {
+  if (tag === BUILTIN_RELAY_TAG) return BUILTIN_RELAY_TAG;
+  return settings.get('relayProfiles').find((r) => relayTag(r.url) === tag)?.id ?? null;
+}

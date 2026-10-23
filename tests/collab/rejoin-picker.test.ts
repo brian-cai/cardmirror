@@ -8,8 +8,10 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   buildRejoinCandidates,
   pickSessionToJoin,
+  whoIsIn,
   type RejoinCandidate,
 } from '../../src/editor/collab/rejoin-picker.js';
+import { settings } from '../../src/editor/settings.js';
 import {
   saveRecentRoom,
   loadRecentRoom,
@@ -138,5 +140,53 @@ describe('pickSessionToJoin', () => {
     const pending = pickSessionToJoin([cand('a', 'left')]);
     (document.querySelector('.pmd-route-cancel') as HTMLButtonElement).click();
     expect(await pending).toBeNull();
+  });
+});
+
+describe('finding the right session (2026-10-22)', () => {
+  const cand = (roomId: string, title: string, relay?: string): RejoinCandidate => ({
+    roomId,
+    shareCode: `code-${roomId}`,
+    guestPass: null,
+    role: 'participant',
+    title,
+    kind: 'left',
+    at: Date.now(),
+    ...(relay ? { relay } : {}),
+  });
+  const visible = () =>
+    [...document.querySelectorAll<HTMLElement>('.pmd-rejoin-row')].filter((r) => !r.hidden).map((r) => r.querySelector('.pmd-home-recent-name')!.textContent);
+  const box = () => document.querySelector<HTMLInputElement>('.pmd-rejoin-input')!;
+  const type = (t: string) => {
+    box().value = t;
+    box().dispatchEvent(new Event('input'));
+  };
+
+  it('typing filters the sessions; a pasted code does not', async () => {
+    const pending = pickSessionToJoin([cand('a', 'Aff blocks'), cand('b', 'Neg K file')]);
+    type('neg');
+    expect(visible()).toEqual(['Neg K file']);
+    type('cmshare2.room.key.1');
+    expect(visible()).toEqual(['Aff blocks', 'Neg K file']);
+    document.querySelector<HTMLButtonElement>('.pmd-route-cancel')!.click();
+    expect(await pending).toBeNull();
+  });
+
+  it('says which relay a session is on, and the pick carries it', async () => {
+    settings.set('pairingRelayUrl', '');
+    const pending = pickSessionToJoin([cand('a', 'Aff blocks', 'https://relay.example/r/college')]);
+    const meta = document.querySelector('.pmd-rejoin-row .pmd-home-recent-path')!.textContent!;
+    expect(meta).toContain('on relay.example/r/college (switches relay)');
+    type('college');
+    expect(visible()).toEqual(['Aff blocks']);
+    document.querySelector<HTMLButtonElement>('.pmd-rejoin-btn')!.click();
+    expect(await pending).toEqual({ kind: 'rejoin', shareCode: 'code-a', guestPass: null, relay: 'https://relay.example/r/college' });
+  });
+
+  it('who is in a team session', () => {
+    expect(whoIsIn({ participants: 0, people: [] })).toBe('nobody in it now');
+    expect(whoIsIn({ participants: 3 })).toBe('3 people in it');
+    expect(whoIsIn({ participants: 2, people: ['Ana', 'Ben'] })).toBe('Ana and Ben');
+    expect(whoIsIn({ participants: 5, people: ['Ana', 'Ben', 'Cy', 'Di'] })).toBe('Ana, Ben, Cy and 2 others');
   });
 });

@@ -252,8 +252,12 @@ describe('payloads', () => {
     expect(listedMode('r1')).toBe('request');
     const rows = await loadTeamSessions(ctx);
     expect(rows).toEqual([
-      { roomId: 'r1', name: 'Neg', startedBy: 'Sam', mode: 'request', shareCode: null, participants: 3, lastActivity: 2 },
+      { roomId: 'r1', name: 'Neg', startedBy: 'Sam', mode: 'request', shareCode: null, participants: 3, lastActivity: 2, people: [] },
     ]);
+    // The host can say who's in it (sealed like the rest); older listings just don't.
+    await listRoom(ctx, { roomId: 'r1', name: 'Neg', startedBy: 'Sam', mode: 'request', shareCode: 'cmshare1.r1.k', people: ['Sam', 'Ana'] });
+    expect(JSON.stringify(relay.calls.at(-1)!.body)).not.toContain('Ana');
+    expect((await loadTeamSessions(ctx))?.[0]?.people).toEqual(['Sam', 'Ana']);
   });
 });
 
@@ -523,7 +527,7 @@ describe('Join dialog team section', () => {
     await vi.waitFor(() => expect(document.querySelectorAll('.pmd-rejoin-team-btn').length).toBe(2));
     const text = document.querySelector('.pmd-rejoin-team')!.textContent!;
     expect(text).toContain('Open one');
-    expect(text).toContain('Sam · 2 people');
+    expect(text).toContain('2 people in it · started by Sam');
     const [join, ask] = [...document.querySelectorAll<HTMLButtonElement>('.pmd-rejoin-team-btn')];
     expect(ask!.textContent).toBe('Request to join');
     join!.click();
