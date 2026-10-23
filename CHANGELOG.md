@@ -5,6 +5,18 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.28 — 2026-10-22
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Fixed
+
+- **A new token for a saved relay updates it.** After a coach rotates the
+  token, pasting the new one updates that saved relay (its name, team key
+  and team list sync carry on) instead of adding a second entry with the
+  old, dead token.
+
 ## 1.15.27 — 2026-10-22
 
 BCai's (@brian-cai) build of CardMirror, updating from
