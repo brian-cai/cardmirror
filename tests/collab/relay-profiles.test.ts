@@ -116,17 +116,26 @@ describe('saving a relay on connect', () => {
     expect(activeProfile()?.id).toBe(p.id);
   });
 
-  it('matches by URL + token fingerprint: same pair updates, another token is another relay', () => {
+  it('matches by URL + token fingerprint: same pair updates; a new token for the same address updates it too', () => {
     const a = saved(HS, KEY_A, 1);
     const again = saved({ url: HS.url + '/', token: HS.token }, KEY_A, 2);
     expect(again.id).toBe(a.id);
     expect(settings.get('relayProfiles')).toHaveLength(1);
     expect(settings.get('relayProfiles')[0]!.lastUsed).toBe(2);
-    const other = saved({ url: HS.url, token: 'another' }, '', 3);
-    expect(other.id).not.toBe(a.id);
-    expect(settings.get('relayProfiles')).toHaveLength(2);
     expect(profileKey(a)).not.toContain(HS.token);
     expect(findProfile(settings.get('relayProfiles'), HS.url, HS.token)?.id).toBe(a.id);
+    // Rotated token: the same saved relay, with the new token and the team key kept.
+    renameProfile(a.id, 'Lincoln');
+    settings.set('teamDirectoryRelays', [{ key: directoryKey(HS.url, HS.token), imported: true, dismissedRevision: -1, revision: 4, hasKey: false }]);
+    const rotated = saved({ url: HS.url, token: 'another' }, KEY_A, 3);
+    expect(rotated.id).toBe(a.id);
+    expect(settings.get('relayProfiles')).toEqual([
+      { id: a.id, label: 'Lincoln', labelCustom: true, url: HS.url, token: 'another', teamKey: KEY_A, lastUsed: 3 },
+    ]);
+    expect(settings.get('teamDirectoryRelays').map((d) => [d.key, d.imported])).toEqual([[directoryKey(HS.url, 'another'), true]]);
+    // Another address is another relay.
+    expect(saved(COLLEGE, '', 4).id).not.toBe(a.id);
+    expect(settings.get('relayProfiles')).toHaveLength(2);
   });
 
   it('only a relay the check accepts is saved (desktop check)', async () => {

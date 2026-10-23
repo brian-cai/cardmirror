@@ -106,7 +106,10 @@ export function rememberConnectedRelay(opts: { info?: RelayInfo | null; now?: nu
   const token = settings.get('pairingRelayToken');
   const now = opts.now ?? Date.now();
   const list = settings.get('relayProfiles');
-  const hit = findProfile(list, url, token);
+  // A new token for a saved address (the token was rotated, or a teammate
+  // sent the current one) updates that relay instead of saving a second
+  // one: an address is one team.
+  const hit = findProfile(list, url, token) ?? list.find((p) => normUrl(p.url) === url) ?? null;
   const label = (p: RelayProfile | null): string =>
     p?.labelCustom ? p.label : opts.info ? defaultRelayLabel(url, opts.info) : p?.label || defaultRelayLabel(url);
   const next: RelayProfile = {
@@ -120,6 +123,16 @@ export function rememberConnectedRelay(opts: { info?: RelayInfo | null; now?: nu
     lastUsed: now,
   };
   save(hit ? list.map((p) => (p.id === hit.id ? next : p)) : [...list, next]);
+  // Same team under the new token: its team directory state (imported,
+  // dismissed) moves along, so syncing carries on without a new offer.
+  if (hit && profileKey(hit) !== profileKey(next)) {
+    const from = profileKey(hit);
+    const to = profileKey(next);
+    const dirs = settings.get('teamDirectoryRelays');
+    if (dirs.some((d) => d.key === from) && !dirs.some((d) => d.key === to)) {
+      settings.set('teamDirectoryRelays', dirs.map((d) => (d.key === from ? { ...d, key: to } : d)));
+    }
+  }
   return next;
 }
 
