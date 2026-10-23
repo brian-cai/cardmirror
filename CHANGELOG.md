@@ -5,6 +5,26 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.36 — 2026-10-23
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Fixed
+
+- **Only you can clear your waiting cards.** On relays that support
+  it (the xtgg relay does), this computer proves it owns its send code,
+  and from then on nobody else with a token can delete cards waiting
+  for you or change your entry in the team list. Relays without it,
+  and the original CardMirror, work as before.
+- **A team that moves relays keeps one team key.** A key from a team
+  file now goes up to whichever relay your team uses, so new members
+  don't make a second key.
+- **Resuming an older session that isn't on this relay** now says so
+  instead of ending it.
+- Small cleanups: partners who leave a session no longer leave hidden
+  cursor elements behind.
+
 ## 1.15.35 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
