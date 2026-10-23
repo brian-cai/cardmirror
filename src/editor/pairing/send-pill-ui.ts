@@ -398,14 +398,7 @@ export class SendPillController {
     this.panel.innerHTML = '';
     this.targets.clear();
     this.recentRows.clear();
-    // The team-list offer's slot (team-directory-ui.ts fills it), at the
-    // far end from the search box.
-    const offer = document.createElement('div');
-    offer.id = 'team-directory-offer';
-    offer.className = 'pmd-send-offer';
-    offer.hidden = true;
-    this.panel.appendChild(offer);
-    void import('../collab/team-directory-ui.js').then((m) => m.renderOffer()).catch(() => {});
+
 
     // Click-open search (CSS hides it during a drag, when typing can't
     // happen anyway): filters the rows; Enter sends to the one nearest it. It sits
@@ -560,6 +553,14 @@ export class SendPillController {
       if (relay) actions.appendChild(relay);
       actions.appendChild(collabSettingsButton('pmd-send-action', () => this.collapse()));
     }
+    // The team-list line (team-directory-ui.ts fills it) sits right above
+    // the search box, where the pill opens: visible without scrolling up.
+    const offer = document.createElement('div');
+    offer.id = 'team-directory-offer';
+    offer.className = 'pmd-send-offer';
+    offer.hidden = true;
+    this.panel.appendChild(offer);
+    void import('../collab/team-directory-ui.js').then((m) => m.renderOffer()).catch(() => {});
     this.panel.appendChild(search);
     this.panel.appendChild(actions);
   }
