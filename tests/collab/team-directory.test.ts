@@ -147,7 +147,7 @@ const json = (body: unknown, status = 200): Response =>
 
 const key = directoryKey(BASE, TOKEN);
 let clock = 1_000_000;
-/** A refresh an hour after the last one (past the throttle). */
+/** A refresh past the throttle. */
 const later = () => (clock += TEAM_DIRECTORY_REFRESH_MS + 1);
 
 beforeEach(() => {
@@ -340,7 +340,7 @@ describe('offer and Not now', () => {
     expect(currentOffer()).toBeNull();
   });
 
-  it('fetches at most hourly unless forced', async () => {
+  it('fetches at most every 5 minutes unless forced', async () => {
     const relay = fakeRelay();
     await refreshTeamDirectory(relay.ctx, { now: clock });
     const n = relay.sent.length;
@@ -386,9 +386,10 @@ describe('import', () => {
     expect(put.path).toBe('/team-directory/me');
     expect(put.body).toEqual({ code: ME, name: 'Sam Lee' });
     expect(settings.get('pairingDisplayName')).toBe('Sam Lee');
+    // Ana was a contact before (on every relay); Ben is new, so he's tied to this relay.
     expect(settings.get('pairingPartners')).toEqual([
       { code: ANA, name: 'Ana (mine)' },
-      { code: BEN, name: 'Ben Wu' },
+      { code: BEN, name: 'Ben Wu', relays: [BASE] },
     ]);
     expect(settings.get('pairingGroups').map((g) => [g.label, g.memberCodes])).toEqual([['Varsity', [ANA, BEN]]]);
     expect(directoryState(key).imported).toBe(true);

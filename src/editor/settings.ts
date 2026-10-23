@@ -100,6 +100,10 @@ export interface PairingPartner {
    *  starred quick-send commands — hiding is about pill clutter, not
    *  reachability. */
   hidden?: boolean;
+  /** Relays this contact is on (pairing/contact-relays.ts): custom relay
+   *  URLs or 'builtin'. Absent = every relay, the original behaviour; the
+   *  original CardMirror ignores the field. */
+  relays?: string[];
 }
 
 /** A named set of partners (e.g. a coach's "Smith/Jones" partnership).
@@ -6518,7 +6522,7 @@ function clamp(n: number, lo: number, hi: number): number {
  *  yet is kept so the editor can hold a partner mid-add (you typed the
  *  nickname before pasting the code); downstream send/group logic ignores
  *  partners whose code is still empty. */
-function sanitizePairingPartners(raw: unknown): PairingPartner[] {
+export function sanitizePairingPartners(raw: unknown): PairingPartner[] {
   if (!Array.isArray(raw)) return [];
   const out: PairingPartner[] = [];
   const seen = new Set<string>();
@@ -6529,7 +6533,16 @@ function sanitizePairingPartners(raw: unknown): PairingPartner[] {
     if (!code && !name) continue;
     if (code && seen.has(code)) continue;
     if (code) seen.add(code);
-    out.push({ code, name, ...((p as PairingPartner).hidden === true ? { hidden: true } : {}) });
+    const rawRelays = (p as PairingPartner).relays;
+    const relays = Array.isArray(rawRelays)
+      ? [...new Set(rawRelays.filter((r): r is string => typeof r === 'string').map((r) => r.trim().slice(0, 500)).filter(Boolean))].slice(0, 20)
+      : [];
+    out.push({
+      code,
+      name,
+      ...((p as PairingPartner).hidden === true ? { hidden: true } : {}),
+      ...(relays.length ? { relays } : {}),
+    });
   }
   return out;
 }

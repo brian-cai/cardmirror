@@ -40,6 +40,7 @@ import { recentSenders } from './inbox-store.js';
 import { setIcon } from '../icons';
 import { byFrequency, groupKey, sendScores } from './send-frequency.js';
 import { sendViewTo } from './send-to-starred.js';
+import { newContact, partnersElsewhere, partnersHere } from './contact-relays.js';
 
 interface SendPillMountOptions {
   parent: HTMLElement;
@@ -427,7 +428,9 @@ export class SendPillController {
     // but remain reachable elsewhere: group sends still fan out to
     // them, and a hidden starred partner keeps its quick-send
     // shortcut — hiding is about pill clutter, not reachability.
-    const allPartners = settings.get('pairingPartners').filter((p) => p.code);
+    // Only the contacts on the relay cards go through now (contact-relays.ts).
+    const everyone = settings.get('pairingPartners').filter((p) => p.code);
+    const allPartners = partnersHere(everyone);
     // Most-sent-to LAST (send-frequency.ts): the pill opens upward from its
     // search box, so the people you send to most sit nearest it. Ties keep
     // the saved order.
@@ -448,6 +451,13 @@ export class SendPillController {
       hint.className = 'pmd-send-empty';
       hint.textContent = 'Add a recipient in Settings → Collaboration.';
       this.panel.appendChild(hint);
+    }
+    const elsewhere = partnersElsewhere(everyone);
+    if (elsewhere > 0) {
+      const note = document.createElement('div');
+      note.className = 'pmd-send-empty pmd-send-elsewhere';
+      note.textContent = `${elsewhere} contact${elsewhere === 1 ? ' is' : 's are'} on other relays. Switch relays to send to them.`;
+      this.panel.appendChild(note);
     }
 
     // People first, GROUPS LAST: the list reads upward from the search box,
@@ -485,7 +495,7 @@ export class SendPillController {
     for (const r of recentSenders()) {
       const code = normalizePairingCode(r.code);
       if (!code || blocked.has(code)) continue;
-      const known = allPartners.find((p) => normalizePairingCode(p.code) === code);
+      const known = everyone.find((p) => normalizePairingCode(p.code) === code);
       const label = known?.name?.trim() || (r.name || '').trim() || `…${code.slice(-6)}`;
       const row = this.targetRow(label, [r.code], label);
       row.classList.add('pmd-send-recent-row');
@@ -620,7 +630,7 @@ export class SendPillController {
     });
     if (nameFor == null) return;
     const name = nameFor.trim();
-    settings.set('pairingPartners', [...cur, { code, name }]);
+    settings.set('pairingPartners', [...cur, newContact(code, name)]);
     showToast(`Added ${name || `…${code.slice(-6)}`} to recipients`);
   }
 

@@ -102,6 +102,7 @@ import { toggleSessionPeople } from './session-people.js';
 import { reportWindowShared } from './window-shared-report.js';
 import { compareAppVersions } from '../relay-protocol.js';
 import { appVersion } from '../install-info.js';
+import { partnersHere } from '../pairing/contact-relays.js';
 
 export interface CollabUiDeps {
   getView(): EditorView | null;
@@ -1892,11 +1893,15 @@ export async function inviteStarredFlow(): Promise<void> {
   }
   const target = resolveStarredTarget(
     settings.get('pairingStarred'),
-    settings.get('pairingPartners'),
+    partnersHere(),
     settings.get('pairingGroups'),
   );
   if (!target) {
-    showToast('Star a partner or group in the Send pill first');
+    showToast(
+      settings.get('pairingStarred')
+        ? 'Your starred contact isn’t on this relay. Switch relays, or star someone here.'
+        : 'Star a partner or group in the Send pill first',
+    );
     return;
   }
   if (target.codes.length === 0) {

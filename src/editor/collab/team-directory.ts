@@ -22,7 +22,7 @@
  *    this install's own send code and display name — nothing else — and
  *    the team key only once the directory was imported.
  *  - Fetched on start, when Settings → Collaboration opens, and at most
- *    hourly, with If-None-Match on the last revision.
+ *    every 5 minutes, with If-None-Match on the last revision.
  *
  * Light module (no Loro, no DOM): the visible parts live in
  * team-directory-ui.ts.
@@ -36,9 +36,10 @@ import { isTeamKey, mergeTeamKey } from '../pairing/team-key.js';
 import { applyTeamKeyFromFile } from '../pairing/team-file-sync.js';
 import { showToast } from '../toast.js';
 import { relayMatchKey, tokenFingerprint } from '../relay-protocol.js';
+import { relayTag, tagImported } from '../pairing/contact-relays.js';
 
-/** Background refresh cadence (spec: at most hourly). */
-export const TEAM_DIRECTORY_REFRESH_MS = 60 * 60_000;
+/** Background refresh cadence: a conditional GET (usually a 304), so cheap enough that a teammate who joins mid-practice shows up within minutes. */
+export const TEAM_DIRECTORY_REFRESH_MS = 5 * 60_000;
 /** A forced refresh (settings opened) this close to the last one reuses it. */
 const FORCE_FLOOR_MS = 5_000;
 /** The spec caps a person's name at 60 characters. */
@@ -305,15 +306,18 @@ export type ApplyResult = { addedPeople: number; addedGroups: number };
 
 /** Merge silently (an imported directory): new people and groups, the
  *  team key. Toasts "Added N teammates from your relay" when N > 0. */
-function applyImported(dir: TeamDirectory): ApplyResult {
+function applyImported(dir: TeamDirectory, tag: string): ApplyResult {
+  const before = settings.get('pairingPartners');
   const merged = mergeTeamDirectory({
     directory: dir,
     ownCode: settings.get('pairingOwnCode'),
-    partners: settings.get('pairingPartners'),
+    partners: before,
     groups: settings.get('pairingGroups'),
   });
-  if (merged.addedPeople || merged.addedGroups || merged.updatedGroups) {
-    settings.set('pairingPartners', merged.partners);
+  // Everyone on this relay's list is on this relay (contact-relays.ts).
+  const tagged = tagImported(merged.partners, before, dir.people.map((p) => p.code), tag);
+  if (merged.addedPeople || merged.addedGroups || merged.updatedGroups || JSON.stringify(tagged) !== JSON.stringify(before)) {
+    settings.set('pairingPartners', tagged);
     settings.set('pairingGroups', merged.groups);
   }
   applyTeamKeyFromFile(directoryAsTeamFile(dir));
@@ -324,7 +328,7 @@ function applyImported(dir: TeamDirectory): ApplyResult {
 }
 
 /** Fetch the directory for `ctx` (`force`: settings opened; else at most
- *  hourly) and act on it: merge if imported, else offer. A null ctx (no
+ *  every 5 minutes) and act on it: merge if imported, else offer. A null ctx (no
  *  custom relay, or card sharing off) takes the offer down. Never throws;
  *  resolves the directory in hand (null = none / unsupported). */
 export async function refreshTeamDirectory(
@@ -389,7 +393,7 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
   const state = directoryState(key);
   if (state.imported) {
     publishOffer(null);
-    if (dir && raw !== null) applyImported(dir);
+    if (dir && raw !== null) applyImported(dir, relayTag(ctx.baseUrl));
     else if (dir) applyTeamKeyFromFile(directoryAsTeamFile(dir));
     const relayHasKey = dir ? !!dir.teamKey : state.hasKey;
     if (!relayHasKey) await syncTeamKeyUp(ctx, key, dir?.name ?? '');
@@ -482,13 +486,14 @@ export async function importTeamDirectory(
     return { ok: false, reason: isNotConnected(err) ? 'not-connected' : 'failed' };
   }
   lastSent.set(key, `${me.code}\n${me.name}`);
+  const before = settings.get('pairingPartners');
   const merged = mergeTeamDirectory({
     directory: dir,
     ownCode: settings.get('pairingOwnCode'),
-    partners: settings.get('pairingPartners'),
+    partners: before,
     groups: settings.get('pairingGroups'),
   });
-  settings.set('pairingPartners', merged.partners);
+  settings.set('pairingPartners', tagImported(merged.partners, before, dir.people.map((p) => p.code), relayTag(ctx.baseUrl)));
   settings.set('pairingGroups', merged.groups);
   // Team key: taken when this machine has none; a different one never
   // replaces yours (the team file's quiet notice instead).

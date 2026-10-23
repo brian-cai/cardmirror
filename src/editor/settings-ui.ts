@@ -106,6 +106,7 @@ import {
   renderSpeechFilename,
 } from './speech-filename.js';
 import { isBackdropClick } from './backdrop-click.js';
+import { BUILTIN_RELAY_TAG, currentRelayTag, newContact, relayTag } from './pairing/contact-relays.js';
 
 interface SeatCandidateUi {
   routingCode: string;
@@ -4284,6 +4285,40 @@ function buildPairingPartnersEditor(): HTMLElement {
       );
       row.appendChild(star);
 
+      // Which relays this contact is on (contact-relays.ts): every relay
+      // unless tied to some. Only worth showing once there is a choice.
+      let relayPanel: HTMLElement | null = null;
+      const relayOptions = contactRelayOptions();
+      if (relayOptions.length > 1) {
+        const relayBtn = document.createElement('button');
+        relayBtn.type = 'button';
+        relayBtn.className = 'pmd-pairing-relays';
+        relayBtn.textContent = contactRelaySummary(partner.relays, relayOptions);
+        relayBtn.title = 'Which relays this contact is on. The Send pill shows the contacts on the relay you’re using.';
+        relayBtn.setAttribute('aria-expanded', 'false');
+        relayBtn.addEventListener('click', () => {
+          if (relayPanel) {
+            relayPanel.remove();
+            relayPanel = null;
+            relayBtn.setAttribute('aria-expanded', 'false');
+            return;
+          }
+          relayPanel = buildContactRelayPanel(idx, relayOptions, (relays) => {
+            relayBtn.textContent = contactRelaySummary(relays, relayOptions);
+            watch.quiet(
+              settings.get('pairingPartners').map((p, i) => {
+                if (i !== idx) return p;
+                const { relays: _drop, ...rest } = p;
+                return relays.length ? { ...rest, relays } : rest;
+              }),
+            );
+          });
+          row.after(relayPanel);
+          relayBtn.setAttribute('aria-expanded', 'true');
+        });
+        row.appendChild(relayBtn);
+      }
+
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.className = 'pmd-pairing-delete';
@@ -4314,12 +4349,72 @@ function buildPairingPartnersEditor(): HTMLElement {
   addBtn.addEventListener('click', () => {
     const cur = settings.get('pairingPartners');
     // Placeholder name — loading drops rows with no code and no name.
-    commit([...cur, { code: '', name: `Recipient ${cur.length + 1}` }]);
+    commit([...cur, newContact('', `Recipient ${cur.length + 1}`)]);
   });
 
   render();
   const watch = watchSetting(wrap, 'pairingPartners', render, ['pairingStarred']);
   return wrap;
+}
+
+/** The relays a contact can be tied to: the built-in one and every saved
+ *  custom relay, plus any tag a contact already carries that isn't saved. */
+function contactRelayOptions(): { tag: string; label: string }[] {
+  const out = new Map<string, string>([[BUILTIN_RELAY_TAG, 'Built-in relay']]);
+  for (const r of settings.get('relayProfiles')) out.set(relayTag(r.url), r.label || r.url.replace(/^https?:\/\//, ''));
+  const cur = settings.get('pairingRelayUrl');
+  if (cur.trim()) out.set(relayTag(cur), out.get(relayTag(cur)) ?? cur.replace(/^https?:\/\//, ''));
+  for (const p of settings.get('pairingPartners')) {
+    for (const t of p.relays ?? []) if (!out.has(t)) out.set(t, t.replace(/^https?:\/\//, ''));
+  }
+  return [...out].map(([tag, label]) => ({ tag, label }));
+}
+
+function contactRelaySummary(relays: readonly string[] | undefined, options: { tag: string; label: string }[]): string {
+  if (!relays?.length) return 'All relays';
+  if (relays.length === 1) return options.find((o) => o.tag === relays[0])?.label ?? '1 relay';
+  return `${relays.length} relays`;
+}
+
+/** The checklist under a contact row: "All relays", or the ones ticked. */
+function buildContactRelayPanel(
+  idx: number,
+  options: { tag: string; label: string }[],
+  onChange: (relays: string[]) => void,
+): HTMLElement {
+  const panel = document.createElement('div');
+  panel.className = 'pmd-pairing-relay-panel';
+  let relays = [...(settings.get('pairingPartners')[idx]?.relays ?? [])];
+  const boxes: HTMLInputElement[] = [];
+  const line = (label: string, checked: boolean, onToggle: (on: boolean) => void): HTMLInputElement => {
+    const l = document.createElement('label');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = checked;
+    box.addEventListener('change', () => onToggle(box.checked));
+    l.append(box, ` ${label}`);
+    panel.appendChild(l);
+    return box;
+  };
+  const all = line('All relays', relays.length === 0, (on) => {
+    if (on) relays = [];
+    else relays = [currentRelayTag()];
+    sync();
+  });
+  for (const o of options) {
+    boxes.push(
+      line(o.label, relays.includes(o.tag), (on) => {
+        relays = on ? [...new Set([...relays, o.tag])] : relays.filter((t) => t !== o.tag);
+        sync();
+      }),
+    );
+  }
+  function sync(): void {
+    all.checked = relays.length === 0;
+    options.forEach((o, i) => (boxes[i]!.checked = relays.includes(o.tag)));
+    onChange(relays);
+  }
+  return panel;
 }
 
 /** Custom ribbon buttons editor: up to 10 rows, each choosing an icon + a

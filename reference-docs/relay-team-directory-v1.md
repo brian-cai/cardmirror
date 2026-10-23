@@ -59,7 +59,7 @@ endpoint for editing other people.
   team file does (existing contacts keep their names; a local team key is never replaced
   silently).
 - Afterwards, re-fetch with `If-None-Match` when the collaboration settings open, on start, and
-  at most hourly, and merge any new people and groups.
+  every few minutes (a 304 is cheap), and merge any new people and groups.
 - If the team has no key and this client has one, offer it with `PUT /team-directory/team-key`;
   on `409`, adopt the returned key under the same merge rule.
 - Never send anything other than this install's own display name and send code. Always pass `?code=` when removing your own entry.

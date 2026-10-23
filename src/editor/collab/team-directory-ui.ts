@@ -47,7 +47,7 @@ export async function teamDirectoryContext(): Promise<TeamDirectoryContext | nul
 }
 
 /** Fetch now (`force`: Settings → Collaboration opened) or when the last
- *  fetch is an hour old. Never throws. */
+ *  fetch is 5 minutes old. Never throws. */
 export async function refreshTeamDirectoryNow(force = false): Promise<void> {
   try {
     await refreshTeamDirectory(await teamDirectoryContext(), { force });
@@ -58,7 +58,7 @@ export async function refreshTeamDirectoryNow(force = false): Promise<void> {
 
 let started = false;
 
-/** Boot: fetch once, then at most hourly; a relay URL/token change or
+/** Boot: fetch once, then every 5 minutes; a relay URL/token change or
  *  turning card sharing on starts over (debounced); a changed display
  *  name re-registers this install's entry. Idempotent. */
 export function startTeamDirectory(): void {

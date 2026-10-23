@@ -13,6 +13,7 @@ import { deriveDropzoneLabel } from '../dropzone-store.js';
 import { showToast } from '../toast.js';
 import { relayClient, sendOutcomeToast, type SendResult } from './relay-client.js';
 import { offerSharingSetup } from './sharing-setup.js';
+import { partnersHere } from './contact-relays.js';
 
 /** Resolve the starred ref → recipient codes + a display label (groups also
  *  carry a `via` label). Returns null when nothing is starred or the starred
@@ -37,15 +38,24 @@ export function resolveStarredTarget(
   return { codes, label: g.label || 'Group', via: g.label };
 }
 
+/** The starred target on the relay cards go through now: its members on
+ *  other relays left out. A starred contact who is only on other relays
+ *  toasts and resolves null (as does nothing starred). */
+export function starredHere(): { codes: string[]; label: string; via?: string } | null {
+  const star = settings.get('pairingStarred');
+  const all = settings.get('pairingPartners');
+  const target = resolveStarredTarget(star, partnersHere(all), settings.get('pairingGroups'));
+  if (!target && star?.kind === 'partner' && resolveStarredTarget(star, all, settings.get('pairingGroups'))) {
+    showToast('Your starred contact is on another relay. Switch relays to send to them.');
+  }
+  return target;
+}
+
 /** Send the cursor's card / active selection to the starred recipient or group.
  *  Silently no-ops when nothing is starred; toasts when sharing is off or the
  *  starred group has no reachable members. */
 export async function sendViewToStarred(view: EditorView): Promise<void> {
-  const target = resolveStarredTarget(
-    settings.get('pairingStarred'),
-    settings.get('pairingPartners'),
-    settings.get('pairingGroups'),
-  );
+  const target = starredHere();
   if (!target) return; // nothing starred (or the starred target was deleted) → no-op
   await sendViewTo(view, target, 'The starred group has no recipients yet');
 }

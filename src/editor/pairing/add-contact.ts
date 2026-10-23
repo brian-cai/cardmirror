@@ -7,6 +7,7 @@ import { settings } from '../settings.js';
 import { showToast } from '../toast.js';
 import { promptForText } from '../text-prompt.js';
 import { looksLikePairingCode, normalizePairingCode } from './pairing-ids.js';
+import { newContact } from './contact-relays.js';
 
 /** True when `rawCode` is a valid code that isn't yours and isn't already a contact. */
 export function canAddContact(rawCode: string | undefined): boolean {
@@ -32,7 +33,7 @@ export async function addContact(rawCode: string | undefined, suggestedName: str
   // Re-check: another window may have added them while the prompt was open.
   if (!canAddContact(code)) return true;
   const name = named.trim();
-  settings.set('pairingPartners', [...settings.get('pairingPartners'), { code, name }]);
+  settings.set('pairingPartners', [...settings.get('pairingPartners'), newContact(code, name)]);
   showToast(`Added ${name || `…${code.slice(-6)}`} to your contacts`);
   return true;
 }
