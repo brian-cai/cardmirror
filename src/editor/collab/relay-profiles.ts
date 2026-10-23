@@ -319,10 +319,26 @@ export function relayEdited(prev: { url: string; token: string }, now = Date.now
   }
 }
 
-/** May `key` go to the current relay (its team directory)? Not when it is
- *  the key of a different team's saved relay: then it came from there. */
+export type TeamKeyOrigin = 'file' | 'minted' | { relay: { url: string; token: string } };
+
+/** Record where `key` came from (newest first). */
+export function noteTeamKeyOrigin(key: string, origin: TeamKeyOrigin): void {
+  if (!key) return;
+  const o = typeof origin === 'string' ? origin : `dir:${relayMatchKey(origin.relay.url, origin.relay.token)}`;
+  const rest = settings.get('teamKeyOrigins').filter((x) => x.k !== key);
+  settings.set('teamKeyOrigins', [{ k: key, o }, ...rest].slice(0, 20));
+}
+
+/** May `key` go to the current relay's team list? A key from a team file
+ *  or made here, yes (the team carries it to whichever relay it uses). One
+ *  taken from a relay's team list goes only back to that relay. A key with
+ *  no record (an older build's) falls back to: not when it is another
+ *  team's saved relay's key. */
 export function keyBelongsHere(key: string): boolean {
   const cur = { url: settings.get('pairingRelayUrl'), token: settings.get('pairingRelayToken') };
+  const origin = settings.get('teamKeyOrigins').find((x) => x.k === key)?.o;
+  if (origin === 'file' || origin === 'minted') return true;
+  if (origin?.startsWith('dir:')) return origin === `dir:${relayMatchKey(cur.url, cur.token)}`;
   if (!normUrl(cur.url)) return true;
   return !settings.get('relayProfiles').some((p) => p.teamKey === key && !sameTeam(p, cur));
 }

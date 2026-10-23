@@ -365,9 +365,15 @@ export function installCursorPresence(
     let name = 'Partner';
     let color = peerColor(peer);
     try {
-      const st = (store.getAllStates() as Record<string, { user?: { name?: string; color?: string } }>)[peer];
+      const all = store.getAllStates() as Record<string, { user?: { name?: string; color?: string } }>;
+      const st = all[peer];
       if (typeof st?.user?.name === 'string' && st.user.name.trim()) name = st.user.name;
       if (typeof st?.user?.color === 'string' && st.user.color) color = st.user.color;
+      // Peers who left: drop their carets, so a long session with people
+      // coming and going doesn't keep one detached element per departure.
+      if (cursorEls.size > Object.keys(all).length) {
+        for (const p of cursorEls.keys()) if (p !== peer && !(p in all)) cursorEls.delete(p);
+      }
     } catch {
       /* store shape/timing — defaults are fine */
     }

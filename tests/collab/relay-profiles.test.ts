@@ -30,6 +30,7 @@ import {
   defaultRelayLabel,
   findProfile,
   keyBelongsHere,
+  noteTeamKeyOrigin,
   profileKey,
   relabelFromInfo,
   relayEdited,
@@ -100,6 +101,7 @@ beforeEach(() => {
   settings.set('relayProfiles', []);
   settings.set('relayBuiltinTeamKey', '');
   settings.set('teamSessionsKey', '');
+  settings.set('teamKeyOrigins', []);
   settings.set('teamDirectoryRelays', []);
   settings.set('pairingEnabled', true);
   useRelay({ url: '', token: '' });
@@ -294,6 +296,24 @@ describe('switching', () => {
     useRelay({ url: HS.url, token: 'debater-token' });
     relayEdited(prev);
     expect(settings.get('teamSessionsKey')).toBe('');
+  });
+
+  it('a key from a team file goes to whichever relay the team uses; a relay list’s key only back to that relay', () => {
+    saved(COLLEGE, KEY_B);
+    // The team moved relays and carried its key in a team file.
+    useRelay(HS);
+    settings.set('teamSessionsKey', KEY_B);
+    expect(keyBelongsHere(KEY_B)).toBe(false); // no record: the old guess
+    noteTeamKeyOrigin(KEY_B, 'file');
+    expect(keyBelongsHere(KEY_B)).toBe(true);
+    // A key taken from the college relay's list stays there.
+    noteTeamKeyOrigin(KEY_C, { relay: COLLEGE });
+    expect(keyBelongsHere(KEY_C)).toBe(false);
+    useRelay(COLLEGE);
+    expect(keyBelongsHere(KEY_C)).toBe(true);
+    noteTeamKeyOrigin(KEY_A, 'minted');
+    useRelay(HS);
+    expect(keyBelongsHere(KEY_A)).toBe(true);
   });
 
   it('a new token at the same per-team address (a rotation) keeps the key', () => {

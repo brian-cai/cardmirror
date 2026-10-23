@@ -252,12 +252,14 @@ export async function saveSessionRecord(record: PersistedSessionRecord): Promise
   // Which relay the room lives on (a session is only reachable there):
   // the one in use when it was first saved, kept from then on — callers
   // rebuild the record without it, and the relay setting may have moved
-  // since (an edit in Settings doesn't leave the session).
-  const relay =
-    record.relay ??
-    roomRelays.get(record.roomId) ??
-    (await get<PersistedSessionRecord>(SESSIONS, record.roomId))?.relay ??
-    (await relayNow());
+  // since (an edit in Settings doesn't leave the session). A record an
+  // older build saved without one stays untagged: the relay in use now
+  // may not be the room's, and resuming asks rather than guessing.
+  let relay = record.relay ?? roomRelays.get(record.roomId);
+  if (!relay) {
+    const stored = await get<PersistedSessionRecord>(SESSIONS, record.roomId);
+    relay = stored ? stored.relay : await relayNow();
+  }
   if (relay) roomRelays.set(record.roomId, relay);
   await put(SESSIONS, { ...record, relay });
   notify();

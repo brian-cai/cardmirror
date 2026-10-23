@@ -1627,7 +1627,10 @@ async function resumeSessionFlowInner(
     // KEEP the record on a failed resume: it existed before this attempt and
     // may hold unsynced edits — the default teardown would delete it (audit
     // find, 2026-07-10). Still resumable from the Sessions list.
-    const ended = err instanceof RoomsError && (err.status === 410 || err.status === 404);
+    // An untagged record (saved before sessions knew their relay) that 404s
+    // may simply live on another relay: not proof the room is over.
+    const ended = err instanceof RoomsError && (err.status === 410 || (err.status === 404 && Boolean(record.relay)));
+    const maybeElsewhere = !ended && !record.relay && err instanceof RoomsError && err.status === 404;
     if (sessRef) {
       void teardownSession(sessRef, /* keepRecord */ true, /* roomOver */ ended).catch((e) =>
         surfaceError('collab teardown', e),
@@ -1635,7 +1638,9 @@ async function resumeSessionFlowInner(
     } else if (ended) {
       void deleteRecentRoom(roomId).catch((e) => surfaceError('collab recent rooms', e));
     }
-    showToast(relayFailureMessage(err, { initiating: false, verb: 'resume' }));
+    showToast(maybeElsewhere
+      ? 'This session wasn’t found on this relay. If it was on another relay, switch to that one and resume again.'
+      : relayFailureMessage(err, { initiating: false, verb: 'resume' }));
     return false;
   }
 }

@@ -19,6 +19,7 @@
  * Desktop only (reads / writes a path). Windows coordinate through a
  * localStorage timestamp so only one of them syncs at a time.
  */
+import { noteTeamKeyOrigin, type TeamKeyOrigin } from '../collab/relay-profiles.js';
 import { settings } from '../settings.js';
 import { getElectronHost } from '../host/index.js';
 import { showToast } from '../toast.js';
@@ -107,10 +108,11 @@ export async function addYourselfToTeamFile(path: string): Promise<boolean> {
  *  machine with no key adopts the file's; one with a different key keeps
  *  its own and gets a quiet notice (no toast — it's not urgent, and a
  *  synced file would repeat it every few minutes; the key coalesces). */
-export function applyTeamKeyFromFile(file: TeamFile): 'adopted' | 'conflict' | 'unchanged' {
+export function applyTeamKeyFromFile(file: TeamFile, origin: TeamKeyOrigin = 'file'): 'adopted' | 'conflict' | 'unchanged' {
   const m = mergeTeamKey(settings.get('teamSessionsKey'), file.teamKey);
   if (m.adopted) {
     settings.set('teamSessionsKey', m.key);
+    noteTeamKeyOrigin(m.key, origin);
     return 'adopted';
   }
   if (m.conflict) {
@@ -135,6 +137,7 @@ export function ensureLocalTeamKey(): string {
   if (isTeamKey(have)) return have;
   const key = generateTeamKey();
   settings.set('teamSessionsKey', key);
+  noteTeamKeyOrigin(key, 'minted');
   return key;
 }
 

@@ -126,7 +126,6 @@ export function startRelayProfiles(): void {
   let settled = { url: settings.get('pairingRelayUrl'), token: settings.get('pairingRelayToken') };
   let timer: ReturnType<typeof setTimeout> | null = null;
   settings.subscribe((st, meta) => {
-    renderChip();
     if (st.pairingRelayUrl === settled.url && st.pairingRelayToken === settled.token) return;
     if (meta?.remote || isSwitchingRelay()) {
       // Another window's edit (it handles the keys), or a switch (it did).
@@ -145,19 +144,11 @@ export function startRelayProfiles(): void {
       void saveIfConnected();
     }, 800);
   });
-  renderChip();
 }
 
-// --- status-bar chip + menu -------------------------------------------------
+// --- relay switch menu (Send / Receive popups, Settings, the command) -------
 
-const CHIP_ID = 'relay-chip';
 const MENU_ID = 'relay-switch-menu';
-
-/** No status-bar chip any more (switching lives in the Send / Receive
- *  popups, Settings and the command): take down one an older build left. */
-export function renderChip(): void {
-  if (typeof document !== 'undefined') document.getElementById(CHIP_ID)?.remove();
-}
 
 function closeMenu(): void {
   document.getElementById(MENU_ID)?.remove();
@@ -386,6 +377,5 @@ export function __resetRelayProfilesUiForTests(): void {
   started = false;
   if (typeof document !== 'undefined') {
     closeMenu();
-    document.getElementById(CHIP_ID)?.remove();
   }
 }

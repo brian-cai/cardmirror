@@ -34,7 +34,7 @@ import { generateGroupId, normalizePairingCode } from '../pairing/pairing-ids.js
 import { mergeTeamFile, TEAM_FILE_KIND, type TeamFile, type TeamMergeResult } from '../pairing/team-file.js';
 import { isTeamKey, mergeTeamKey } from '../pairing/team-key.js';
 import { applyTeamKeyFromFile, ensureLocalTeamKey } from '../pairing/team-file-sync.js';
-import { keyBelongsHere } from './relay-profiles.js';
+import { keyBelongsHere, noteTeamKeyOrigin, type TeamKeyOrigin } from './relay-profiles.js';
 import { showToast } from '../toast.js';
 import { relayMatchKey, tokenFingerprint } from '../relay-protocol.js';
 import { relayTag, tagImported } from '../pairing/contact-relays.js';
@@ -357,11 +357,12 @@ export async function syncTeamKeyUp(ctx: TeamDirectoryContext, key: string, team
     if (!stillCurrent(ctx)) return;
     if (existing !== null && isTeamKey(existing) && minted && existing !== local) {
       settings.set('teamSessionsKey', existing);
+      noteTeamKeyOrigin(existing, fromThisRelay());
       return;
     }
     // 409: someone else's key won the race. Same rule as a team file's.
     if (existing !== null && isTeamKey(existing) && mergeTeamKey(local, existing).conflict) {
-      applyTeamKeyFromFile({ kind: TEAM_FILE_KIND, version: 1, name: teamName || 'Team', people: [], groups: [], teamKey: existing });
+      applyTeamKeyFromFile({ kind: TEAM_FILE_KIND, version: 1, name: teamName || 'Team', people: [], groups: [], teamKey: existing }, fromThisRelay());
     }
   } catch {
     /* offline or refused: try again next refresh */
@@ -374,9 +375,16 @@ function takeDirectoryKey(dir: TeamDirectory): void {
   const local = settings.get('teamSessionsKey');
   if (dir.teamKey && isTeamKey(local) && local !== dir.teamKey && !keyBelongsHere(local)) {
     settings.set('teamSessionsKey', dir.teamKey);
+    noteTeamKeyOrigin(dir.teamKey, fromThisRelay());
     return;
   }
-  applyTeamKeyFromFile(directoryAsTeamFile(dir));
+  applyTeamKeyFromFile(directoryAsTeamFile(dir), fromThisRelay());
+}
+
+/** A key taken from the team list of the relay in Settings (callers have
+ *  checked the refresh is still current). */
+function fromThisRelay(): TeamKeyOrigin {
+  return { relay: { url: settings.get('pairingRelayUrl'), token: settings.get('pairingRelayToken') } };
 }
 
 // --- refresh ----------------------------------------------------------

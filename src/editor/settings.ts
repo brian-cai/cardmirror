@@ -1804,6 +1804,11 @@ export interface Settings {
    *  feature is off. Set only by Import team / team file sync / Export
    *  team, and never replaced once set (team-key.ts mergeTeamKey). */
   teamSessionsKey: string;
+  /** Where each team key on this machine came from (newest first, at most
+   *  20): 'file' (a team file), 'minted' (made here), or 'dir:<relay match
+   *  key>' (taken from that relay's team list). Decides whether a key may
+   *  be published to the relay in use (relay-profiles keyBelongsHere). */
+  teamKeyOrigins: { k: string; o: string }[];
   /** Team sessions: list new sessions as OPEN (the listing carries the
    *  share code, so any teammate joins directly) instead of the default
    *  "request" (teammates ask, someone in the session approves). */
@@ -2192,6 +2197,7 @@ const DEFAULTS: Settings = {
   contactsAutoExportPath: '',
   teamFileSyncPath: '',
   teamSessionsKey: '',
+  teamKeyOrigins: [],
   teamSessionsOpen: false,
   cleanProtectedStyles: [],
 };
@@ -5800,6 +5806,14 @@ function sanitize(s: Settings): Settings {
     teamFileSyncPath: typeof s.teamFileSyncPath === 'string' ? s.teamFileSyncPath.trim() : '',
     teamSessionsKey:
       typeof s.teamSessionsKey === 'string' && /^[A-Za-z0-9_-]{43}$/.test(s.teamSessionsKey) ? s.teamSessionsKey : '',
+    teamKeyOrigins: Array.isArray(s.teamKeyOrigins)
+      ? (s.teamKeyOrigins as unknown[])
+          .filter((x): x is { k: string; o: string } =>
+            !!x && typeof x === 'object' && typeof (x as { k?: unknown }).k === 'string' && /^[A-Za-z0-9_-]{43}$/.test((x as { k: string }).k)
+            && typeof (x as { o?: unknown }).o === 'string' && (x as { o: string }).o.length <= 600)
+          .slice(0, 20)
+          .map((x) => ({ k: x.k, o: x.o }))
+      : [],
     teamSessionsOpen: s.teamSessionsOpen === true,
     collabShowCursors: s.collabShowCursors !== false,
     pairingPartners: sanitizePairingPartners(s.pairingPartners),

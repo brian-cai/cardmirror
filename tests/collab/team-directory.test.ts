@@ -169,6 +169,7 @@ beforeEach(() => {
   // automatically; the auto-add tests set it.)
   settings.set('pairingDisplayName', '');
   settings.set('pairingPartners', []);
+  settings.set('teamKeyOrigins', []);
   settings.set('pairingGroups', []);
   settings.set('teamSessionsKey', '');
   settings.set('teamDirectoryRelays', []);

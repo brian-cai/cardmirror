@@ -34,4 +34,23 @@ describe('session record relay', () => {
     expect((await loadSessionRecord('room-2'))?.relay).toBe('https://b.example/r/two');
     settings.set('pairingRelayUrl', '');
   });
+
+  it('a record an older build saved without a relay stays untagged', async () => {
+    await saveSessionRecord(rec('room-3')); // creates the store
+    // What an older build left: the record with no relay.
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('cardmirror-collab');
+      open.onsuccess = () => {
+        const tx = open.result.transaction('sessions', 'readwrite');
+        tx.objectStore('sessions').put({ ...rec('room-old'), relay: undefined });
+        tx.oncomplete = () => (open.result.close(), resolve());
+        tx.onerror = () => reject(tx.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+    settings.set('pairingRelayUrl', 'https://b.example/r/two');
+    await saveSessionRecord(rec('room-old'));
+    expect((await loadSessionRecord('room-old'))?.relay).toBeUndefined();
+    settings.set('pairingRelayUrl', '');
+  });
 });

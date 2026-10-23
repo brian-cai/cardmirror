@@ -17152,14 +17152,7 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
   cursor: pointer;
 }
 
-/* Saved relays: the status-bar relay chip, its quick-switch menu, and the
-   list in Settings → Collaboration. */
-.pmd-relay-chip {
-  max-width: 14rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* Saved relays: the quick-switch menu and the list in Settings → Collaboration. */
 .pmd-relay-menu {
   position: fixed;
   right: 8px;
