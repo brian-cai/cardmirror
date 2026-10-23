@@ -17267,3 +17267,39 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
 /* Join requests: a card above the status bar's right end. */
 .pmd-team-join-requests-card:not([hidden]) { bottom: calc(var(--status-bar-height, 28px) + 10px); right: 14px; display: flex;
   align-items: center; gap: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18); border-radius: 8px; }
+
+/* "The relay isn't answering": a small strip just above the status bar while the relay in
+   use is unreachable (relay-reachability-ui.ts). Informational, so muted chrome colors. */
+.pmd-relay-down {
+  position: fixed;
+  bottom: calc(var(--status-bar-height, 24px) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(640px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.75rem;
+  background: var(--pmd-c-surface);
+  color: var(--pmd-c-text-secondary);
+  border: 1px solid var(--pmd-c-border-soft);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  font-size: 0.8rem;
+  z-index: 210;
+}
+.pmd-relay-down-link {
+  color: var(--pmd-c-accent, inherit);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.pmd-relay-down-close {
+  margin-left: 0.25rem;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}

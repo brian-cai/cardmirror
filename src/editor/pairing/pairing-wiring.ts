@@ -133,6 +133,10 @@ export function initPairingWiring(): void {
     });
   }
 
+  // "The relay isn't answering" bar: watches every relay call's outcome
+  // (quiet until the relay in use stops answering for a while).
+  void import('../collab/relay-reachability-ui.js').then((m) => m.startRelayReachability()).catch(() => {});
+
   // Learn whether the built-in relay is usable here (sharing-setup.ts), so
   // the first Send / Receive click on a fresh install offers setup.
   void import('../collab/collab-relay.js').then((m) => m.ensureBakedRelay()).catch(() => {});

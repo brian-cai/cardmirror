@@ -122,7 +122,7 @@ export function __resetRelayInfoUiForTests(): void {
 
 /** Open in the system browser (desktop) or a new tab (web) — the same
  *  path the editor's hyperlinks use. */
-function openExternally(href: string): void {
+export function openExternally(href: string): void {
   const electron = getElectronHost();
   if (electron) {
     void electron.openExternal(href).catch(() => {});

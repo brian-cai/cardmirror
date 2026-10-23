@@ -424,6 +424,9 @@ interface ElectronAPI {
   /** Relay rejected our credentials (401) — throttled in main. `detail`
    *  is a custom relay's own reason (e.g. the install limit), if any. */
   onPairingUnauthorized?(handler: (info: { detail?: string }) => void): () => void;
+  /** A mailbox poll's answer from the relay (status 0 = none); failures
+   *  and recoveries only. Older mains don't send it. */
+  onPairingRelayOutcome?(handler: (info: { base: string; status: number }) => void): () => void;
   pairingConnectAccount?(payload: {
     connectCode: string;
     confirmEvict?: boolean;
@@ -1326,6 +1329,10 @@ export class ElectronHost implements Host {
 
   onPairingUnauthorized(handler: (info: { detail?: string }) => void): () => void {
     return api().onPairingUnauthorized?.(handler) ?? (() => {});
+  }
+
+  onPairingRelayOutcome(handler: (info: { base: string; status: number }) => void): () => void {
+    return api().onPairingRelayOutcome?.(handler) ?? (() => {});
   }
 
   async pairingConnectAccount(payload: {

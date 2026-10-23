@@ -839,6 +839,13 @@ interface PairingInboxItemIpc {
     ipcRenderer.on('pairing:version-mismatch', listener);
     return () => ipcRenderer.removeListener('pairing:version-mismatch', listener);
   },
+  /** Each mailbox poll's answer from the relay (status 0 = none): failures
+   *  and recoveries only. Feeds the "relay isn't answering" bar. */
+  onPairingRelayOutcome(handler: (info: { base: string; status: number }) => void): () => void {
+    const listener = (_e: unknown, info: { base: string; status: number }): void => handler(info);
+    ipcRenderer.on('pairing:relay-outcome', listener);
+    return () => ipcRenderer.removeListener('pairing:relay-outcome', listener);
+  },
   onPairingUnauthorized(handler: (info: { detail?: string }) => void) {
     const listener = (_e: unknown, info?: { detail?: string }) => handler(info ?? {});
     ipcRenderer.on('pairing:unauthorized', listener);

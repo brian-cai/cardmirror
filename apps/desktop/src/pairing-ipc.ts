@@ -630,14 +630,28 @@ function deleteMessage(msgId: string): void {
  *  back as bodyless 304s (relays without the tag just ignore it). */
 let lastPollTag = '';
 
+/** Tell the windows how the relay answered a mailbox poll (status 0 = no
+ *  answer), for the "relay isn't answering" bar. Only changes and failures
+ *  are sent: a healthy relay polled all day sends one message. */
+let lastOutcomeOk: boolean | null = null;
+function broadcastRelayOutcome(base: string, status: number): void {
+  const ok = status !== 0 && status < 500;
+  if (ok && lastOutcomeOk === true) return;
+  lastOutcomeOk = ok;
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('pairing:relay-outcome', { base, status });
+  }
+}
+
 /** One catch-up/poll cycle: pull our mailbox and process it. */
 async function pollOnce(): Promise<void> {
   if (polling || !config.enabled || !relayUsable()) return;
   void maybeRenewEntitlement();
   polling = true;
   lastPollStartedAt = Date.now();
+  let answered = false;
+  const base = relayUrl();
   try {
-    const base = relayUrl();
     await proofs.ensure(base, authHeaders());
     const url = `${base}/messages?recipient=${encodeURIComponent(ks().ownRoutingId())}`;
     const res = await fetch(url, {
@@ -646,6 +660,8 @@ async function pollOnce(): Promise<void> {
       // Covers the body read below too (the signal stays attached).
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
+    answered = true;
+    broadcastRelayOutcome(base, res.status);
     if (res.status === 304) return; // empty poll — bodyless (capacity, 2026-08-18)
     if (res.status === 401) {
       // Same surface as the stream's 401, with the relay's reason.
@@ -666,6 +682,7 @@ async function pollOnce(): Promise<void> {
     await processMessages(messages);
   } catch (err) {
     console.warn('[pairing] poll error:', err);
+    if (!answered) broadcastRelayOutcome(base, 0);
   } finally {
     polling = false;
   }

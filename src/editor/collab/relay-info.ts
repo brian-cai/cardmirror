@@ -75,12 +75,21 @@ export interface RelayClientBuild {
   note: string;
 }
 
+/** A daily window (UTC) when the relay may restart for updates. */
+export interface RelayMaintenance {
+  /** "HH:MM", UTC. */
+  dailyUtc: string;
+  minutes: number;
+}
+
 export interface RelayInfo {
   v: 1;
   operator: RelayOperator | null;
   access: RelayAccess | null;
   notice: RelayNotice | null;
   clients: RelayClientBuild[];
+  /** Absent from most relays' documents (null). */
+  maintenance?: RelayMaintenance | null;
 }
 
 // --- request headers --------------------------------------------------
@@ -207,7 +216,15 @@ export function parseRelayInfo(raw: unknown): RelayInfo | null {
     }
   }
 
-  return { v: 1, operator, access, notice, clients };
+  let maintenance: RelayMaintenance | null = null;
+  if (r['maintenance'] && typeof r['maintenance'] === 'object') {
+    const m = r['maintenance'] as Record<string, unknown>;
+    const at = str(m['dailyUtc'], 5);
+    const minutes = count(m['minutes']);
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(at) && minutes && minutes <= 240) maintenance = { dailyUtc: at, minutes };
+  }
+
+  return maintenance ? { v: 1, operator, access, notice, clients, maintenance } : { v: 1, operator, access, notice, clients };
 }
 
 /** The notice to show now: present, not past `until`, not dismissed. */

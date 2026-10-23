@@ -28,6 +28,21 @@ export type RoomsFetch = typeof fetch;
  *  Node's fetch does not care. Wrapping keeps both happy. */
 const boundFetch: RoomsFetch = (input, init) => fetch(input, init);
 
+/** Who hears about every relay call's outcome: the reachability bar
+ *  (relay-reachability-ui.ts). `status` is the HTTP status, 0 = no answer
+ *  (network error, timeout). One listener; null = nobody. */
+let outcomeListener: ((base: string, status: number) => void) | null = null;
+export function setRelayOutcomeListener(fn: ((base: string, status: number) => void) | null): void {
+  outcomeListener = fn;
+}
+function reportOutcome(base: string, status: number): void {
+  try {
+    outcomeListener?.(base, status);
+  } catch {
+    /* never let the bar break a request */
+  }
+}
+
 /** Typed transport failure; `status` is 0 for network-level errors. */
 /** Best-effort ' — <detail>' suffix from a non-2xx body (FastAPI's
  *  `{detail}` or the mock's `{error}`; a non-JSON body contributes a
@@ -239,8 +254,11 @@ export class RoomsClient {
         timedOut ? `rooms request timed out after ${ms}ms` : ((err as Error).message ?? 'network error'),
       );
       this.noteFailure(e);
+      // A caller's own abort (leaving, a superseded request) says nothing about the relay.
+      if (timedOut || name !== 'AbortError' || !init?.signal?.aborted) reportOutcome(this.opts.baseUrl(), 0);
       throw e;
     }
+    reportOutcome(this.opts.baseUrl(), res.status);
     if (!res.ok && !accept?.includes(res.status)) {
       // Fold the relay's own detail into the error: its 413 alone covers
       // both 'update too large' and 'room storage cap reached', and pool
@@ -844,6 +862,7 @@ export class RoomStream {
     this.stats.attempts++;
     this.controller = new AbortController();
     const fetchImpl = this.opts.fetchImpl ?? boundFetch;
+    let answered = false;
     try {
       const sidQ = this.opts.sid ? `?sid=${encodeURIComponent(this.opts.sid)}` : '';
       const cred = this.opts.credentials?.();
@@ -860,6 +879,8 @@ export class RoomStream {
         },
         signal: this.controller.signal,
       });
+      answered = true;
+      reportOutcome(this.opts.baseUrl(), res.status);
       // Release bodies we don't read: an abandoned response body holds
       // its pool connection until GC — one per retry, for hours, during
       // an outage (2026-09-01 review).
@@ -955,6 +976,9 @@ export class RoomStream {
       if (this.stopped) return;
       if ((err as Error).name !== 'AbortError') {
         console.warn('[room-stream] stream error:', (err as Error).message ?? err);
+        // Only a connect that never got an answer: a stream dropped mid-way
+        // (deploy, idle reap) reconnects and reports on that attempt.
+        if (!answered) reportOutcome(this.opts.baseUrl(), 0);
       }
       this.scheduleRetry();
     }
