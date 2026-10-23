@@ -5,6 +5,22 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.38 — 2026-10-23
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **You're told when the relay isn't answering.** If the relay stops
+  responding for more than a few seconds, a small bar says so ("The
+  relay isn't answering. Retrying…") with a link to the relay's status
+  page, and that your session edits are kept on this computer. It
+  clears on its own the moment the relay is back. During the relay's
+  daily maintenance window it says the relay may be restarting for
+  updates instead. A relay refusing a token is not an outage and never
+  shows this bar.
+
 ## 1.15.37 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
