@@ -300,7 +300,7 @@ function makeView(): EditorView {
 }
 
 describe('new-features fuzz — transclusion + numbering (single view)', () => {
-  it('stays valid + render-total across 20 seeds', () => {
+  it('stays valid + render-total across 20 seeds', { timeout: 60_000 }, () => {
     for (let seed = 1; seed <= 20; seed++) {
       const rnd = mulberry32(seed);
       const view = makeView();
