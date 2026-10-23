@@ -5,6 +5,27 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.35 — 2026-10-23
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Fixed
+
+- **Changing your relay no longer ends the session you're in.** A
+  live co-editing session stays on the relay it started on until you
+  leave it; before, editing the relay in Settings could make it end
+  and lose your way back in.
+- **A team file's "Use team relay" keeps the team's key.** The key in
+  the file now goes with the team's relay, so team sessions show up
+  for everyone who imported it.
+- **Switching relays mid-refresh no longer mixes two teams' lists.**
+- **Reopening a session from another relay switches to that relay
+  first**, instead of reporting the session as ended.
+- **Your relay token only goes to its own relay.** While you type a
+  new relay address, the old token isn't sent there, and a relay you
+  type without a token never gets the built-in relay's.
+
 ## 1.15.34 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
