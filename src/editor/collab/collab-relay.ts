@@ -188,6 +188,9 @@ export function relayClient(): RoomsClient | null {
     // a relay the user configured; {} on the built-in relay (kept so when
     // a custom relay is set later).
     extHeaders: custom ? () => customRelayExtHeaders() : () => ({}),
+    // Mailbox proof v1: signed in main for this pinned relay and token.
+    mailboxProof: (method, code) =>
+      getElectronHost()?.mailboxProof?.({ baseUrl: url, token: credentials().token, method, code }) ?? Promise.resolve({}),
   });
 }
 

@@ -42,6 +42,7 @@ import * as path from 'node:path';
 import { createPairingKeystore, routingId, type PairingKeystore, type SealedBundle } from './pairing-crypto.js';
 import { BUILT_IN_RELAY_TOKEN } from './pairing-build.js';
 import { readRelayDetail, RelayStream } from './relay-stream.js';
+import { createMailboxProofs } from './mailbox-proof.js';
 import {
   entitlementIfValid,
   interpretConnectResponse,
@@ -606,9 +607,21 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
   };
 }
 
+/** Mailbox proof v1, on relays that offer it (mailbox-proof.ts). */
+const proofs = createMailboxProofs({ signer: () => ks() });
+
 function deleteMessage(msgId: string): void {
-  const url = `${relayUrl()}/messages/${encodeURIComponent(msgId)}`;
-  fetch(url, { method: 'DELETE', headers: authHeaders(), signal: AbortSignal.timeout(ACK_TIMEOUT_MS) }).catch((err) => {
+  const base = relayUrl();
+  void (async () => {
+    // A relay with mailbox proofs gets the recipient named and the proof;
+    // any other relay, the base protocol's bare DELETE.
+    const proof = (await proofs.ensure(base, authHeaders())) ? proofs.headerFor(base, 'DELETE') : {};
+    const named = Object.keys(proof).length ? `?recipient=${encodeURIComponent(ks().ownRoutingId())}` : '';
+    const url = `${base}/messages/${encodeURIComponent(msgId)}${named}`;
+    const res = await fetch(url, { method: 'DELETE', headers: authHeaders(proof), signal: AbortSignal.timeout(ACK_TIMEOUT_MS) });
+    if (res.status === 403) proofs.forget(base);
+    void res.body?.cancel().catch(() => {});
+  })().catch((err) => {
     console.warn(`[pairing] DELETE ${msgId} failed:`, err);
   });
 }
@@ -624,10 +637,12 @@ async function pollOnce(): Promise<void> {
   polling = true;
   lastPollStartedAt = Date.now();
   try {
-    const url = `${relayUrl()}/messages?recipient=${encodeURIComponent(ks().ownRoutingId())}`;
+    const base = relayUrl();
+    await proofs.ensure(base, authHeaders());
+    const url = `${base}/messages?recipient=${encodeURIComponent(ks().ownRoutingId())}`;
     const res = await fetch(url, {
       method: 'GET',
-      headers: authHeaders(lastPollTag ? { 'If-None-Match': lastPollTag } : {}),
+      headers: authHeaders({ ...(lastPollTag ? { 'If-None-Match': lastPollTag } : {}), ...proofs.headerFor(base, 'GET') }),
       // Covers the body read below too (the signal stays attached).
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
@@ -640,6 +655,7 @@ async function pollOnce(): Promise<void> {
       return;
     }
     if (!res.ok) {
+      if (res.status === 403) proofs.forget(base);
       console.warn(`[pairing] GET inbox returned ${res.status}`);
       return;
     }
@@ -778,11 +794,13 @@ function applyDelivery(): void {
     startFallbackPolling();
     return;
   }
+  // Learn the relay's mailbox proofs early, so the stream's next connect carries one.
+  void proofs.ensure(relayUrl(), authHeaders());
   void maybeRenewEntitlement();
   console.log(`[pairing] connecting push stream for ${ks().ownRoutingId()}`);
   stream = new RelayStream({
     url: () => `${relayUrl()}/stream?recipient=${encodeURIComponent(ks().ownRoutingId())}`,
-    headers: () => authHeaders(),
+    headers: () => authHeaders(proofs.headerFor(relayUrl(), 'STREAM')),
     label: 'pairing',
     callbacks: {
       onConnected: () => {
@@ -981,6 +999,20 @@ export function registerPairingIpc(): void {
       renewNotBefore = 0; // a person is acting — never held back by a backoff
       const evict = typeof payload.evict === 'string' && payload.evict.trim() ? payload.evict.trim() : undefined;
       return connectAccount(payload.connectCode, !!payload.confirmEvict, evict);
+    },
+  );
+  // Mailbox proof v1 for the renderer's team-list writes (its own entry
+  // only): the private key stays here. The renderer names the relay and
+  // token its (pinned) client uses; {} when that relay has no proofs.
+  ipcMain.handle(
+    'host:mailbox-proof',
+    async (_e, payload: { baseUrl?: unknown; token?: unknown; method?: unknown; code?: unknown }) => {
+      const base = typeof payload?.baseUrl === 'string' ? payload.baseUrl.trim().replace(/\/+$/, '') : '';
+      const token = typeof payload?.token === 'string' ? payload.token : '';
+      const method = payload?.method === 'PUT' || payload?.method === 'DELETE' ? payload.method : '';
+      if (!base || !token || !method || payload?.code !== ks().ownPublicCode()) return {};
+      const info = await proofs.ensure(base, { Authorization: `Bearer ${token}`, [RELAY_CLIENT_VERSION_HEADER]: app.getVersion() });
+      return info ? proofs.headerFor(base, method) : {};
     },
   );
   // Does a self-hosted relay accept us? One authenticated mailbox GET

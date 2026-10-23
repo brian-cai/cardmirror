@@ -22,6 +22,7 @@ import {
   createCipheriv,
   createDecipheriv,
   createHash,
+  createHmac,
   createPrivateKey,
   createPublicKey,
   diffieHellman,
@@ -57,6 +58,21 @@ export interface PairingKeystore {
   seal(obj: unknown, recipientPublicCode: string): SealedBundle;
   /** Decrypt a bundle addressed to us. Throws on tamper / wrong key. */
   open(bundle: SealedBundle): unknown;
+  /** `X-Mailbox-Proof` value proving this machine holds its key, for one
+   *  call to a relay advertising `relayKey` (mailbox proof v1; see
+   *  mailboxProofMac). */
+  mailboxProof(relayKey: string, method: string, ts: number): string;
+}
+
+const PROOF_INFO = Buffer.from('xtgg-mailbox-proof-v1');
+
+/** Mailbox proof v1 (xtgg relay docs/mailbox-proof-v1.md): HMAC-SHA256 over
+ *  `v1|METHOD|routing|ts`, keyed by HKDF-SHA256 of X25519(own key, relay key)
+ *  with salt ownPub‖relayPub. Proves the caller holds the private key behind
+ *  its routing code without revealing it. */
+export function mailboxProofMac(shared: Buffer, ownPubRaw: Buffer, relayPubRaw: Buffer, method: string, routing: string, ts: number): Buffer {
+  const key = Buffer.from(hkdfSync('sha256', shared, Buffer.concat([ownPubRaw, relayPubRaw]), PROOF_INFO, 32));
+  return createHmac('sha256', key).update(`v1|${method}|${routing}|${ts}`).digest();
 }
 
 function rawPub(key: KeyObject): Buffer {
@@ -178,6 +194,14 @@ export function createPairingKeystore(keysFilePath: string): PairingKeystore {
         decipher.final(),
       ]);
       return JSON.parse(pt.toString('utf8'));
+    },
+    mailboxProof(relayKey: string, method: string, ts: number): string {
+      ensure();
+      const relayRaw = Buffer.from(relayKey, 'base64url');
+      const shared = diffieHellman({ privateKey: priv!, publicKey: pubObjectFromRaw(relayRaw) });
+      const routing = routingId(CODE_PREFIX + pubRawCache!.toString('base64url'));
+      const mac = mailboxProofMac(shared, pubRawCache!, relayRaw, method, routing, ts);
+      return `v1.${pubRawCache!.toString('base64url')}.${ts}.${mac.toString('base64url')}`;
     },
   };
 }

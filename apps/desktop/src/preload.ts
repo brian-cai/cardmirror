@@ -850,6 +850,8 @@ interface PairingInboxItemIpc {
   readTeamFile: (filePath: string) =>
     ipcRenderer.invoke('host:read-team-file', filePath) as Promise<{ bytes: Uint8Array; mtimeMs: number } | null>,
   pairingPollNow: () => ipcRenderer.invoke('host:pairing-poll-now') as Promise<void>,
+  mailboxProof: (payload: { baseUrl: string; token: string; method: 'PUT' | 'DELETE'; code: string }) =>
+    ipcRenderer.invoke('host:mailbox-proof', payload) as Promise<Record<string, string>>,
   pairingRelayCheck: (payload: { relayUrl: string; relayToken: string }) =>
     ipcRenderer.invoke('host:pairing-relay-check', payload) as Promise<{ custom: boolean; ok: boolean; status: number }>,
   pairingAccountStatus: () =>

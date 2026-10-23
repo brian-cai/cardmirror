@@ -120,6 +120,29 @@ describe('RoomsClient', () => {
   });
 });
 
+describe('RoomsClient mailbox proof', () => {
+  it('sends the proof on its own team-list writes, and nothing when there is none', async () => {
+    const seen: Array<[string, string, string | null]> = [];
+    const mk = (proof: Record<string, string> | undefined) => new RoomsClient({
+      baseUrl: () => 'https://relay.example',
+      token: () => 't',
+      ...(proof ? { mailboxProof: async () => proof } : {}),
+      fetchImpl: async (url: string, init?: RequestInit) => {
+        const h = (init?.headers ?? {}) as Record<string, string>;
+        seen.push([init?.method ?? 'GET', String(url), h['X-Mailbox-Proof'] ?? null]);
+        return new Response(init?.method === 'DELETE' ? null : '{"revision":3}', { status: init?.method === 'DELETE' ? 204 : 200,
+          headers: { 'content-type': 'application/json' } });
+      },
+    });
+    const withProof = mk({ 'X-Mailbox-Proof': 'v1.p.1.m' });
+    await withProof.putTeamDirectoryMe('cmk1.x', 'Sam');
+    await withProof.putTeamDirectoryGroups('cmk1.x', []);
+    await withProof.deleteTeamDirectoryMe('cmk1.x');
+    await mk(undefined).putTeamDirectoryMe('cmk1.x', 'Sam');
+    expect(seen.map((s) => s[2])).toEqual(['v1.p.1.m', 'v1.p.1.m', 'v1.p.1.m', null]);
+  });
+});
+
 describe('RoomStream', () => {
   it('delivers hello, live updates, presence, and end', async () => {
     const { roomId } = await client.createRoom();
