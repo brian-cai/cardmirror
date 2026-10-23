@@ -28,6 +28,7 @@ import { type ActiveSession, type CollabUiDeps, META_COMMIT_ORIGIN, claimRoom, d
 import { refreshPresenceDots } from './collab-chip.js';
 import { adoptSharedTitle, sessionLabel } from './collab-titles.js';
 import { startTeamWatch } from './collab-team-listing.js';
+import { teardownPolicy, type TeardownReason } from './collab-session-policy.js';
 
 export let presenceTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -239,6 +240,12 @@ export function installSeams(
  *  cancelled RESUME, or a close-but-keep); terminal paths clear it. Returns the
  *  record-clear promise so terminal callers can await deletion (so a re-read of
  *  the Sessions list doesn't flash a stale row); most callers ignore it. */
+/** Tear `sess` down for `reason` (see teardownPolicy for what each keeps). */
+export function teardownFor(sess: ActiveSession, reason: TeardownReason): Promise<void> {
+  const { keepRecord, roomOver } = teardownPolicy(reason);
+  return teardownSession(sess, keepRecord, roomOver);
+}
+
 export function teardownSession(
   sess: ActiveSession,
   keepRecord = false,

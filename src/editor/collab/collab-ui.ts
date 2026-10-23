@@ -27,7 +27,6 @@ import { surfaceError } from '../error-surface.js';
 import { offerSharingSetup } from '../pairing/sharing-setup.js';
 import { promptForText, confirmDialog } from '../text-prompt.js';
 import { setCollabCopresenceProvider, setCollabCloseActions, setCollabHandoffProvider, setCollabSessionCountProvider, setCollabLiveRoomProbe, setCollabFocusChangeHandler, setCollabShareCodeGetter, setCollabInviteLinkGetter } from './collab-hooks.js';
-import { RoomsError } from './room-client.js';
 import { getElectronHost } from '../host/index.js';
 import { ensureBakedRelay, relayClient, relayClientWithGuestPass, endRoomOnRelay } from './collab-relay.js';
 import { teamSessionsSupportWithin } from './team-sessions.js';
@@ -47,8 +46,8 @@ import { type ActiveSession, type CollabUiDeps, META_COMMIT_ORIGIN, actionSessio
 import { refreshChipForFocus, updateChip } from './collab-chip.js';
 import { sessionPrepOverlay, sessionProgressOverlay } from './collab-overlays.js';
 import { sessionCallbacks } from './collab-session-callbacks.js';
-import { relayFailureMessage } from './collab-session-policy.js';
-import { installSeams, teardownSession } from './collab-seams.js';
+import { relayFailureMessage, resumeFailure, roomIsGone, roomsStatus, sessionRelayPlan } from './collab-session-policy.js';
+import { installSeams, teardownFor } from './collab-seams.js';
 import { META_TITLE_CUSTOM, adoptSharedTitle, defaultSessionName, namedDocTitle, sessionDocTitle, sharedDocTitle, titleIsCustom } from './collab-titles.js';
 import { listStartedSession, relistSession, sendInviteTo, teamContext, teamJoinSource } from './collab-team-listing.js';
 
@@ -331,14 +330,14 @@ export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
  *  False when it can't be (not saved here, or the user said no). Untagged
  *  sessions (older records) go to the relay in use, as before. */
 async function onSessionRelay(tag: string | null | undefined): Promise<boolean> {
-  if (!tag || tag === currentRelayTag()) return true;
-  const target = relayProfileIdForTag(tag);
-  if (!target) {
-    showToast(`That session is on ${relayLabelForTag(tag)}, which isn’t saved here. Connect to it in Settings → Collaboration first.`);
+  const plan = sessionRelayPlan(tag, currentRelayTag(), relayProfileIdForTag);
+  if (plan.kind === 'here') return true;
+  if (plan.kind === 'not-saved') {
+    showToast(`That session is on ${relayLabelForTag(tag ?? '')}, which isn’t saved here. Connect to it in Settings → Collaboration first.`);
     return false;
   }
   const { switchRelayNow } = await import('./relay-profiles-ui.js');
-  return (await switchRelayNow(target)) === 'switched';
+  return (await switchRelayNow(plan.profileId)) === 'switched';
 }
 
 const joinsInFlight = new Set<string>();
@@ -446,7 +445,7 @@ async function joinSessionWithCodeInner(
       // An ENDED (410) or expired/GC'd (404) room is not an offline
       // condition — the seed would resume a session that no longer exists.
       // Surface it as ended.
-      if (err instanceof RoomsError && (err.status === 410 || err.status === 404)) throw err;
+      if (roomIsGone(roomsStatus(err))) throw err;
       if (err instanceof JoinCancelledError) throw err;
       // Offline (or relay unreachable): fall back to the invite's
       // prefetched seed (§4.1). Everything in it came FROM the room,
@@ -515,7 +514,7 @@ async function joinSessionWithCodeInner(
     deps.getView()?.focus();
     return true;
   } catch (err) {
-    if (sessRef) void teardownSession(sessRef).catch((e) => surfaceError('collab teardown', e));
+    if (sessRef) void teardownFor(sessRef, 'join-failed').catch((e) => surfaceError('collab teardown', e));
     if (err instanceof JoinCancelledError) {
       showToast('Join cancelled');
       return false;
@@ -523,7 +522,7 @@ async function joinSessionWithCodeInner(
     // A dead room's invite and seed are useless — purge the seed and report
     // consumed so the Receive pill clears the row. Every other failure keeps
     // both, so the user can retry once the network/slot situation changes.
-    const ended = err instanceof RoomsError && (err.status === 410 || err.status === 404);
+    const ended = roomIsGone(roomsStatus(err));
     if (ended) {
       void deletePrefetch(decoded.roomId).catch((e) => surfaceError('collab seed cleanup', e));
       void deleteRecentRoom(decoded.roomId).catch((e) => surfaceError('collab recent rooms', e));
@@ -658,10 +657,9 @@ async function resumeSessionFlowInner(
     // find, 2026-07-10). Still resumable from the Sessions list.
     // An untagged record (saved before sessions knew their relay) that 404s
     // may simply live on another relay: not proof the room is over.
-    const ended = err instanceof RoomsError && (err.status === 410 || (err.status === 404 && Boolean(record.relay)));
-    const maybeElsewhere = !ended && !record.relay && err instanceof RoomsError && err.status === 404;
+    const { ended, maybeElsewhere } = resumeFailure(roomsStatus(err), Boolean(record.relay));
     if (sessRef) {
-      void teardownSession(sessRef, /* keepRecord */ true, /* roomOver */ ended).catch((e) =>
+      void teardownFor(sessRef, { resumeFailed: { roomOver: ended } }).catch((e) =>
         surfaceError('collab teardown', e),
       );
     } else if (ended) {
@@ -821,7 +819,7 @@ async function endOrLeaveSession(sess: ActiveSession): Promise<boolean> {
   // onEnded no-ops.
   // A host End tombstoned the room; a guest Leave leaves it alive and
   // rejoinable from Join session.
-  const cleared = teardownSession(sess, false, /* roomOver */ isHost);
+  const cleared = teardownFor(sess, isHost ? 'host-end' : 'guest-leave');
   refreshChipForFocus(); // repaint from live truth (a stale snapshot left ghost chips — field find, 2026-08-12)
   await cleared; // record actually gone before we return
   return true;
@@ -845,7 +843,7 @@ async function closeKeepResumableSession(uid: string): Promise<boolean> {
     sess.session.start(); // reconnect; the session stays live, caller aborts
     return false;
   }
-  void teardownSession(sess, /* keepRecord */ true).catch((e) => surfaceError('collab teardown', e));
+  void teardownFor(sess, 'keep-resumable').catch((e) => surfaceError('collab teardown', e));
   refreshChipForFocus(); // repaint from live truth (a stale snapshot left ghost chips — field find, 2026-08-12)
   return true;
 }

@@ -9,7 +9,7 @@ import { clearNotice, postNotice } from '../status-notices.js';
 import { notifyCollabCopresenceChange } from './collab-hooks.js';
 import { type ActiveSession, type CollabUiDeps, sessions } from './collab-ui-state.js';
 import { isChipSession, refreshChipForFocus, updateChip } from './collab-chip.js';
-import { teardownSession } from './collab-seams.js';
+import { teardownFor } from './collab-seams.js';
 
 export let offlineNoticeMs = 3 * 60_000;
 export function __setOfflineNoticeMsForTests(ms: number | null): void {
@@ -164,7 +164,7 @@ export function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSessio
       const sess = getSess();
       if (!sess || !sessions.has(sess.ownerUid)) return;
       const wasHost = sess.session.role === 'host';
-      void teardownSession(sess, false, /* roomOver */ true).catch((e) => surfaceError('collab teardown', e));
+      void teardownFor(sess, 'remote-end').catch((e) => surfaceError('collab teardown', e));
       refreshChipForFocus(); // repaint from live truth (a stale snapshot left ghost chips — field find, 2026-08-12)
       // Rebuild the OWNER doc's plugin stack — refreshing the focused view
       // left an unfocused owner pane holding dead session plugins (audit
@@ -188,7 +188,7 @@ export function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSessio
       // offline chip forever (audit find, 2026-07-10). Tear down but KEEP
       // the record so the user can rejoin from the Sessions list when
       // someone leaves.
-      void teardownSession(sess, /* keepRecord */ true).catch((e) => surfaceError('collab teardown', e));
+      void teardownFor(sess, 'full').catch((e) => surfaceError('collab teardown', e));
       refreshChipForFocus(); // repaint from live truth (a stale snapshot left ghost chips — field find, 2026-08-12)
       if (deps.refreshPluginsForUid) deps.refreshPluginsForUid(sess.ownerUid);
       else deps.refreshPlugins();
