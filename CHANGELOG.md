@@ -5,10 +5,20 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
-## 1.15.29 — 2026-10-22
+## 1.15.30 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Your team adds itself.** On a relay with a team list, connecting adds
+  you to it and everyone on it to your contacts, no button (it asks only
+  if you haven't set a display name).
+- **Suggested groups.** Your groups made only of teammates are suggested
+  to the team, and theirs show in Settings → Collaboration ("Suggested by
+  teammates", with Add) and the Send popup. Groups with anyone else stay
+  private.
 
 ### Fixed
 
