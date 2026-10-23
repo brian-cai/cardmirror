@@ -53,9 +53,9 @@ describe('Collaboration tab on web', () => {
     // Phase 4: the contacts system + master toggle surface on web; only
     // the poll-cadence knob stays desktop (web uses a fixed cadence).
     expect(webRows).toEqual([
+      'pairingDisplayName',
       'pairingEnabled',
       'pairingOwnCode',
-      'pairingDisplayName',
       'pairingPartners',
       'pairingGroups',
       'pairingBlockedCodes',

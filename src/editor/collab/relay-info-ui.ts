@@ -161,21 +161,28 @@ export function relayInfoRows(info: RelayInfo | null): Array<[string, Node]> {
   const rows: Array<[string, Node]> = [];
   const text = (s: string): Node => document.createTextNode(s);
   const op = info.operator;
-  if (op?.name || op?.url) {
-    rows.push(['Run by', op.url ? link(op.name || host(op.url), op.url) : text(op.name)]);
+  // One line for who runs it: name, then Support and Status links.
+  const who = document.createElement('span');
+  const sep = (): void => void who.append(text(' \u00b7 '));
+  if (op?.name || op?.url) who.append(op.url ? link(op.name || host(op.url), op.url) : text(op.name));
+  if (op?.support) {
+    if (who.childNodes.length) sep();
+    who.append(link('Support', `mailto:${op.support}`));
   }
-  if (op?.support) rows.push(['Support', link(op.support, `mailto:${op.support}`)]);
-  if (op?.status) rows.push(['Status', link(host(op.status), op.status)]);
-  if (op?.manage) rows.push(['Manage access', link(host(op.manage), op.manage)]);
+  if (op?.status) {
+    if (who.childNodes.length) sep();
+    who.append(link('Status', op.status));
+  }
+  if (who.childNodes.length) rows.push(['Relay', who]);
   const a = info.access;
   if (a) {
+    // Your token's standing; its label is the operator's own bookkeeping.
     const parts: string[] = [];
-    if (a.label) parts.push(a.label);
     if (a.status) parts.push(a.status === 'active' ? 'Active' : 'Suspended');
     if (a.expiresAt !== null) {
-      parts.push(`expires ${new Date(a.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`);
+      parts.push(`until ${new Date(a.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`);
     }
-    if (parts.length) rows.push(['Access', text(parts.join(' · '))]);
+    if (parts.length) rows.push(['Your access', text(parts.join(' \u00b7 '))]);
     const installs = installsLine(a.installs);
     if (installs) rows.push(['Installs', text(installs.replace(/^Installs: /, ''))]);
   }
@@ -191,7 +198,7 @@ export function buildRelayInfoSection(onCleanup: (fn: () => void) => void): HTML
   const wrap = document.createElement('section');
   wrap.className = 'pmd-relay-info-section';
   wrap.dataset['anchor'] = 'about-this-relay';
-  wrap.dataset['searchAliases'] = 'about this relay operator support status manage access installs plan expiry update available';
+  wrap.dataset['searchAliases'] = 'about this relay operator support status access installs plan expiry update available';
   const heading = document.createElement('div');
   heading.className = 'pmd-install-info-heading';
   heading.textContent = 'About this relay';

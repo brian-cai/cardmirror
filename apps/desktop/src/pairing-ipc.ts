@@ -146,6 +146,16 @@ function relayToken(): string {
   return DEFAULT_RELAY_TOKEN;
 }
 
+/** Is there a relay this install can actually use? A custom relay, a
+ *  Debate Decoded account, or a build with the built-in relay's token.
+ *  Collaboration is on by default, so a fresh install with none of these
+ *  stays quiet instead of polling the built-in relay with no credential. */
+function relayUsable(): boolean {
+  if (config.relayUrl.trim()) return true;
+  if (validEntitlement()) return true;
+  return DEFAULT_RELAY_TOKEN !== '' && DEFAULT_RELAY_TOKEN !== 'dev-pairing-token';
+}
+
 interface SendItem {
   label: string;
   type: string;
@@ -593,7 +603,7 @@ let lastPollTag = '';
 
 /** One catch-up/poll cycle: pull our mailbox and process it. */
 async function pollOnce(): Promise<void> {
-  if (polling || !config.enabled) return;
+  if (polling || !config.enabled || !relayUsable()) return;
   void maybeRenewEntitlement();
   polling = true;
   lastPollStartedAt = Date.now();
@@ -744,8 +754,8 @@ function startFallbackPolling(): void {
  *  paces a low-frequency belt-and-suspenders catch-up. */
 function applyDelivery(): void {
   stopDelivery();
-  if (!config.enabled) {
-    console.log('[pairing] delivery off');
+  if (!config.enabled || !relayUsable()) {
+    console.log(config.enabled ? '[pairing] delivery off (no relay set up yet)' : '[pairing] delivery off');
     return;
   }
   if (streamUnsupportedUrl !== null && streamUnsupportedUrl === relayUrl()) {

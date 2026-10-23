@@ -2603,7 +2603,18 @@ function buildTeamFileSection(rerender: () => void): HTMLElement {
   section.appendChild(actions);
   if (getElectronHost()) {
     section.appendChild(buildTeamFileSyncRow(rerender));
-    section.appendChild(buildContactsAutoExportRow(rerender));
+    // Auto-export matters less now that a relay's team list keeps everyone
+    // in sync: folded away unless it's already on.
+    const autoExport = buildContactsAutoExportRow(rerender);
+    if (settings.get('contactsAutoExportPath')) section.appendChild(autoExport);
+    else {
+      const more = document.createElement('details');
+      more.className = 'pmd-settings-more';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Keep a team file updated automatically';
+      more.append(summary, autoExport);
+      section.appendChild(more);
+    }
   }
   return section;
 }

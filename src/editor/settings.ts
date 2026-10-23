@@ -2169,7 +2169,9 @@ const DEFAULTS: Settings = {
   cardCutterReadTimeSec: 0,
   pluginsEnabled: false,
   pluginCommunityInstalls: false,
-  pairingEnabled: false,
+  // On by default (BCai's build): nothing connects until a relay is set
+  // up (desktop pairing-ipc relayUsable), so this only saves a step.
+  pairingEnabled: true,
   pairingPollSeconds: 30,
   pairingRelayUrl: '',
   pairingRelayToken: '',
@@ -4461,6 +4463,17 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     revealWhen: 'cardCutterEnabled',
   },
   {
+    key: 'pairingDisplayName',
+    label: 'Your display name',
+    // First in Collaboration (BCai's build): it's what teammates see, and
+    // joining a relay's team list needs it. Web too (not electronOnly):
+    // co-editing presence cursors carry this name.
+    description:
+      "The name teammates see: on your cursor in co-editing sessions, on cards you send, and on your team's list on a custom relay.",
+    kind: 'text',
+    category: 'pairing',
+  },
+  {
     key: 'pairingEnabled',
     label: 'Enable collaboration',
     description:
@@ -4475,17 +4488,6 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     description:
       "This machine's code. Share it with anyone you want to be able to send you cards. Anyone with this code (and the app) can send to you; regenerate it to cut off old shares.",
     kind: 'pairingOwnCode',
-    category: 'pairing',
-    dependsOn: 'pairingEnabled',
-  },
-  {
-    key: 'pairingDisplayName',
-    label: 'Your display name',
-    // Web too (not electronOnly): co-editing presence cursors carry
-    // this name — without the row, web users are stuck as "Guest NNN".
-    description:
-      "Optional name shown to collaborators — on your live cursor in co-editing sessions, and stamped on cards you send. Leave empty for a generic name.",
-    kind: 'text',
     category: 'pairing',
     dependsOn: 'pairingEnabled',
   },
@@ -5758,7 +5760,7 @@ function sanitize(s: Settings): Settings {
 
     pluginsEnabled: !isLiteBuild() && s.pluginsEnabled === true,
     pluginCommunityInstalls: s.pluginCommunityInstalls === true,
-    pairingEnabled: !isLiteBuild() && s.pairingEnabled === true,
+    pairingEnabled: !isLiteBuild() && s.pairingEnabled !== false,
     pairingConnectedUntil: Number.isFinite(Number(s.pairingConnectedUntil))
       ? Math.max(0, Number(s.pairingConnectedUntil))
       : DEFAULTS.pairingConnectedUntil,

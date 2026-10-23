@@ -379,11 +379,15 @@ describe('About this relay', () => {
     const doc = { ...FULL_DOC, clients: [{ id: 'cardmirror-xtgg', latest: '999.0.0', url: 'https://example.org/rel' }] };
     const rows = relayInfoRows(parseRelayInfo(doc));
     const byLabel = new Map(rows.map(([l, n]) => [l, n]));
-    expect([...byLabel.keys()]).toEqual(['Run by', 'Support', 'Status', 'Manage access', 'Access', 'Installs', 'This app']);
-    expect((byLabel.get('Run by') as HTMLAnchorElement).href).toBe('https://relay.example/about');
-    expect(byLabel.get('Run by')!.textContent).toBe('Example Relay');
-    expect((byLabel.get('Support') as HTMLAnchorElement).href).toBe('mailto:help@relay.example');
-    expect(byLabel.get('Access')!.textContent).toMatch(/^Duo, season · Active · expires /);
+    // Compact: who runs it on one line, your access without the operator's label.
+    expect([...byLabel.keys()]).toEqual(['Relay', 'Your access', 'Installs', 'This app']);
+    const links = [...(byLabel.get('Relay') as HTMLElement).querySelectorAll('a')].map((x) => [x.textContent, x.href]);
+    expect(links).toEqual([
+      ['Example Relay', 'https://relay.example/about'],
+      ['Support', 'mailto:help@relay.example'],
+      ['Status', expect.stringMatching(/^https:/)],
+    ]);
+    expect(byLabel.get('Your access')!.textContent).toMatch(/^Active · until /);
     expect(byLabel.get('Installs')!.textContent).toBe('3 of 4 in use; unused for 30 days stop counting');
     expect(byLabel.get('This app')!.textContent).toBe('Update available (999.0.0)');
     expect(relayInfoRows(parseRelayInfo({ v: 1 }))).toEqual([]);
