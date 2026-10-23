@@ -5,6 +5,27 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.27 — 2026-10-22
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Added
+
+- **Contacts belong to relays.** The Send pill, Send to Recipient,
+  starred sends and session invites offer the contacts on the relay
+  you're using, and say how many are on other relays. Teammates from a
+  relay's team list are tied to it (someone on two relays is on both),
+  and contacts you add on a custom relay are tied to that one. Change it
+  per contact in Settings → Collaboration. Contacts you already had,
+  team files and contacts on the built-in relay stay on every relay, as
+  in the original app.
+
+### Changed
+
+- **Team list updates every 5 minutes** instead of hourly, so a teammate
+  who joins mid-practice shows up within minutes.
+
 ## 1.15.26 — 2026-10-22
 
 BCai's (@brian-cai) build of CardMirror, updating from
