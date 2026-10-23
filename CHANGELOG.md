@@ -22,6 +22,12 @@ github.com/brian-cai/cardmirror.
 
 ### Fixed
 
+- **The team list stays the team.** A teammate removed from your contacts
+  comes back on the next sync (every 5 minutes, on start, or when you open
+  Settings → Collaboration), not only when the list changes. Hide someone
+  in the Send pill instead, or ask whoever manages the team to take them
+  off the list.
+
 - **People in a session show up when they join**, not only once they
   click in and type, and stay listed while their window isn't focused
   (only their caret goes). Teammates already in the session appear to a

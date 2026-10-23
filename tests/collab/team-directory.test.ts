@@ -644,3 +644,22 @@ describe('suggested groups', () => {
     expect(suggestionsToShow(d, [{ id: 'x', label: 'VARSITY', memberCodes: [BEN, ANA] }], 'Sam')).toEqual([]);
   });
 });
+
+describe('the list is the team (2026-10-23)', () => {
+  it('a teammate deleted here comes back on the next refresh, also after a restart', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay();
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    expect(settings.get('pairingPartners').map((p) => p.code)).toEqual([ANA, BEN]);
+    // Delete Ben locally; the list didn't change (a 304), but he's re-added.
+    settings.set('pairingPartners', settings.get('pairingPartners').filter((p) => p.code !== BEN));
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(settings.get('pairingPartners').map((p) => p.code)).toContain(BEN);
+    // A restart (empty memory, imported state kept) fetches the list itself, not just "unchanged".
+    __resetTeamDirectoryForTests();
+    settings.set('pairingPartners', settings.get('pairingPartners').filter((p) => p.code !== ANA));
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(relay.sent.at(-1)!.headers['If-None-Match']).toBeUndefined();
+    expect(settings.get('pairingPartners').map((p) => p.code)).toContain(ANA);
+  });
+});

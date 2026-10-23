@@ -381,10 +381,10 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
   fetchedAt.set(key, now);
   const st = directoryState(key);
   const cached = memory.get(key) ?? null;
-  // Ask "changed since?" only when an unchanged answer is enough: the
-  // directory was imported or dismissed at that revision, or is in hand.
-  const conditional =
-    st.revision >= 0 && (st.imported || st.dismissedRevision === st.revision || cached?.revision === st.revision);
+  // Ask "changed since?" only with that revision in hand: an imported team
+  // re-merges the list on every refresh (below), so it needs the list
+  // itself, not just "unchanged" (after a restart, memory is empty).
+  const conditional = st.revision >= 0 && cached?.revision === st.revision;
   let raw: unknown;
   try {
     raw = await ctx.client.getTeamDirectory(conditional ? st.revision : undefined);
@@ -424,8 +424,10 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
   }
   if (state.imported) {
     publishOffer(null);
-    if (dir && raw !== null) applyImported(dir, relayTag(ctx.baseUrl));
-    else if (dir) applyTeamKeyFromFile(directoryAsTeamFile(dir));
+    // Every refresh, changed or not: the list is the team, so a teammate
+    // deleted here comes back (hide them in the Send pill instead, or ask
+    // whoever manages the team to take them off the list).
+    if (dir) applyImported(dir, relayTag(ctx.baseUrl));
     const relayHasKey = dir ? !!dir.teamKey : state.hasKey;
     if (!relayHasKey) await syncTeamKeyUp(ctx, key, dir?.name ?? '');
     if (dir) {
