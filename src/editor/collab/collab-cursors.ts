@@ -117,8 +117,21 @@ class CoalescingCursorStore extends CursorEphemeralStore {
     return this.allMemo;
   }
 
+  /** Who we are, once known: keeps us PRESENT without a caret. The stock
+   *  plugin clears the local state whenever the editor loses focus (and on
+   *  view teardown), which deleted us from every partner's roster: someone
+   *  who joined and hadn't clicked in yet, or was reading in another
+   *  window, looked absent, while leaving (an explicit delete) showed at
+   *  once. Now "no caret" stays {user} (partners skip caret-less peers
+   *  when drawing cursors, and still list them); leaving is farewell(). */
+  presenceUser: Record<string, unknown> | null = null;
+
   override setLocal(...args: Parameters<CursorEphemeralStore['setLocal']>): ReturnType<CursorEphemeralStore['setLocal']> {
     this.invalidate();
+    const [state] = args;
+    if (this.presenceUser && !state.anchor && !state.focus && !state.user) {
+      return super.setLocal({ user: this.presenceUser } as Parameters<CursorEphemeralStore['setLocal']>[0]);
+    }
     return super.setLocal(...args);
   }
 
@@ -282,6 +295,10 @@ export function installCursorPresence(
     color: peerColor(peerId),
     ...(looksLikePairingCode(ownCode) ? { code: ownCode } : {}),
   };
+  // Present from the moment we join (and while unfocused), not only once
+  // we click into the doc: see CoalescingCursorStore.presenceUser.
+  store.presenceUser = user;
+  if (cursorsEnabled()) store.setLocal({ user } as Parameters<typeof store.setLocal>[0]);
 
   // --- inbound cursor coalescing buffer (see CURSOR_RECEIVE_COALESCE_MS) ---
   let cursorBuf: Uint8Array[] = [];
@@ -434,7 +451,18 @@ export function installCursorPresence(
           if (disposed) return;
           const batch = cursorBuf;
           cursorBuf = [];
+          const before = new Set(Object.keys(store.getAllStates()));
           store.applyBatch(batch);
+          // Someone new appeared: answer with our own presence now, so a
+          // joiner sees everyone already here at once instead of after
+          // each peer's next 15 s keepalive. Once per newcomer, no storm.
+          if (cursorsEnabled() && Object.keys(store.getAllStates()).some((p) => p !== peerId && !before.has(p))) {
+            const local = store.getLocal();
+            if (local) {
+              lastSentBytes = null;
+              store.setLocal(local);
+            }
+          }
         }, CURSOR_RECEIVE_COALESCE_MS);
       } else if (type === FRAME_LEASE) {
         try {
