@@ -245,10 +245,21 @@ async function relayNow(): Promise<string | undefined> {
   }
 }
 
+/** Each room's relay once known this run, so a save needn't re-read it. */
+const roomRelays = new Map<string, string>();
+
 export async function saveSessionRecord(record: PersistedSessionRecord): Promise<void> {
   // Which relay the room lives on (a session is only reachable there):
-  // the one in use while it's live, kept once known.
-  await put(SESSIONS, { ...record, relay: record.relay ?? (await relayNow()) });
+  // the one in use when it was first saved, kept from then on — callers
+  // rebuild the record without it, and the relay setting may have moved
+  // since (an edit in Settings doesn't leave the session).
+  const relay =
+    record.relay ??
+    roomRelays.get(record.roomId) ??
+    (await get<PersistedSessionRecord>(SESSIONS, record.roomId))?.relay ??
+    (await relayNow());
+  if (relay) roomRelays.set(record.roomId, relay);
+  await put(SESSIONS, { ...record, relay });
   notify();
 }
 
@@ -262,6 +273,7 @@ export async function listSessionRecords(): Promise<PersistedSessionRecord[]> {
 }
 
 export async function deleteSessionRecord(roomId: string): Promise<void> {
+  roomRelays.delete(roomId);
   await del(SESSIONS, roomId);
   notify();
 }

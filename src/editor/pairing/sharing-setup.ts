@@ -9,11 +9,14 @@
  */
 import { settings } from '../settings.js';
 import { promptForRouteChoice } from '../text-prompt.js';
+import { relayUsable } from '../collab/collab-relay.js';
 
-/** Whether this computer can share right now: collaboration on. (A
- *  missing relay is reported by the send / session paths themselves.) */
+/** Whether this computer can share right now: collaboration on and a
+ *  relay it can use. Collaboration is on by default, so a fresh install
+ *  with no relay, account or team file gets the setup offer instead of a
+ *  send that fails. */
 export function sharingReady(): boolean {
-  return settings.get('pairingEnabled');
+  return settings.get('pairingEnabled') && relayUsable();
 }
 
 /** Offer the ways to set sharing up. `why` names what the user tried. */

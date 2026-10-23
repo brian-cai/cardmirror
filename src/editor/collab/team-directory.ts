@@ -30,10 +30,11 @@
 
 import { RoomsError, type RoomsClient } from './room-client.js';
 import { settings, type PairingGroup, type PairingPartner, type TeamDirectoryRelayState } from '../settings.js';
-import { normalizePairingCode } from '../pairing/pairing-ids.js';
+import { generateGroupId, normalizePairingCode } from '../pairing/pairing-ids.js';
 import { mergeTeamFile, TEAM_FILE_KIND, type TeamFile, type TeamMergeResult } from '../pairing/team-file.js';
 import { isTeamKey, mergeTeamKey } from '../pairing/team-key.js';
-import { applyTeamKeyFromFile } from '../pairing/team-file-sync.js';
+import { applyTeamKeyFromFile, ensureLocalTeamKey } from '../pairing/team-file-sync.js';
+import { keyBelongsHere } from './relay-profiles.js';
 import { showToast } from '../toast.js';
 import { relayMatchKey, tokenFingerprint } from '../relay-protocol.js';
 import { relayTag, tagImported } from '../pairing/contact-relays.js';
@@ -166,20 +167,59 @@ export function directoryAsTeamFile(dir: TeamDirectory): TeamFile {
   return file;
 }
 
-/** Merge the directory's people and groups into the importer's lists —
- *  mergeTeamFile on directoryAsTeamFile, nothing else. */
+/** Merge the directory's people and groups into the importer's lists:
+ *  the first time exactly as a team file (groups matched by name), after
+ *  that only into the groups the list owns. */
 export function mergeTeamDirectory(opts: {
   directory: TeamDirectory;
   ownCode: string;
   partners: readonly PairingPartner[];
   groups: readonly PairingGroup[];
-}): TeamMergeResult {
-  return mergeTeamFile({
-    file: directoryAsTeamFile(opts.directory),
+  /** Groups this relay's list owns (TeamDirectoryRelayState.groupIds).
+   *  Absent: matched by name like a team file, and recorded. */
+  groupIds?: readonly string[];
+}): TeamMergeResult & { groupIds: string[] } {
+  const owned = opts.groupIds;
+  if (!owned) {
+    const merged = mergeTeamFile({
+      file: directoryAsTeamFile(opts.directory),
+      ownCode: opts.ownCode,
+      partners: opts.partners,
+      groups: opts.groups,
+    });
+    const labels = new Set(opts.directory.groups.map((g) => g.label.toLowerCase()));
+    return { ...merged, groupIds: merged.groups.filter((g) => labels.has(g.label.toLowerCase())).map((g) => g.id) };
+  }
+  // People as a team file merges them; groups only into the ones this list
+  // made, so a group of yours with the same name never gains its members.
+  const people = mergeTeamFile({
+    file: { ...directoryAsTeamFile(opts.directory), groups: [] },
     ownCode: opts.ownCode,
     partners: opts.partners,
-    groups: opts.groups,
+    groups: [],
   });
+  const own = normalizePairingCode(opts.ownCode);
+  const known = new Set(people.partners.map((p) => normalizePairingCode(p.code)));
+  const groups = opts.groups.map((g) => ({ ...g, memberCodes: [...g.memberCodes] }));
+  const ids = new Set(owned.filter((id) => groups.some((g) => g.id === id)));
+  let addedGroups = 0;
+  let updatedGroups = 0;
+  for (const g of opts.directory.groups) {
+    const members = g.memberCodes.filter((c) => c !== own && known.has(c));
+    const label = g.label.toLowerCase();
+    const mine = groups.find((x) => ids.has(x.id) && x.label.toLowerCase() === label);
+    if (mine) {
+      const before = mine.memberCodes.length;
+      mine.memberCodes = [...new Set([...mine.memberCodes, ...members])];
+      if (mine.memberCodes.length > before) updatedGroups++;
+    } else if (members.length > 0 && !groups.some((x) => x.label.toLowerCase() === label)) {
+      const id = generateGroupId();
+      groups.push({ id, label: g.label, memberCodes: members });
+      ids.add(id);
+      addedGroups++;
+    }
+  }
+  return { partners: people.partners, groups, addedPeople: people.addedPeople, addedGroups, updatedGroups, groupIds: [...ids] };
 }
 
 /** How many of the directory's people this install doesn't have (its own
@@ -294,15 +334,23 @@ function publishOffer(next: TeamDirectoryOffer | null): void {
 
 // --- team key ---------------------------------------------------------
 
-/** Give the team this machine's key when the directory has none; on 409
- *  take the team's under the merge rule (a different one never replaces
- *  ours: the same notice as a team file's). Never throws. */
+/** Give the team this machine's key when the directory has none (minting
+ *  one when this machine has none either); on 409 take the team's — a key
+ *  minted just now gives way, an older one follows the merge rule (never
+ *  replaced: the same notice as a team file's). A key saved for a
+ *  different team's relay is never sent. Never throws. */
 export async function syncTeamKeyUp(ctx: TeamDirectoryContext, key: string, teamName: string): Promise<void> {
-  const local = settings.get('teamSessionsKey');
-  if (!isTeamKey(local)) return;
+  let local = settings.get('teamSessionsKey');
+  const minted = !isTeamKey(local);
+  if (minted) local = ensureLocalTeamKey();
+  else if (!keyBelongsHere(local)) return;
   try {
     const existing = await ctx.client.putTeamDirectoryKey(local);
     patchState(key, { hasKey: true });
+    if (existing !== null && isTeamKey(existing) && minted && existing !== local) {
+      settings.set('teamSessionsKey', existing);
+      return;
+    }
     // 409: someone else's key won the race. Same rule as a team file's.
     if (existing !== null && isTeamKey(existing) && mergeTeamKey(local, existing).conflict) {
       applyTeamKeyFromFile({ kind: TEAM_FILE_KIND, version: 1, name: teamName || 'Team', people: [], groups: [], teamKey: existing });
@@ -310,6 +358,17 @@ export async function syncTeamKeyUp(ctx: TeamDirectoryContext, key: string, team
   } catch {
     /* offline or refused: try again next refresh */
   }
+}
+
+/** The directory's team key, under the team file rule — except that a key
+ *  this machine holds for a different team's relay gives way to it. */
+function takeDirectoryKey(dir: TeamDirectory): void {
+  const local = settings.get('teamSessionsKey');
+  if (dir.teamKey && isTeamKey(local) && local !== dir.teamKey && !keyBelongsHere(local)) {
+    settings.set('teamSessionsKey', dir.teamKey);
+    return;
+  }
+  applyTeamKeyFromFile(directoryAsTeamFile(dir));
 }
 
 // --- refresh ----------------------------------------------------------
@@ -320,23 +379,30 @@ const inflight = new Map<string, Promise<TeamDirectory | null>>();
 
 export type ApplyResult = { addedPeople: number; addedGroups: number };
 
-/** Merge silently (an imported directory): new people and groups, the
- *  team key. Toasts "Added N teammates from your relay" when N > 0. */
-function applyImported(dir: TeamDirectory, tag: string): ApplyResult {
+/** Merge silently (an imported directory): new people every time (the
+ *  list is the team); groups and relay tags only when the list changed,
+ *  so a member you took out of a group or a relay you unticked for a
+ *  contact stays that way until the team's list moves. Toasts "Added N
+ *  teammates from your relay" when N > 0. */
+function applyImported(dir: TeamDirectory, tag: string, key: string): ApplyResult {
   const before = settings.get('pairingPartners');
+  const state = directoryState(key);
+  const changed = state.mergedRevision !== dir.revision;
   const merged = mergeTeamDirectory({
-    directory: dir,
+    directory: changed ? dir : { ...dir, groups: [] },
     ownCode: settings.get('pairingOwnCode'),
     partners: before,
     groups: settings.get('pairingGroups'),
+    groupIds: state.groupIds,
   });
   // Everyone on this relay's list is on this relay (contact-relays.ts).
-  const tagged = tagImported(merged.partners, before, dir.people.map((p) => p.code), tag);
+  const tagged = tagImported(merged.partners, before, dir.people.map((p) => p.code), tag, { retag: changed });
   if (merged.addedPeople || merged.addedGroups || merged.updatedGroups || JSON.stringify(tagged) !== JSON.stringify(before)) {
     settings.set('pairingPartners', tagged);
     settings.set('pairingGroups', merged.groups);
   }
-  applyTeamKeyFromFile(directoryAsTeamFile(dir));
+  if (changed) patchState(key, { mergedRevision: dir.revision, groupIds: merged.groupIds });
+  takeDirectoryKey(dir);
   if (merged.addedPeople > 0) {
     showToast(`Added ${merged.addedPeople} teammate${merged.addedPeople === 1 ? '' : 's'} from your relay.`);
   }
@@ -427,7 +493,7 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
     // Every refresh, changed or not: the list is the team, so a teammate
     // deleted here comes back (hide them in the Send pill instead, or ask
     // whoever manages the team to take them off the list).
-    if (dir) applyImported(dir, relayTag(ctx.baseUrl));
+    if (dir) applyImported(dir, relayTag(ctx.baseUrl), key);
     const relayHasKey = dir ? !!dir.teamKey : state.hasKey;
     if (!relayHasKey) await syncTeamKeyUp(ctx, key, dir?.name ?? '');
     if (dir) {
@@ -620,16 +686,17 @@ export async function importTeamDirectory(
     ownCode: settings.get('pairingOwnCode'),
     partners: before,
     groups: settings.get('pairingGroups'),
+    groupIds: directoryState(key).groupIds,
   });
   settings.set('pairingPartners', tagImported(merged.partners, before, dir.people.map((p) => p.code), relayTag(ctx.baseUrl)));
   settings.set('pairingGroups', merged.groups);
   // Team key: taken when this machine has none; a different one never
   // replaces yours (the team file's quiet notice instead).
-  applyTeamKeyFromFile(directoryAsTeamFile(dir));
+  takeDirectoryKey(dir);
   // The revision stays the one merged: the next fetch gets the whole
   // directory again (our own entry, and anything a manager changed in
   // between), and merging it twice is a no-op.
-  patchState(key, { imported: true, revision: dir.revision, hasKey: !!dir.teamKey });
+  patchState(key, { imported: true, revision: dir.revision, hasKey: !!dir.teamKey, mergedRevision: dir.revision, groupIds: merged.groupIds });
   publishOffer(null);
   if (!dir.teamKey) await syncTeamKeyUp(ctx, key, dir.name);
   return { ok: true, addedPeople: merged.addedPeople, addedGroups: merged.addedGroups };

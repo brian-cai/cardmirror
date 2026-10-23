@@ -5142,6 +5142,13 @@ export interface TeamDirectoryRelayState {
   revision: number;
   /** The directory carried a team key at `revision`. */
   hasKey: boolean;
+  /** Revision whose groups (and relay tags) were last merged; absent = none. */
+  mergedRevision?: number;
+  /** Groups this relay's list created (or, before this was recorded, the
+   *  same-named ones it fed). Only these gain the list's members; a group
+   *  of yours that happens to share a name is left alone. Absent = not
+   *  recorded yet (an import from an older build). */
+  groupIds?: string[];
 }
 
 /** A saved custom relay (collab/relay-profiles.ts). */
@@ -5201,6 +5208,10 @@ function sanitizeTeamDirectoryRelays(v: unknown): TeamDirectoryRelayState[] {
       dismissedRevision: rev(r['dismissedRevision']),
       revision: rev(r['revision']),
       hasKey: r['hasKey'] === true,
+      ...(typeof r['mergedRevision'] === 'number' ? { mergedRevision: rev(r['mergedRevision']) } : {}),
+      ...(Array.isArray(r['groupIds'])
+        ? { groupIds: (r['groupIds'] as unknown[]).filter((x): x is string => typeof x === 'string' && x.length <= 100).slice(0, 200) }
+        : {}),
     });
   }
   return out.slice(-20);

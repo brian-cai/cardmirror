@@ -60,6 +60,23 @@ export function defaultRelayLabel(url: string, info: RelayInfo | null = null): s
   return (parts.length ? parts.join(' · ') : relayHostPath(url)).slice(0, 80);
 }
 
+/** A per-team address (".../r/<name>"): one team, whatever its token. A
+ *  shared address (one relay, a team per token) is not. */
+export function isTeamAddress(url: string): boolean {
+  try {
+    return /\/r\/[^/]+\/?$/.test(new URL(normUrl(url)).pathname);
+  } catch {
+    return false;
+  }
+}
+
+/** Are two relay + token pairs the same team? The same token at the same
+ *  address, or any token at the same per-team address (a rotated token). */
+export function sameTeam(a: Pick<RelayProfile, 'url' | 'token'>, b: Pick<RelayProfile, 'url' | 'token'>): boolean {
+  if (profileKey(a) === profileKey(b)) return true;
+  return normUrl(a.url) === normUrl(b.url) && isTeamAddress(a.url);
+}
+
 export function profileKey(p: Pick<RelayProfile, 'url' | 'token'>): string {
   return relayMatchKey(p.url, p.token);
 }
@@ -114,10 +131,11 @@ export function rememberConnectedRelay(opts: { info?: RelayInfo | null; now?: nu
   const token = settings.get('pairingRelayToken');
   const now = opts.now ?? Date.now();
   const list = settings.get('relayProfiles');
-  // A new token for a saved address (the token was rotated, or a teammate
-  // sent the current one) updates that relay instead of saving a second
-  // one: an address is one team.
-  const hit = findProfile(list, url, token) ?? list.find((p) => normUrl(p.url) === url) ?? null;
+  // A new token for a saved per-team address (".../r/<name>": the token was
+  // rotated, or a teammate sent the current one) updates that relay instead
+  // of saving a second one. On a shared address the token is the team, so
+  // a new token is a new relay.
+  const hit = findProfile(list, url, token) ?? list.find((p) => sameTeam(p, { url, token })) ?? null;
   const label = (p: RelayProfile | null): string =>
     p?.labelCustom ? p.label : opts.info ? defaultRelayLabel(url, opts.info) : p?.label || defaultRelayLabel(url);
   const next: RelayProfile = {
@@ -249,9 +267,11 @@ export async function switchRelay(target: string, hooks: SwitchHooks, now = Date
 }
 
 /** URL / token typed in Settings settled from `prev` to the current pair:
- *  the outgoing relay keeps its key, and a saved relay switched to by
- *  typing its address gets its own key back. An unknown relay keeps the
- *  key in use (a typo fix mustn't drop it); it's saved with it on connect. */
+ *  the outgoing relay keeps its key (saved with it, so fixing a typo gets
+ *  it back), and a saved relay switched to by typing its address gets its
+ *  own key back. An unknown relay starts with no key: one team's key must
+ *  never reach another team's relay. Only a new token at the same per-team
+ *  address (a rotation) keeps it. */
 export function relayEdited(prev: { url: string; token: string }, now = Date.now()): void {
   const cur = { url: settings.get('pairingRelayUrl'), token: settings.get('pairingRelayToken') };
   if (relayMatchKey(prev.url, prev.token) === relayMatchKey(cur.url, cur.token)) return;
@@ -259,14 +279,32 @@ export function relayEdited(prev: { url: string; token: string }, now = Date.now
   const list = settings.get('relayProfiles');
   const out = findProfile(list, prev.url, prev.token);
   if (!normUrl(prev.url)) settings.set('relayBuiltinTeamKey', key);
-  else if (out && out.teamKey !== key) save(list.map((p) => (p.id === out.id ? { ...p, teamKey: key } : p)));
+  else if (out) {
+    if (out.teamKey !== key) save(list.map((p) => (p.id === out.id ? { ...p, teamKey: key } : p)));
+  } else if (key) {
+    // A custom relay never saved (it never connected): keep its key anyway.
+    save([
+      ...list,
+      { id: newId(), label: defaultRelayLabel(prev.url), labelCustom: false, url: normUrl(prev.url), token: prev.token, teamKey: key, lastUsed: now },
+    ]);
+  }
   const into = findProfile(settings.get('relayProfiles'), cur.url, cur.token);
   if (into) {
     settings.set('teamSessionsKey', into.teamKey);
     save(settings.get('relayProfiles').map((p) => (p.id === into.id ? { ...p, lastUsed: now } : p)));
   } else if (!normUrl(cur.url)) {
     settings.set('teamSessionsKey', settings.get('relayBuiltinTeamKey'));
+  } else if (!(normUrl(prev.url) && sameTeam(prev, cur))) {
+    settings.set('teamSessionsKey', '');
   }
+}
+
+/** May `key` go to the current relay (its team directory)? Not when it is
+ *  the key of a different team's saved relay: then it came from there. */
+export function keyBelongsHere(key: string): boolean {
+  const cur = { url: settings.get('pairingRelayUrl'), token: settings.get('pairingRelayToken') };
+  if (!normUrl(cur.url)) return true;
+  return !settings.get('relayProfiles').some((p) => p.teamKey === key && !sameTeam(p, cur));
 }
 
 /** The list as shown: most recently used first. */

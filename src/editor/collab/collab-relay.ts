@@ -20,14 +20,14 @@ import { customRelayExtHeaders } from './relay-info.js';
  *  '' fields mean web edition / old preload / nothing baked.
  *  `routingCode` is non-'' only when the baked token is an entitlement
  *  (machine binding — see relay-protocol.ts). */
-let bakedRelay: { url: string; token: string; routingCode: string } | null = null;
+let bakedRelay: { url: string; token: string; routingCode: string; usable?: boolean } | null = null;
 let bakedRefreshWired = false;
 
 export async function ensureBakedRelay(): Promise<void> {
   if (bakedRelay) return;
   try {
     const got = await getElectronHost()?.collabRelayDefaults();
-    bakedRelay = { url: got?.url ?? '', token: got?.token ?? '', routingCode: got?.routingCode ?? '' };
+    bakedRelay = { url: got?.url ?? '', token: got?.token ?? '', routingCode: got?.routingCode ?? '', usable: got?.usable };
   } catch {
     bakedRelay = { url: '', token: '', routingCode: '' };
   }
@@ -49,7 +49,7 @@ export async function refreshBakedRelay(): Promise<void> {
   try {
     const got = await getElectronHost()?.collabRelayDefaults();
     if (got) {
-      bakedRelay = { url: got.url ?? '', token: got.token ?? '', routingCode: got.routingCode ?? '' };
+      bakedRelay = { url: got.url ?? '', token: got.token ?? '', routingCode: got.routingCode ?? '', usable: got.usable };
     }
   } catch {
     /* keep previous */
@@ -115,6 +115,17 @@ function resolveCredential(): { token: string; routingCode: string } {
         ? ''
         : (bakedRelay?.routingCode ?? '');
   return { token, routingCode };
+}
+
+/** Can this computer reach a relay with a credential? A relay set in
+ *  Settings, a linked account, a dev relay, or what the desktop main
+ *  process reports for its built-in one. Not known yet (the baked
+ *  defaults not loaded, or an older main that doesn't say) counts as
+ *  yes: the send and session paths report a missing relay themselves. */
+export function relayUsable(): boolean {
+  if (!getElectronHost()) return true;
+  if (settings.get('pairingRelayUrl').trim() || webEntitlementToken() || collabDevRelay()) return true;
+  return bakedRelay?.usable !== false;
 }
 
 export function relayClient(): RoomsClient | null {

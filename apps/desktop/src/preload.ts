@@ -811,6 +811,8 @@ interface PairingInboxItemIpc {
       url: string;
       token: string;
       routingCode: string;
+      /** Main can reach a relay with a credential (pairing-ipc relayUsable). */
+      usable?: boolean;
     }>,
   toggleDevTools: () => ipcRenderer.invoke('host:toggle-devtools') as Promise<void>,
   onPowerResumed: (handler: () => void) => {

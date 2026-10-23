@@ -29,6 +29,7 @@ import {
   currentRelayLabel,
   defaultRelayLabel,
   findProfile,
+  keyBelongsHere,
   profileKey,
   relabelFromInfo,
   relayEdited,
@@ -116,26 +117,38 @@ describe('saving a relay on connect', () => {
     expect(activeProfile()?.id).toBe(p.id);
   });
 
-  it('matches by URL + token fingerprint: same pair updates; a new token for the same address updates it too', () => {
-    const a = saved(HS, KEY_A, 1);
-    const again = saved({ url: HS.url + '/', token: HS.token }, KEY_A, 2);
+  it('matches by URL + token fingerprint: same pair updates; a new token at a per-team address updates it too', () => {
+    const a = saved(COLLEGE, KEY_A, 1);
+    const again = saved({ url: COLLEGE.url + '/', token: COLLEGE.token }, KEY_A, 2);
     expect(again.id).toBe(a.id);
     expect(settings.get('relayProfiles')).toHaveLength(1);
     expect(settings.get('relayProfiles')[0]!.lastUsed).toBe(2);
-    expect(profileKey(a)).not.toContain(HS.token);
-    expect(findProfile(settings.get('relayProfiles'), HS.url, HS.token)?.id).toBe(a.id);
-    // Rotated token: the same saved relay, with the new token and the team key kept.
-    renameProfile(a.id, 'Lincoln');
-    settings.set('teamDirectoryRelays', [{ key: directoryKey(HS.url, HS.token), imported: true, dismissedRevision: -1, revision: 4, hasKey: false }]);
-    const rotated = saved({ url: HS.url, token: 'another' }, KEY_A, 3);
+    expect(profileKey(a)).not.toContain(COLLEGE.token);
+    expect(findProfile(settings.get('relayProfiles'), COLLEGE.url, COLLEGE.token)?.id).toBe(a.id);
+    // Rotated token at ".../r/squad": the same saved relay, with the new token and the team key kept.
+    renameProfile(a.id, 'Squad');
+    settings.set('teamDirectoryRelays', [{ key: directoryKey(COLLEGE.url, COLLEGE.token), imported: true, dismissedRevision: -1, revision: 4, hasKey: false }]);
+    const rotated = saved({ url: COLLEGE.url, token: 'another' }, KEY_A, 3);
     expect(rotated.id).toBe(a.id);
     expect(settings.get('relayProfiles')).toEqual([
-      { id: a.id, label: 'Lincoln', labelCustom: true, url: HS.url, token: 'another', teamKey: KEY_A, lastUsed: 3 },
+      { id: a.id, label: 'Squad', labelCustom: true, url: COLLEGE.url, token: 'another', teamKey: KEY_A, lastUsed: 3 },
     ]);
-    expect(settings.get('teamDirectoryRelays').map((d) => [d.key, d.imported])).toEqual([[directoryKey(HS.url, 'another'), true]]);
+    expect(settings.get('teamDirectoryRelays').map((d) => [d.key, d.imported])).toEqual([[directoryKey(COLLEGE.url, 'another'), true]]);
     // Another address is another relay.
-    expect(saved(COLLEGE, '', 4).id).not.toBe(a.id);
+    expect(saved(HS, '', 4).id).not.toBe(a.id);
     expect(settings.get('relayProfiles')).toHaveLength(2);
+  });
+
+  it('a new token at a shared address is another team: a new saved relay, its own team list state', () => {
+    const a = saved(HS, KEY_A, 1);
+    settings.set('teamDirectoryRelays', [{ key: directoryKey(HS.url, HS.token), imported: true, dismissedRevision: -1, revision: 4, hasKey: true }]);
+    const b = saved({ url: HS.url, token: 'debater-token' }, KEY_B, 2);
+    expect(b.id).not.toBe(a.id);
+    expect(settings.get('relayProfiles').map((p) => [p.token, p.teamKey])).toEqual([
+      [HS.token, KEY_A],
+      ['debater-token', KEY_B],
+    ]);
+    expect(settings.get('teamDirectoryRelays').map((d) => d.key)).toEqual([directoryKey(HS.url, HS.token)]);
   });
 
   it('only a relay the check accepts is saved (desktop check)', async () => {
@@ -257,7 +270,7 @@ describe('switching', () => {
     expect(toasts).toEqual(['Switched to hs.relay.example/relay.']);
   });
 
-  it('typing a saved relay’s address swaps to its key; an unknown one keeps the key in use', () => {
+  it('typing a saved relay’s address swaps to its key; an unknown one starts with none (never another team’s)', () => {
     saved(HS, KEY_A);
     saved(COLLEGE, KEY_B);
     let prev = { ...COLLEGE };
@@ -267,8 +280,37 @@ describe('switching', () => {
     prev = { ...HS };
     useRelay({ url: 'https://typo.example/relay', token: HS.token });
     relayEdited(prev);
+    expect(settings.get('teamSessionsKey')).toBe('');
+    expect(keyBelongsHere(KEY_A)).toBe(false);
+    // Fixing the typo gets the key back.
+    prev = { url: 'https://typo.example/relay', token: HS.token };
+    useRelay(HS);
+    relayEdited(prev);
     expect(settings.get('teamSessionsKey')).toBe(KEY_A);
+    expect(keyBelongsHere(KEY_A)).toBe(true);
     expect(findProfile(settings.get('relayProfiles'), COLLEGE.url, COLLEGE.token)?.teamKey).toBe(KEY_B);
+    // A new token at the same shared address is another team: no key.
+    prev = { ...HS };
+    useRelay({ url: HS.url, token: 'debater-token' });
+    relayEdited(prev);
+    expect(settings.get('teamSessionsKey')).toBe('');
+  });
+
+  it('a new token at the same per-team address (a rotation) keeps the key', () => {
+    saved(COLLEGE, KEY_B);
+    useRelay({ url: COLLEGE.url, token: 'rotated' });
+    relayEdited(COLLEGE);
+    expect(settings.get('teamSessionsKey')).toBe(KEY_B);
+    expect(keyBelongsHere(KEY_B)).toBe(true);
+  });
+
+  it('an unsaved custom relay’s key is kept when typing another address', () => {
+    useRelay({ url: 'https://never.example/relay', token: 't' });
+    settings.set('teamSessionsKey', KEY_C);
+    useRelay(HS);
+    relayEdited({ url: 'https://never.example/relay', token: 't' });
+    expect(settings.get('teamSessionsKey')).toBe('');
+    expect(findProfile(settings.get('relayProfiles'), 'https://never.example/relay', 't')?.teamKey).toBe(KEY_C);
   });
 });
 

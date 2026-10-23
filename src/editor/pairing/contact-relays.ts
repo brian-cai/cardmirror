@@ -74,14 +74,18 @@ export function newContact(code: string, name: string): PairingPartner {
 /**
  * After a team-list import on relay `tag`: contacts that weren't there
  * before get the tag; contacts that were, and are already tied to other
- * relays, get it added; untagged ones (every relay) stay untagged.
+ * relays, get it added (only with `retag`: the list changed — otherwise
+ * a relay the user unticked for a contact comes back every refresh);
+ * untagged ones (every relay) stay untagged.
  */
 export function tagImported(
   partners: readonly PairingPartner[],
   before: readonly PairingPartner[],
   listedCodes: readonly string[],
   tag: string,
+  opts: { retag?: boolean } = {},
 ): PairingPartner[] {
+  const retag = opts.retag !== false;
   if (tag === BUILTIN_RELAY_TAG) return [...partners];
   const listed = new Set(listedCodes.map(normalizePairingCode));
   const old = new Map(before.map((p) => [normalizePairingCode(p.code), p]));
@@ -90,7 +94,7 @@ export function tagImported(
     if (!listed.has(code)) return p;
     const prev = old.get(code);
     if (!prev) return { ...p, relays: [tag] };
-    if (!prev.relays?.length || prev.relays.includes(tag)) return p;
+    if (!retag || !prev.relays?.length || prev.relays.includes(tag)) return p;
     return { ...p, relays: [...prev.relays, tag].slice(-MAX_CONTACT_RELAYS) };
   });
 }

@@ -913,7 +913,7 @@ export function registerPairingIpc(): void {
   // equivalent exposure to the web edition.
   ipcMain.handle(
     'host:collab-relay-defaults',
-    async (): Promise<{ url: string; token: string; routingCode: string }> => {
+    async (): Promise<{ url: string; token: string; routingCode: string; usable: boolean }> => {
       // Await the entitlement load so the FIRST rooms fetch after launch
       // already carries the entitlement (and its routing code) instead of
       // racing the lazy file read and falling back to the shared token.
@@ -926,7 +926,7 @@ export function registerPairingIpc(): void {
       // exists, so this never materializes a key file on an install that
       // never enabled sharing.
       const routingCode = ent !== null && token === ent.entitlement ? ks().ownRoutingId() : '';
-      return { url: relayUrl(), token, routingCode };
+      return { url: relayUrl(), token, routingCode, usable: relayUsable() };
     },
   );
 

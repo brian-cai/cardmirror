@@ -19,7 +19,7 @@ import { showToast } from '../toast.js';
 import { resolveStarredTarget, sendViewTo } from './send-to-starred.js';
 import { isBackdropClick } from '../backdrop-click.js';
 import { byFrequency, groupKey, sendScores } from './send-frequency.js';
-import { offerSharingSetup } from './sharing-setup.js';
+import { offerSharingSetup, sharingReady } from './sharing-setup.js';
 import { partnersHere } from './contact-relays.js';
 
 export interface RecipientChoice {
@@ -199,7 +199,7 @@ export function pickRecipient(choices: RecipientChoice[]): Promise<RecipientChoi
  *  active selection there. Toasts when sharing is off or nothing is
  *  configured; cancelling does nothing. */
 export async function sendViewToRecipient(view: EditorView): Promise<void> {
-  if (!settings.get('pairingEnabled')) {
+  if (!sharingReady()) {
     void offerSharingSetup('Sending a card');
     return;
   }

@@ -32,6 +32,7 @@ vi.mock('../../src/editor/collab/collab-relay.js', () => ({
   relayClient: () => relayRef.client,
 }));
 
+import { relayTag } from '../../src/editor/pairing/contact-relays.js';
 import { RoomsClient } from '../../src/editor/collab/room-client.js';
 import {
   currentOffer,
@@ -252,7 +253,7 @@ describe('merge = team file import', () => {
       { label: 'Novice', members: ['Cal'] },
     ],
   };
-  const strip = (r: ReturnType<typeof mergeTeamFile>) => ({
+  const strip = ({ groupIds: _ids, ...r }: ReturnType<typeof mergeTeamFile> & { groupIds?: string[] }) => ({
     ...r,
     groups: r.groups.map((g) => ({ label: g.label, memberCodes: g.memberCodes })),
   });
@@ -454,7 +455,8 @@ describe('import', () => {
     expect(relay.sent.at(-1)!.headers['If-None-Match']).toBe('"17"');
     expect(toasts).toEqual([]);
     await refreshTeamDirectory(relay.ctx, { now: later() });
-    expect(relay.sent.at(-1)!.headers['If-None-Match']).toBe('"18"');
+    // 17 → 18 (our entry) → 19 (the team key this install minted: the list had none).
+    expect(relay.sent.at(-1)!.headers['If-None-Match']).toBe('"19"');
     expect(toasts).toEqual([]);
 
     relay.edit({
@@ -530,6 +532,40 @@ describe('team key', () => {
     expect(settings.get('teamSessionsKey')).toBe(KEY_A);
     expect(conflictNotices()).toHaveLength(1);
     expect(relay.sent.some((s) => s.path === '/team-directory/team-key')).toBe(false);
+  });
+
+  it('directory has none, machine has none → a key is minted for this team and PUT', async () => {
+    const relay = fakeRelay();
+    await imported(relay);
+    const put = relay.sent.find((s) => s.path === '/team-directory/team-key')!;
+    expect(settings.get('teamSessionsKey')).toHaveLength(43);
+    expect(put.body).toEqual({ teamKey: settings.get('teamSessionsKey') });
+  });
+
+  it('a minted key loses the race quietly: the team’s key is taken', async () => {
+    const relay = fakeRelay({ teamKeyAnswer: () => json({ teamKey: KEY_B }, 409) });
+    await imported(relay);
+    expect(settings.get('teamSessionsKey')).toBe(KEY_B);
+    expect(conflictNotices()).toHaveLength(0);
+  });
+
+  it('another team’s key (saved for a different relay) is never sent; the directory’s replaces it', async () => {
+    settings.set('relayProfiles', [
+      { id: 'rp-other', label: 'Other', labelCustom: false, url: 'https://other.example/relay', token: 'x', teamKey: KEY_A, lastUsed: 1 },
+    ]);
+    settings.set('teamSessionsKey', KEY_A);
+    const relay = fakeRelay();
+    await imported(relay);
+    expect(relay.sent.some((s) => s.path === '/team-directory/team-key')).toBe(false);
+
+    settings.set('teamSessionsKey', KEY_A);
+    const withKey = fakeRelay({ directory: () => ({ ...DOC, teamKey: KEY_B }) });
+    __resetTeamDirectoryForTests();
+    settings.set('teamDirectoryRelays', []);
+    await imported(withKey);
+    expect(settings.get('teamSessionsKey')).toBe(KEY_B);
+    expect(conflictNotices()).toHaveLength(0);
+    settings.set('relayProfiles', []);
   });
 
   it('nothing about the key is sent before Import', async () => {
@@ -661,5 +697,48 @@ describe('the list is the team (2026-10-23)', () => {
     await refreshTeamDirectory(relay.ctx, { now: later() });
     expect(relay.sent.at(-1)!.headers['If-None-Match']).toBeUndefined();
     expect(settings.get('pairingPartners').map((p) => p.code)).toContain(ANA);
+  });
+});
+
+describe('groups and relay tags follow the list only when it changes', () => {
+  it('a member you took out of the list’s group stays out until the list moves', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay();
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    const varsity = () => settings.get('pairingGroups').find((g) => g.label === 'Varsity')!;
+    expect(varsity().memberCodes).toEqual([ANA, BEN]);
+    // The list moved once more after joining (our entry, the team key).
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    settings.set('pairingGroups', settings.get('pairingGroups').map((g) => ({ ...g, memberCodes: [ANA] })));
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(varsity().memberCodes).toEqual([ANA]);
+    relay.edit({ groups: [{ label: 'Varsity', members: [ANA, BEN] }] });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(varsity().memberCodes).toEqual([ANA, BEN]);
+  });
+
+  it('a group of yours with the same name as a later list group is left alone', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay({ directory: () => ({ ...DOC, groups: [] }) });
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    settings.set('pairingGroups', [{ id: 'grp-mine', label: 'Novice', memberCodes: [ANA] }]);
+    relay.edit({ groups: [{ label: 'novice', members: [ANA, BEN] }] });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(settings.get('pairingGroups')).toEqual([{ id: 'grp-mine', label: 'Novice', memberCodes: [ANA] }]);
+  });
+
+  it('a relay you unticked for a contact stays unticked until the list moves', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay();
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    const tag = relayTag(BASE);
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    settings.set('pairingPartners', settings.get('pairingPartners').map((p) => (p.code === ANA ? { ...p, relays: ['builtin'] } : p)));
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(settings.get('pairingPartners').find((p) => p.code === ANA)!.relays).toEqual(['builtin']);
+    relay.edit({ name: 'Lincoln' });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(settings.get('pairingPartners').find((p) => p.code === ANA)!.relays).toEqual(['builtin', tag]);
   });
 });

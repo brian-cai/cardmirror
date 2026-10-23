@@ -12,7 +12,7 @@ import { bundleSendItems } from './send-bundle.js';
 import { deriveDropzoneLabel } from '../dropzone-store.js';
 import { showToast } from '../toast.js';
 import { relayClient, sendOutcomeToast, type SendResult } from './relay-client.js';
-import { offerSharingSetup } from './sharing-setup.js';
+import { offerSharingSetup, sharingReady } from './sharing-setup.js';
 import { partnersHere } from './contact-relays.js';
 
 /** Resolve the starred ref → recipient codes + a display label (groups also
@@ -68,7 +68,7 @@ export async function sendViewTo(
   target: { codes: string[]; label: string; via?: string },
   emptyGroupMessage = 'That group has no recipients yet',
 ): Promise<void> {
-  if (!settings.get('pairingEnabled')) {
+  if (!sharingReady()) {
     void offerSharingSetup('Sending a card');
     return;
   }

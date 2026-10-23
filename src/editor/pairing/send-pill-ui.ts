@@ -27,7 +27,7 @@ import { settings, type PairingGroup } from '../settings.js';
 import { showToast } from '../toast.js';
 import { relayClient, sendOutcomeToast, type SendItem } from './relay-client.js';
 import { collabEnabled } from '../collab/collab-gate.js';
-import { offerSharingSetup } from './sharing-setup.js';
+import { offerSharingSetup, sharingReady } from './sharing-setup.js';
 import { collabSettingsAvailable, collabSettingsButton, relaySwitchButton } from './collab-settings-button.js';
 import {
   collabActiveShareCode,
@@ -174,7 +174,7 @@ export class SendPillController {
     // the current doc first when none is active. Only offered while the
     // collab gate is open; otherwise the pill stays drag-only.
     this.bar.addEventListener('click', () => {
-      if (!settings.get('pairingEnabled')) {
+      if (!sharingReady()) {
         void offerSharingSetup('Sending');
         return;
       }
@@ -310,7 +310,7 @@ export class SendPillController {
 
   /** Cursor + tooltip reflect whether clicking does anything. */
   private applyClickAffordance(): void {
-    const ready = settings.get('pairingEnabled');
+    const ready = sharingReady();
     this.bar.classList.toggle('pmd-send-bar-clickable', true);
     const canInvite = collabEnabled() && collabInviter() !== null;
     this.bar.title = ready

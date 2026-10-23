@@ -130,6 +130,10 @@ export function initPairingWiring(): void {
     });
   }
 
+  // Learn whether the built-in relay is usable here (sharing-setup.ts), so
+  // the first Send / Receive click on a fresh install offers setup.
+  void import('../collab/collab-relay.js').then((m) => m.ensureBakedRelay()).catch(() => {});
+
   const electron = getElectronHost();
   // Coming back to the app is when you're looking for an invite: check
   // the mailbox right away instead of trusting a possibly-dead stream.

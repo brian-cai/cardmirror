@@ -27,7 +27,7 @@ import { showToast } from '../toast.js';
 import { addContact, canAddContact } from './add-contact.js';
 import { parseRoomInvite } from './room-invite.js';
 import { collabEnabled } from '../collab/collab-gate.js';
-import { offerSharingSetup } from './sharing-setup.js';
+import { offerSharingSetup, sharingReady } from './sharing-setup.js';
 import { collabSettingsAvailable, collabSettingsButton, relaySwitchButton } from './collab-settings-button.js';
 import { collabInviteJoiner, collabSessionJoinPrompt } from '../collab/collab-hooks.js';
 import { deletePrefetch } from '../collab/collab-store.js';
@@ -160,7 +160,7 @@ export class ReceivePillController {
 
     const toggle = (e: Event): void => {
       e.stopPropagation();
-      if (!settings.get('pairingEnabled')) {
+      if (!sharingReady()) {
         void offerSharingSetup('Receiving cards');
         return;
       }

@@ -407,7 +407,7 @@ interface ElectronAPI {
    *  `routingCode` (absent on older preloads) is '' unless the token is
    *  an entitlement — then it names this machine for the relay's
    *  machine-binding check. */
-  collabRelayDefaults?(): Promise<{ url: string; token: string; routingCode?: string }>;
+  collabRelayDefaults?(): Promise<{ url: string; token: string; routingCode?: string; usable?: boolean }>;
   /** Toggle Chromium DevTools on this window (packaged builds have no
    *  menu accelerators for it on Windows/Linux). */
   toggleDevTools?(): Promise<void>;
@@ -1295,7 +1295,7 @@ export class ElectronHost implements Host {
     await api().pairingInboxMarkAllRead?.();
   }
 
-  async collabRelayDefaults(): Promise<{ url: string; token: string; routingCode?: string }> {
+  async collabRelayDefaults(): Promise<{ url: string; token: string; routingCode?: string; usable?: boolean }> {
     return (await api().collabRelayDefaults?.()) ?? { url: '', token: '', routingCode: '' };
   }
 
