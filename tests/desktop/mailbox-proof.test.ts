@@ -26,7 +26,7 @@ describe('mailbox proof v1', () => {
     const ks = createPairingKeystore(path.join(dir, 'keys.json'));
     const relay = generateKeyPairSync('x25519');
     const relayX = (relay.publicKey.export({ format: 'jwk' }) as { x: string }).x;
-    const [v, pub, ts, mac] = ks.mailboxProof(relayX, 'PUT', 1700000000).split('.');
+    const [v, pub, ts, mac] = ks.mailboxProof(relayX, 'PUT', 1700000000).split('.') as [string, string, string, string];
     expect(v).toBe('v1');
     expect('cmk1.' + pub).toBe(ks.ownPublicCode());
     const routing = createHash('sha256').update(b(pub)).digest().subarray(0, 16).toString('base64url');

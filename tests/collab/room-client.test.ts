@@ -127,7 +127,7 @@ describe('RoomsClient mailbox proof', () => {
       baseUrl: () => 'https://relay.example',
       token: () => 't',
       ...(proof ? { mailboxProof: async () => proof } : {}),
-      fetchImpl: async (url: string, init?: RequestInit) => {
+      fetchImpl: async (url: RequestInfo | URL, init?: RequestInit) => {
         const h = (init?.headers ?? {}) as Record<string, string>;
         seen.push([init?.method ?? 'GET', String(url), h['X-Mailbox-Proof'] ?? null]);
         return new Response(init?.method === 'DELETE' ? null : '{"revision":3}', { status: init?.method === 'DELETE' ? 204 : 200,
