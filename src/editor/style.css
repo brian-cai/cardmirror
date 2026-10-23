@@ -17270,3 +17270,7 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
 
 .pmd-settings-more { margin-top: 8px; }
 .pmd-settings-more > summary { cursor: pointer; font-size: 12px; opacity: .75; }
+
+/* Join requests: a card above the status bar's right end. */
+.pmd-team-join-requests-card:not([hidden]) { bottom: calc(var(--status-bar-height, 28px) + 10px); right: 14px; display: flex;
+  align-items: center; gap: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18); border-radius: 8px; }

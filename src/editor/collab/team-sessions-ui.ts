@@ -36,18 +36,14 @@ function element(): HTMLElement | null {
   if (el) return el;
   el = document.createElement('div');
   el.id = ELEMENT_ID;
-  el.className = 'status-segment pmd-team-join-requests';
+  // A card above the status bar's right end (BCai's build): a segment in
+  // the bar itself was easy to miss. Still non-modal: nothing covers the
+  // page and the editor keeps focus.
+  el.className = 'pmd-team-join-requests pmd-team-join-requests-floating pmd-team-join-requests-card';
   el.setAttribute('role', 'status');
   el.setAttribute('aria-live', 'polite');
   el.hidden = true;
-  // Right after the session chip in the status bar; a shell without one
-  // (tests, odd layouts) gets a small fixed strip instead.
-  const chip = document.getElementById('collab-chip');
-  if (chip?.parentElement) chip.insertAdjacentElement('afterend', el);
-  else {
-    el.classList.add('pmd-team-join-requests-floating');
-    document.body.appendChild(el);
-  }
+  document.body.appendChild(el);
   return el;
 }
 
@@ -69,6 +65,7 @@ function render(): void {
     return;
   }
   const { req, room } = all[0]!;
+  notifyIfAway(all.map((x) => x.req));
   el.hidden = false;
   el.replaceChildren();
   const text = document.createElement('span');
@@ -103,6 +100,24 @@ function render(): void {
     more.className = 'pmd-team-join-requests-more';
     more.textContent = `+${all.length - 1} more`;
     el.appendChild(more);
+  }
+}
+
+/** A desktop notification for a new request while this window isn't in
+ *  front (once per request), so a host reading elsewhere still sees it. */
+const notified = new Set<string>();
+function notifyIfAway(reqs: PendingJoinRequest[]): void {
+  if (typeof document === 'undefined' || typeof Notification === 'undefined') return;
+  const away = document.hidden || !document.hasFocus();
+  for (const r of reqs) {
+    if (notified.has(r.requestId)) continue;
+    notified.add(r.requestId);
+    if (!away) continue;
+    try {
+      new Notification(`${r.name} wants to join your session`, { body: 'Open CardMirror to approve or deny.', silent: false });
+    } catch {
+      /* notifications off: the card is still there */
+    }
   }
 }
 

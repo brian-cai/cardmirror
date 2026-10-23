@@ -262,7 +262,7 @@ export function installCursorPresence(
     return true;
   };
   const unsubLocal = store.subscribeLocalUpdates((bytes: Uint8Array) => {
-    if (disposed || !cursorsEnabled()) return;
+    if (disposed) return;
     pendingBytes = bytes;
     sendTimer ??= setTimeout(() => {
       sendTimer = null;
@@ -279,7 +279,7 @@ export function installCursorPresence(
   // and clears the dedupe baseline so the (byte-identical) refresh
   // frame actually reaches peers before their expiry timer fires.
   const keepalive = setInterval(() => {
-    if (disposed || !cursorsEnabled()) return;
+    if (disposed) return;
     const local = store.getLocal();
     if (local) {
       lastSentBytes = null;
@@ -298,7 +298,7 @@ export function installCursorPresence(
   // Present from the moment we join (and while unfocused), not only once
   // we click into the doc: see CoalescingCursorStore.presenceUser.
   store.presenceUser = user;
-  if (cursorsEnabled()) store.setLocal({ user } as Parameters<typeof store.setLocal>[0]);
+  store.setLocal({ user } as Parameters<typeof store.setLocal>[0]);
 
   // --- inbound cursor coalescing buffer (see CURSOR_RECEIVE_COALESCE_MS) ---
   let cursorBuf: Uint8Array[] = [];
@@ -456,7 +456,7 @@ export function installCursorPresence(
           // Someone new appeared: answer with our own presence now, so a
           // joiner sees everyone already here at once instead of after
           // each peer's next 15 s keepalive. Once per newcomer, no storm.
-          if (cursorsEnabled() && Object.keys(store.getAllStates()).some((p) => p !== peerId && !before.has(p))) {
+          if (Object.keys(store.getAllStates()).some((p) => p !== peerId && !before.has(p))) {
             const local = store.getLocal();
             if (local) {
               lastSentBytes = null;
@@ -479,7 +479,7 @@ export function installCursorPresence(
       // presence dot lingered on every partner for up to 45s — during
       // exactly the "did they leave?" moment (2026-09-01 review, PH-A10).
       // An ephemeral delete is a payload shape old clients already apply.
-      if (disposed || !cursorsEnabled()) return;
+      if (disposed) return;
       try {
         partingLocal = store.getLocal() ?? partingLocal;
         let bytes: Uint8Array | null = null;
@@ -499,7 +499,7 @@ export function installCursorPresence(
     rebroadcast(): void {
       // After a stream reconnect nothing re-announced presence until the
       // 15s keepalive; partners saw us absent for up to that long.
-      if (disposed || !cursorsEnabled()) return;
+      if (disposed) return;
       const local = store.getLocal() ?? partingLocal;
       partingLocal = undefined;
       if (local) {
@@ -518,6 +518,10 @@ export function installCursorPresence(
   };
 }
 
+/** "Show partner cursors" governs only what YOU see (the cursor plugin
+ *  in plugins()). Your own presence always goes out: hiding others'
+ *  carets used to stop announcing you too, so a partner with the setting
+ *  off was invisible in everyone else's session (2026-10-23). */
 function cursorsEnabled(): boolean {
   return settings.get('collabShowCursors');
 }

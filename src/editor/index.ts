@@ -231,6 +231,7 @@ import {
   collabRoomClaimKey,
   notifyCollabFocusChange,
   setCollabRelaySwitchLeaver,
+  collabActiveShareCode,
 } from './collab/collab-hooks.js';
 import { learnHighlightPlugin, flashcardRangeAt } from './learn-highlight-plugin.js';
 import { repairHighlightPlugin } from './repair-highlight-plugin.js';
@@ -7539,6 +7540,18 @@ const homeCallbacks: HomeScreenCallbacks = {
     // landed on a text line).
     view?.focus();
   },
+  // Desktop with collaboration on: Join a session is the second tile.
+  ...(getElectronHost() && collabEnabled()
+    ? {
+        joinSession: () => {
+          void loadCollabUi().then(async (m) => {
+            await m.joinSessionFlow(multiDocActive ? makeMultiPaneSessionDeps() : collabDeps);
+            // Joined (the focused doc is in a session now): show it. Cancelled: stay home.
+            if (collabActiveShareCode() !== null) homeScreen.hide();
+          });
+        },
+      }
+    : {}),
   newSpeechDoc: () => {
     if (multiDocActive) {
       homeScreen.hide();

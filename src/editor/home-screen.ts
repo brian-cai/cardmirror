@@ -54,6 +54,10 @@ import { showToast } from './toast.js';
 export interface HomeScreenCallbacks {
   newDoc: () => void;
   newSpeechDoc: () => void;
+  /** Join or rejoin a co-editing session (BCai's build: in the second
+   *  tile, in place of New speech document, which stays in the ribbon and
+   *  command palette). Absent where collaboration isn't available. */
+  joinSession?: () => void;
   open: () => void;
   /** Reopen a recent file in-place. The renderer reads the
    *  handle, mounts the doc, and prunes the entry on failure. */
@@ -188,7 +192,7 @@ class HomeScreen {
     // (referenced just below when building their cards).
     const runners: Array<() => void> = [
       () => this.callbacks?.newDoc(),
-      () => this.callbacks?.newSpeechDoc(),
+      () => (this.callbacks?.joinSession ? this.callbacks.joinSession() : this.callbacks?.newSpeechDoc()),
       () => this.callbacks?.open(),
     ];
     if (callbacks.clean) runners.push(() => this.callbacks?.clean?.());
@@ -212,11 +216,13 @@ class HomeScreen {
       this.actionCard('New document', 'Create a new document.', this.actionRunners[0]!),
     );
     actions.appendChild(
-      this.actionCard(
-        'New speech document',
-        'Create a new document and designate it as the speech doc.',
-        this.actionRunners[1]!,
-      ),
+      callbacks.joinSession
+        ? this.actionCard('Join a session', 'Join a teammate\u2019s co-editing session, or rejoin one of yours.', this.actionRunners[1]!)
+        : this.actionCard(
+            'New speech document',
+            'Create a new document and designate it as the speech doc.',
+            this.actionRunners[1]!,
+          ),
     );
     actions.appendChild(
       this.actionCard('Open…', 'Browse for a .cmir or .docx file.', this.actionRunners[2]!),

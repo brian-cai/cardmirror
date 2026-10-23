@@ -208,8 +208,9 @@ describe('team sessions in the session flows', () => {
       { timeout: 4000 },
     );
     expect(strip.textContent).toContain('Alex wants to join:');
-    // In the status bar, right after the session chip.
-    expect(document.getElementById('collab-chip')!.nextElementSibling).toBe(strip);
+    // A card above the status bar (BCai's build), not a segment in it.
+    expect(strip.parentElement).toBe(document.body);
+    expect(strip.classList.contains('pmd-team-join-requests-card')).toBe(true);
 
     button('Approve', strip).click();
     await vi.waitFor(() => expect(ext.log).toContain(`DELETE /rooms/${roomId}/join-requests/rq1`));

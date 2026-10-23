@@ -426,3 +426,35 @@ describe('present without focus (2026-10-22: joiners looked absent until they ty
     bView.destroy();
   }, 20_000);
 });
+
+describe('cursors off still shows you in the session (2026-10-23)', () => {
+  it('a partner with "Show partner cursors" off is listed (no caret), and sees the others', async () => {
+    const { settings } = await import('../../src/editor/settings.js');
+    const { session: a, shareCode } = await CollabSession.host({ pmDoc: simpleDoc('off doc'), client, flushMs: 40, minBackoffMs: 30, maxBackoffMs: 60 });
+    const bPresence: Uint8Array[] = [];
+    const b = await CollabSession.join({
+      ...decodeShareCode(shareCode)!, client, flushMs: 40, minBackoffMs: 30, maxBackoffMs: 60,
+      callbacks: { onPresence: (bytes) => bPresence.push(bytes) },
+    });
+    a.start();
+    b.start();
+    await sleep(300);
+    settings.set('collabShowCursors', false); // A turned cursors off
+    const aCursors = installCursorPresence(a, () => aView);
+    settings.set('collabShowCursors', true);
+    const bCursors = installCursorPresence(b, () => bView);
+    const aView = mkView([...a.plugins(), ...aCursors.plugins()]);
+    const bView = mkView([...b.plugins(), ...bCursors.plugins()]);
+    await settle();
+    await sleep(400);
+    for (const f of bPresence.splice(0)) bCursors.applyRemote(f);
+    await sleep(250);
+    expect(bCursors.visiblePeers(), 'A is listed for B').toContain(a.loroDoc.peerIdStr);
+    aCursors.dispose();
+    bCursors.dispose();
+    await a.stop();
+    await b.stop();
+    aView.destroy();
+    bView.destroy();
+  }, 20_000);
+});

@@ -4523,7 +4523,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'collabShowCursors',
     label: 'Show partner cursors in sessions',
     description:
-      "Render your partner's live cursor and selection during a collaboration session. Turning this off keeps the document syncing — it only hides the cursor overlay (and stops broadcasting yours).",
+      "Render your partner's live cursor and selection during a collaboration session. Turning this off keeps the document syncing — it hides the cursor overlay and stops sharing your cursor; people still see that you're in the session.",
     kind: 'toggle',
     category: 'pairing',
     electronOnly: true,
