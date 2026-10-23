@@ -63,6 +63,8 @@ export interface TeamDirectory {
   name: string;
   people: TeamDirectoryPerson[];
   groups: { label: string; memberCodes: string[] }[];
+  /** Groups teammates suggested (optional extension); never auto-imported. */
+  suggestedGroups: { label: string; memberCodes: string[]; by: string[] }[];
   teamKey?: string;
   revision: number;
   updatedAt: number | null;
@@ -131,7 +133,21 @@ export function parseTeamDirectory(raw: unknown): TeamDirectory | null {
   }
   const revision = typeof r['revision'] === 'number' && Number.isInteger(r['revision']) && r['revision'] >= 0 ? r['revision'] : 0;
   const updatedAt = typeof r['updatedAt'] === 'number' && Number.isFinite(r['updatedAt']) ? r['updatedAt'] : null;
-  const dir: TeamDirectory = { v: 1, name: str(r['name'], 80), people, groups, revision, updatedAt };
+  const suggestedGroups: TeamDirectory['suggestedGroups'] = [];
+  for (const g of Array.isArray(r['suggestedGroups']) ? r['suggestedGroups'] : []) {
+    if (!g || typeof g !== 'object') continue;
+    const e = g as Record<string, unknown>;
+    const label = str(e['label'], 80);
+    const members = [
+      ...new Set(
+        (Array.isArray(e['members']) ? e['members'] : []).map((m) => normalizePairingCode(str(m, 2000))).filter((c) => seen.has(c)),
+      ),
+    ];
+    if (!label || members.length < 2) continue;
+    const by = (Array.isArray(e['by']) ? e['by'] : []).map((n) => str(n, TEAM_DIRECTORY_NAME_MAX)).filter(Boolean);
+    suggestedGroups.push({ label, memberCodes: members, by });
+  }
+  const dir: TeamDirectory = { v: 1, name: str(r['name'], 80), people, groups, suggestedGroups, revision, updatedAt };
   if (isTeamKey(r['teamKey'])) dir.teamKey = r['teamKey'];
   return dir;
 }
@@ -390,13 +406,32 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
     patchState(key, { revision: dir.revision, hasKey: !!dir.teamKey });
   }
 
-  const state = directoryState(key);
+  let state = directoryState(key);
+  // Auto-add: on a relay with a team list, join it and add everyone, no
+  // click (it's your own team's relay). Only a missing display name stops
+  // it: then the Send popup's line asks for one.
+  if (!state.imported && dir && settings.get('pairingDisplayName').trim() && ownDirectoryEntry()) {
+    const out = await importTeamDirectory(ctx, dir, settings.get('pairingDisplayName'));
+    if (out.ok) {
+      const team = dir.name.trim() || 'your team';
+      showToast(
+        out.addedPeople > 0
+          ? `Added ${out.addedPeople} teammate${out.addedPeople === 1 ? '' : 's'} from ${team}.`
+          : `You’re on ${team}’s list on this relay.`,
+      );
+      state = directoryState(key);
+    }
+  }
   if (state.imported) {
     publishOffer(null);
     if (dir && raw !== null) applyImported(dir, relayTag(ctx.baseUrl));
     else if (dir) applyTeamKeyFromFile(directoryAsTeamFile(dir));
     const relayHasKey = dir ? !!dir.teamKey : state.hasKey;
     if (!relayHasKey) await syncTeamKeyUp(ctx, key, dir?.name ?? '');
+    if (dir) {
+      await syncMyGroups(ctx, key, dir);
+      publishSuggestions(key, dir);
+    }
     return dir;
   }
   if (dir && shouldOffer(dir, state, settings.get('pairingOwnCode'), settings.get('pairingPartners'))) {
@@ -406,6 +441,97 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
     publishOffer(null);
   }
   return dir;
+}
+
+// --- suggested groups (optional extension) ----------------------------
+
+/** Signature of the groups last suggested per relay + team this app run. */
+const lastGroupsSent = new Map<string, string>();
+/** Relays + teams that answered the groups PUT with "not here" (404). */
+const noSuggestions = new Set<string>();
+
+/** Your groups made only of teammates on this list (2+ of them): what you
+ *  suggest to the team. Groups with anyone else stay private. */
+export function myTeamGroups(dir: TeamDirectory, groups: readonly PairingGroup[], ownCode: string): { label: string; members: string[] }[] {
+  const codes = new Set(dir.people.map((p) => p.code));
+  const own = normalizePairingCode(ownCode);
+  const official = new Set(dir.groups.map((g) => groupSig(g.label, g.memberCodes)));
+  return groups
+    .map((g) => ({ label: g.label.trim(), members: [...new Set(g.memberCodes.map(normalizePairingCode))] }))
+    .filter((g) => g.label && g.members.length >= 2 && g.members.every((c) => codes.has(c) || c === own))
+    .filter((g) => !official.has(groupSig(g.label, g.members)))
+    .slice(0, 20);
+}
+
+const groupSig = (label: string, members: readonly string[]): string =>
+  `${label.trim().toLowerCase()}\n${[...members].map(normalizePairingCode).sort().join(',')}`;
+
+/** Suggest your team groups (only on a change). Never throws. */
+export async function syncMyGroups(ctx: TeamDirectoryContext, key: string, dir: TeamDirectory): Promise<void> {
+  const me = ownDirectoryEntry();
+  if (!me || noSuggestions.has(key) || !isListed(dir, me.code)) return;
+  const mine = myTeamGroups(dir, settings.get('pairingGroups'), me.code);
+  const sig = JSON.stringify(mine);
+  // Nothing to suggest and nothing suggested yet this run: no call.
+  if ((lastGroupsSent.get(key) ?? '[]') === sig) return;
+  try {
+    await ctx.client.putTeamDirectoryGroups(me.code, mine);
+    lastGroupsSent.set(key, sig);
+  } catch (err) {
+    if (err instanceof RoomsError && err.status === 404) noSuggestions.add(key);
+  }
+}
+
+/** The suggestions worth showing: not one of your groups already, and not
+ *  only your own. */
+export function suggestionsToShow(dir: TeamDirectory, groups: readonly PairingGroup[], ownName: string): TeamDirectory['suggestedGroups'] {
+  const have = new Set(groups.map((g) => groupSig(g.label, g.memberCodes)));
+  const me = ownName.trim();
+  return dir.suggestedGroups.filter((g) => !have.has(groupSig(g.label, g.memberCodes)) && !(g.by.length === 1 && g.by[0] === me));
+}
+
+let suggestions: { key: string; groups: TeamDirectory['suggestedGroups'] } | null = null;
+const suggestionListeners = new Set<() => void>();
+
+export function currentSuggestions(): TeamDirectory['suggestedGroups'] {
+  return suggestions?.groups ?? [];
+}
+
+export function onSuggestions(fn: () => void): () => void {
+  suggestionListeners.add(fn);
+  return () => suggestionListeners.delete(fn);
+}
+
+function publishSuggestions(key: string, dir: TeamDirectory | null): void {
+  const next = dir ? suggestionsToShow(dir, settings.get('pairingGroups'), settings.get('pairingDisplayName')) : [];
+  const same = suggestions?.key === key && JSON.stringify(suggestions.groups) === JSON.stringify(next);
+  suggestions = { key, groups: next };
+  if (!same) for (const fn of suggestionListeners) fn();
+}
+
+/** Your groups changed: re-suggest them and refresh what's shown. Never throws. */
+export async function groupsChanged(ctx: TeamDirectoryContext | null): Promise<void> {
+  if (!ctx) return;
+  const key = directoryKey(ctx.baseUrl, ctx.token);
+  const dir = memory.get(key);
+  if (!dir || !directoryState(key).imported) return;
+  await syncMyGroups(ctx, key, dir);
+  publishSuggestions(key, dir);
+}
+
+/** Add a suggested group as your own (members you have as contacts). */
+export function addSuggestedGroup(g: { label: string; memberCodes: string[] }): boolean {
+  const partners = new Set(settings.get('pairingPartners').map((p) => normalizePairingCode(p.code)));
+  const own = normalizePairingCode(settings.get('pairingOwnCode'));
+  const members = g.memberCodes.filter((c) => partners.has(c) && c !== own);
+  if (members.length === 0) return false;
+  const groups = settings.get('pairingGroups');
+  const taken = new Set(groups.map((x) => x.label.trim().toLowerCase()));
+  let label = g.label.trim();
+  for (let n = 2; taken.has(label.toLowerCase()); n++) label = `${g.label.trim()} (${n})`;
+  settings.set('pairingGroups', [...groups, { id: `grp-${Math.random().toString(36).slice(2, 10)}`, label, memberCodes: members }]);
+  if (suggestions) publishSuggestions(suggestions.key, memory.get(suggestions.key) ?? null);
+  return true;
 }
 
 // --- import + own entry -----------------------------------------------
@@ -534,6 +660,10 @@ export function __resetTeamDirectoryForTests(): void {
   fetchedAt.clear();
   inflight.clear();
   lastSent.clear();
+  lastGroupsSent.clear();
+  noSuggestions.clear();
+  suggestions = null;
+  suggestionListeners.clear();
   offer = null;
   offerListeners.clear();
 }

@@ -10,6 +10,10 @@
  */
 
 import {
+  addSuggestedGroup,
+  currentSuggestions,
+  groupsChanged,
+  onSuggestions,
   currentOffer,
   dismissOffer,
   importTeamDirectory,
@@ -65,6 +69,7 @@ export function startTeamDirectory(): void {
   if (started) return;
   started = true;
   onTeamDirectoryOffer(renderOffer);
+  onSuggestions(() => renderOffer());
   void refreshTeamDirectoryNow();
   setInterval(() => void refreshTeamDirectoryNow(), TEAM_DIRECTORY_REFRESH_MS);
   let prev = {
@@ -76,7 +81,14 @@ export function startTeamDirectory(): void {
   };
   let relayTimer: ReturnType<typeof setTimeout> | null = null;
   let nameTimer: ReturnType<typeof setTimeout> | null = null;
+  let groupsTimer: ReturnType<typeof setTimeout> | null = null;
+  let prevGroups = settings.get('pairingGroups');
   settings.subscribe((st) => {
+    if (st.pairingGroups !== prevGroups) {
+      prevGroups = st.pairingGroups;
+      if (groupsTimer) clearTimeout(groupsTimer);
+      groupsTimer = setTimeout(() => void teamDirectoryContext().then(groupsChanged).catch(() => {}), 2000);
+    }
     const relayChanged =
       st.pairingRelayUrl !== prev.url || st.pairingRelayToken !== prev.token || st.pairingEnabled !== prev.enabled;
     const meChanged = st.pairingDisplayName !== prev.name || st.pairingOwnCode !== prev.code;
@@ -131,12 +143,14 @@ export function offerText(o: TeamDirectoryOffer): string {
 }
 
 export function renderOffer(o: TeamDirectoryOffer | null = currentOffer()): void {
-  markPill(!!o);
+  const suggested = currentSuggestions();
+  markPill(!!o || suggested.length > 0);
   const el = element();
   if (!el) return;
   if (!o) {
-    el.hidden = true;
     el.replaceChildren();
+    el.hidden = suggested.length === 0;
+    if (suggested.length) renderSuggestionsLine(el, suggested.length);
     return;
   }
   el.hidden = false;
@@ -166,6 +180,66 @@ export function renderOffer(o: TeamDirectoryOffer | null = currentOffer()): void
   };
   el.appendChild(act(addOnly(o) ? 'Add me' : 'Import', async () => void (await runImport(o)), true));
   el.appendChild(act('Not now', async () => dismissOffer(o.key, o.directory.revision), false));
+}
+
+/** "Teammates suggest 2 groups · Review": opens the list in Settings. */
+function renderSuggestionsLine(el: HTMLElement, n: number): void {
+  const text = document.createElement('span');
+  text.className = 'pmd-team-join-requests-text';
+  text.textContent = `Teammates suggest ${n} group${n === 1 ? '' : 's'}`;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'pmd-team-join-requests-btn pmd-team-join-requests-approve';
+  b.textContent = 'Review';
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    void import('../settings-ui.js').then((m) => m.openSettings({ category: 'pairing', anchor: 'suggested-groups' }));
+  });
+  el.append(text, b);
+}
+
+/** Settings → Collaboration: the groups teammates suggest, each with Add. */
+export function buildSuggestedGroupsSection(onCleanup: (fn: () => void) => void): HTMLElement {
+  const wrap = document.createElement('section');
+  wrap.className = 'pmd-suggested-groups';
+  wrap.id = 'suggested-groups';
+  const render = (): void => {
+    wrap.replaceChildren();
+    const list = currentSuggestions();
+    wrap.hidden = list.length === 0;
+    if (!list.length) return;
+    const title = document.createElement('div');
+    title.className = 'pmd-settings-row-title';
+    title.textContent = 'Suggested by teammates';
+    const desc = document.createElement('div');
+    desc.className = 'pmd-settings-row-desc';
+    desc.textContent = 'Groups your teammates made from people on this relay’s team list. Add one to use it in the Send pill. Yours are suggested to them the same way.';
+    wrap.append(title, desc);
+    const names = new Map(settings.get('pairingPartners').map((p) => [p.code, p.name]));
+    for (const g of list) {
+      const row = document.createElement('div');
+      row.className = 'pmd-suggested-group';
+      const label = document.createElement('span');
+      label.className = 'pmd-suggested-group-label';
+      label.textContent = `${g.label} · ${g.memberCodes.length} people`;
+      label.title = g.memberCodes.map((c) => names.get(c) || '…' + c.slice(-6)).join(', ');
+      const by = document.createElement('span');
+      by.className = 'pmd-suggested-group-by';
+      by.textContent = g.by.length ? `from ${g.by.slice(0, 2).join(', ')}${g.by.length > 2 ? ` +${g.by.length - 2}` : ''}` : '';
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.textContent = 'Add';
+      add.addEventListener('click', () => {
+        if (addSuggestedGroup(g)) showToast(`Added the group ${g.label}.`);
+        else showToast('None of its people are in your contacts yet.');
+      });
+      row.append(label, by, add);
+      wrap.appendChild(row);
+    }
+  };
+  render();
+  onCleanup(onSuggestions(render));
+  return wrap;
 }
 
 /** Import: confirm the display name (pre-filled), then register + merge. */

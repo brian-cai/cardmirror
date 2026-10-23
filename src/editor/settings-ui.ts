@@ -779,6 +779,8 @@ class SettingsModal {
           panel.appendChild(saved);
         }
         panel.appendChild(row);
+        // Team list: groups teammates suggest, right under your own groups.
+        if (meta.key === 'pairingGroups' && !isLiteBuild()) panel.appendChild(buildSuggestedGroupsSlot());
         // Relay info v1: "About this relay" under the custom relay fields
         // (hidden unless a custom relay answers the info call).
         if (meta.key === 'relayShowInstallName') panel.appendChild(buildRelayInfoSlot());
@@ -2164,6 +2166,18 @@ function buildSavedRelaysSlot(): HTMLElement {
   slot.dataset['searchAliases'] = 'saved relays switch relay profiles custom relay coach team relay reconnect';
   void import('./collab/relay-profiles-ui.js').then((m) => {
     slot.appendChild(m.buildSavedRelaysSection((fn) => registerRowCleanup(slot, fn)));
+  });
+  return slot;
+}
+
+/** Placeholder for the lazily loaded "Suggested by teammates" list. */
+function buildSuggestedGroupsSlot(): HTMLElement {
+  const slot = document.createElement('div');
+  slot.className = 'pmd-suggested-groups-slot';
+  slot.dataset['anchor'] = 'suggested-groups';
+  slot.dataset['searchAliases'] = 'suggested groups team groups teammates';
+  void import('./collab/team-directory-ui.js').then((m) => {
+    slot.appendChild(m.buildSuggestedGroupsSection((fn) => registerRowCleanup(slot, fn)));
   });
   return slot;
 }

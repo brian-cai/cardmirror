@@ -432,6 +432,19 @@ export class RoomsClient {
     return typeof body?.revision === 'number' ? body.revision : -1;
   }
 
+  /** `PUT /team-directory/me/groups` — the groups this install's entry
+   *  suggests to the team (team directory v1, optional `suggestedGroups`). */
+  async putTeamDirectoryGroups(code: string, groups: { label: string; members: string[] }[]): Promise<number> {
+    const path = '/team-directory/me/groups';
+    const res = await this.request(path, {
+      method: 'PUT',
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ code, groups }),
+    });
+    const body = await this.readJson<{ revision?: unknown }>(res, path);
+    return typeof body?.revision === 'number' ? body.revision : -1;
+  }
+
   /** `DELETE /team-directory/me?code=` — remove this install's own entry.
    *  The code is always passed (a token shared by many people needs it). */
   async deleteTeamDirectoryMe(code: string): Promise<void> {

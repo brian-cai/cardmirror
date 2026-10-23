@@ -41,6 +41,8 @@ import {
   importTeamDirectory,
   mergeTeamDirectory,
   missingPeople,
+  myTeamGroups,
+  suggestionsToShow,
   onTeamDirectoryOffer,
   parseTeamDirectory,
   parseTeamDirectorySupport,
@@ -162,7 +164,9 @@ beforeEach(() => {
   settings.set('pairingRelayToken', TOKEN);
   settings.set('pairingEnabled', true);
   settings.set('pairingOwnCode', ME);
-  settings.set('pairingDisplayName', 'Sam');
+  // No display name: the offer case. (With one, refresh adds you
+  // automatically; the auto-add tests set it.)
+  settings.set('pairingDisplayName', '');
   settings.set('pairingPartners', []);
   settings.set('pairingGroups', []);
   settings.set('teamSessionsKey', '');
@@ -569,6 +573,7 @@ describe('offer UI', () => {
     relayRef.client = relay.client;
     onTeamDirectoryOffer(renderOffer);
     await refreshTeamDirectory(relay.ctx, { now: clock });
+    settings.set('pairingDisplayName', 'Sam'); // set after the offer appeared (with it, the refresh adds you)
     prompt.answer = 'Sam Lee';
     button('Import').click();
     await vi.waitFor(() => expect(directoryState(key).imported).toBe(true));
@@ -595,3 +600,47 @@ describe('offer UI', () => {
   });
 });
 
+
+describe('auto-add (2026-10-23)', () => {
+  it('with a display name, a refresh joins the list and adds everyone, no offer', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay();
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    expect(directoryState(key).imported).toBe(true);
+    expect(currentOffer()).toBeNull();
+    expect(relay.sent.find((s) => s.method === 'PUT' && s.path === '/team-directory/me')?.body).toEqual({ code: ME, name: 'Sam' });
+    expect(settings.get('pairingPartners').map((p) => p.code)).toEqual([ANA, BEN]);
+    expect(toasts.at(-1)).toBe('Added 2 teammates from Lincoln HS Debate.');
+  });
+
+  it('without one, the offer stays (it asks for the name)', async () => {
+    await refreshTeamDirectory(fakeRelay().ctx, { now: clock });
+    expect(directoryState(key).imported).toBe(false);
+    expect(currentOffer()?.missing).toBe(2);
+  });
+});
+
+describe('suggested groups', () => {
+  const VAR = { label: 'Varsity', memberCodes: [ANA, BEN] };
+  it('suggests only groups made of teammates, never the team’s own', () => {
+    const d = parseTeamDirectory({ ...DOC, groups: [] })!;
+    const groups = [
+      { id: 'g1', ...VAR },
+      { id: 'g2', label: 'Family', memberCodes: [ANA, 'cmk1.OUTSIDEROUTSIDEROUTSIDEROUTSIDEROUTSIDE000'] },
+      { id: 'g3', label: 'Solo', memberCodes: [ANA] },
+    ];
+    expect(myTeamGroups(d, groups, ME)).toEqual([{ label: 'Varsity', members: [ANA, BEN] }]);
+    const withOfficial = parseTeamDirectory({ ...DOC, groups: [{ label: 'varsity', members: [BEN, ANA] }] })!;
+    expect(myTeamGroups(withOfficial, groups, ME)).toEqual([]);
+  });
+
+  it('parses suggestions and hides ones you have or made', () => {
+    const d = parseTeamDirectory({ ...DOC, suggestedGroups: [{ label: 'Varsity', members: [ANA, BEN], by: ['Ana'] }, { label: 'Mine', members: [ANA, BEN], by: ['Sam'] }] })!;
+    expect(d.suggestedGroups).toEqual([
+      { label: 'Varsity', memberCodes: [ANA, BEN], by: ['Ana'] },
+      { label: 'Mine', memberCodes: [ANA, BEN], by: ['Sam'] },
+    ]);
+    expect(suggestionsToShow(d, [], 'Sam').map((g) => g.label)).toEqual(['Varsity']);
+    expect(suggestionsToShow(d, [{ id: 'x', label: 'VARSITY', memberCodes: [BEN, ANA] }], 'Sam')).toEqual([]);
+  });
+});
