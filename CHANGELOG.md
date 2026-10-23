@@ -5,6 +5,30 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.34 — 2026-10-23
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Fixed
+
+- **Your team key stays with your team's relay.** Typing a new relay
+  address in Settings no longer carries the current team's key over to
+  it, and a key saved for one relay is never given to another.
+- **Two teams on one relay address stay separate.** A new token for a
+  shared relay address is saved as its own relay instead of replacing
+  the one you had; only a team's own address (…/r/your-team) treats a
+  new token as the same team.
+- **Your own groups are yours.** A relay's team list only updates the
+  groups it made, and only when the list actually changes, so a
+  member you took out of a group, or a relay you unticked for a
+  contact, stays that way.
+- **Sessions remember their relay.** Changing the relay while in a
+  session no longer relabels that session with the new relay.
+- **A fresh install offers setup.** With collaboration on by default and
+  no relay yet, Send and Receive now offer to set sharing up instead of
+  failing.
+
 ## 1.15.33 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
