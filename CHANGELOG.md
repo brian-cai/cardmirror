@@ -5,6 +5,18 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.37 — 2026-10-23
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Internal
+
+- **Collaboration code reorganized; no user-visible changes.** The
+  session UI is split into smaller parts, and the decisions it makes
+  (which relay a session needs, when a session has really ended, what
+  leaving keeps) now have their own tests.
+
 ## 1.15.36 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
