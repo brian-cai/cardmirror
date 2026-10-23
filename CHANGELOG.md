@@ -5,6 +5,30 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.29 — 2026-10-22
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Fixed
+
+- **People in a session show up when they join**, not only once they
+  click in and type, and stay listed while their window isn't focused
+  (only their caret goes). Teammates already in the session appear to a
+  newcomer at once.
+
+### Changed
+
+- **A cleaner status bar.** Switching relays moved to a globe button in
+  the Send and Receive popups, and the team-list offer is a short line
+  at the top of the Send popup (with a dot on Send while it waits).
+- **Saved relays are named after their address** (".../r/collegiate" is
+  "collegiate"); rename them in Settings → Collaboration.
+- **Join or rejoin a session** is roomier and searchable: type to filter
+  by name, people or relay. Each recent session says which relay it's
+  on, and rejoining one on another relay switches to it first. Team
+  sessions say who's in them ("Ana, Ben and 2 others").
+
 ## 1.15.28 — 2026-10-22
 
 BCai's (@brian-cai) build of CardMirror, updating from
