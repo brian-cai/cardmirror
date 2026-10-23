@@ -66,9 +66,11 @@ describe('one credential resolution per request (2026-09-01 review, T13)', () =>
     // credential alone. One combined resolution → at most ~4.
     expect(spy.mock.calls.length).toBeLessThanOrEqual(6);
     spy.mockRestore();
-    // Liveness unchanged: the next request sees a settings write at once.
+    // A token typed in Settings is pinned for the client's life (a live
+    // session stays on its relay); the next client picks up the new one.
     settings.set('pairingRelayToken', 'tok-B');
-    expect(client.opts.credentials!().token).toBe('tok-B');
+    expect(client.opts.credentials!().token).toBe('tok-A');
+    expect(relayClient()!.opts.credentials!().token).toBe('tok-B');
   });
 });
 
@@ -82,15 +84,18 @@ describe('relayClient credential liveness', () => {
     expect(client.opts.token()).toBe('entitlement-B-fresh');
   });
 
-  it('routingCode stays paired with the credential source at call time', () => {
+  it('routingCode stays paired with the credential source', () => {
     linkWebAccount('entitlement-A', 'wk1.originalcode');
     const client = relayClient()!;
     expect(client.opts.routingCode!()).toBe('wk1.originalcode');
-    // A self-host token override appears mid-session: it is not an
-    // entitlement, so the machine-binding header must drop with it.
+    // A self-host token override appears mid-session: the running client
+    // keeps its relay and credential (pinned); a new client uses the
+    // override, which is not an entitlement, so no machine-binding header.
     settings.set('pairingRelayToken', 'self-host-token');
-    expect(client.opts.token()).toBe('self-host-token');
-    expect(client.opts.routingCode!()).toBe('');
+    expect(client.opts.token()).toBe('entitlement-A');
+    const next = relayClient()!;
+    expect(next.opts.token()).toBe('self-host-token');
+    expect(next.opts.routingCode!()).toBe('');
   });
 
   it('an entitlement that EXPIRES stops being presented (no stale bearer)', () => {

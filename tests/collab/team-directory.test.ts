@@ -742,3 +742,41 @@ describe('groups and relay tags follow the list only when it changes', () => {
     expect(settings.get('pairingPartners').find((p) => p.code === ANA)!.relays).toEqual(['builtin', tag]);
   });
 });
+
+// ── a relay switch during a refresh (2026-10-23 review) ───────────────
+
+describe('relay switched mid-refresh', () => {
+  it('applies nothing from the old relay once Settings moved on', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    let current = true;
+    const relay = fakeRelay({ directory: () => ({ ...DOC, teamKey: KEY_A }) });
+    // The user switches relays while the list is being fetched.
+    const orig = relay.client.getTeamDirectory.bind(relay.client);
+    relay.client.getTeamDirectory = async (rev?: number) => {
+      const out = await orig(rev);
+      current = false;
+      return out;
+    };
+    await refreshTeamDirectory({ ...relay.ctx, isCurrent: () => current }, { now: clock });
+    expect(settings.get('pairingPartners')).toEqual([]);
+    expect(settings.get('pairingGroups')).toEqual([]);
+    expect(settings.get('teamSessionsKey')).toBe('');
+    expect(relay.paths()).not.toContain('PUT /team-directory/me');
+  });
+
+  it('an import whose registration outlived the switch merges nothing', async () => {
+    let current = true;
+    const relay = fakeRelay({ directory: () => ({ ...DOC, teamKey: KEY_A }) });
+    const orig = relay.client.putTeamDirectoryMe.bind(relay.client);
+    relay.client.putTeamDirectoryMe = async (code: string, name: string) => {
+      const out = await orig(code, name);
+      current = false;
+      return out;
+    };
+    const dir = parseTeamDirectory({ ...DOC, teamKey: KEY_A })!;
+    const out = await importTeamDirectory({ ...relay.ctx, isCurrent: () => current }, dir, 'Sam');
+    expect(out.ok).toBe(false);
+    expect(settings.get('pairingPartners')).toEqual([]);
+    expect(settings.get('teamSessionsKey')).toBe('');
+  });
+});

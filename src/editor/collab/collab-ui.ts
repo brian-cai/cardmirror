@@ -1245,16 +1245,7 @@ export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
   const pick = await pickSessionToJoin(candidates, teamJoinSource());
   if (!pick) return;
   if (pick.kind === 'rejoin') {
-    // A session lives on one relay: switch to it first when it's elsewhere.
-    if (pick.relay && pick.relay !== currentRelayTag()) {
-      const target = relayProfileIdForTag(pick.relay);
-      if (!target) {
-        showToast(`That session is on ${relayLabelForTag(pick.relay)}, which isn’t saved here. Connect to it in Settings → Collaboration first.`);
-        return;
-      }
-      const { switchRelayNow } = await import('./relay-profiles-ui.js');
-      if ((await switchRelayNow(target)) !== 'switched') return;
-    }
+    if (!(await onSessionRelay(pick.relay))) return;
     await joinSessionWithCode(deps, pick.shareCode, { guestPass: pick.guestPass });
     return;
   }
@@ -1268,6 +1259,20 @@ export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
     return;
   }
   await joinSessionWithCode(deps, entered);
+}
+
+/** A session lives on one relay: switch to it first when it's elsewhere.
+ *  False when it can't be (not saved here, or the user said no). Untagged
+ *  sessions (older records) go to the relay in use, as before. */
+async function onSessionRelay(tag: string | null | undefined): Promise<boolean> {
+  if (!tag || tag === currentRelayTag()) return true;
+  const target = relayProfileIdForTag(tag);
+  if (!target) {
+    showToast(`That session is on ${relayLabelForTag(tag)}, which isn’t saved here. Connect to it in Settings → Collaboration first.`);
+    return false;
+  }
+  const { switchRelayNow } = await import('./relay-profiles-ui.js');
+  return (await switchRelayNow(target)) === 'switched';
 }
 
 /** Join with a code in hand — the prompt flow above and the Receive
@@ -1556,6 +1561,9 @@ async function resumeSessionFlowInner(
     showToast('No saved session to resume');
     return false;
   }
+  // Opened from a file or the Sessions list while on another relay: there
+  // the room is unknown (404) and would read as ended, deleting the record.
+  if (!(await onSessionRelay(record.relay))) return false;
   await ensureBakedRelay();
   const client =
     relayClient() ??

@@ -8,6 +8,7 @@
  */
 
 import { WORD_COUNT_ORDERS, type WordCountOrder } from './word-count-order.js';
+import { adoptRelay, tokenFromAnotherHost } from './collab/relay-profiles.js';
 import { confirmDialog, promptForChoice, promptForRouteChoice } from './text-prompt.js';
 import { exportUserDictionary, importUserDictionary } from './viewport-spellcheck.js';
 import { requestVoiceCalibration } from './voice/hooks.js';
@@ -2908,8 +2909,8 @@ export async function importTeamFile(): Promise<boolean> {
     settings.set('pairingPartners', merged.partners);
     settings.set('pairingGroups', merged.groups);
     if (useRelay && file!.relay) {
-      settings.set('pairingRelayUrl', file!.relay.url);
-      settings.set('pairingRelayToken', file!.relay.token);
+      // As a switch, so the file's key (below) goes to the team's relay.
+      adoptRelay(file!.relay.url, file!.relay.token);
     }
     if (!settings.get('pairingEnabled')) settings.set('pairingEnabled', true);
     // Team key: taken when this machine has none; a different one never
@@ -4016,7 +4017,7 @@ function buildPairingAccountEditor(row: HTMLElement): HTMLElement {
       const relayUrl = settings.get('pairingRelayUrl').trim();
       const relayToken = settings.get('pairingRelayToken');
       const mine = ++seq;
-      if (!relayUrl) {
+      if (!relayUrl || tokenFromAnotherHost(relayUrl, relayToken)) {
         applyRelayManaged(false, '');
         return;
       }

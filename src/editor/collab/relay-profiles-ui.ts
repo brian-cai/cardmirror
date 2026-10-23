@@ -19,6 +19,7 @@ import {
   removeProfile,
   renameProfile,
   switchRelay,
+  tokenFromAnotherHost,
   BUILTIN_RELAY,
   type SwitchHooks,
   type SwitchResult,
@@ -92,6 +93,7 @@ export async function checkCurrentRelay(): Promise<boolean> {
   const relayToken = settings.get('pairingRelayToken');
   const electron = getElectronHost();
   if (!relayUrl || !electron?.pairingRelayCheck) return false;
+  if (tokenFromAnotherHost(relayUrl, relayToken)) return false;
   try {
     const r = await electron.pairingRelayCheck({ relayUrl, relayToken });
     // Still the same relay? (The user may have typed on.)

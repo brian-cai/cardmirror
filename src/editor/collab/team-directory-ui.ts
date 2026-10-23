@@ -47,7 +47,9 @@ export async function teamDirectoryContext(): Promise<TeamDirectoryContext | nul
   await ensureBakedRelay();
   const client = relayClient();
   const baseUrl = relayBaseUrl();
-  return client && baseUrl ? { client, baseUrl, token: settings.get('pairingRelayToken') } : null;
+  const token = settings.get('pairingRelayToken');
+  const isCurrent = (): boolean => relayBaseUrl() === baseUrl && settings.get('pairingRelayToken') === token;
+  return client && baseUrl ? { client, baseUrl, token, isCurrent } : null;
 }
 
 /** Fetch now (`force`: Settings → Collaboration opened) or when the last

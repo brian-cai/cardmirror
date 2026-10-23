@@ -77,7 +77,14 @@ export interface TeamDirectoryContext {
   client: RoomsClient;
   baseUrl: string;
   token: string;
+  /** Is this still the relay in Settings? A refresh that outlives a relay
+   *  switch must not write its team's list, groups or key into the new
+   *  relay's settings. Absent: always (tests, one-shot calls). */
+  isCurrent?: () => boolean;
 }
+
+/** Still talking to the relay in Settings (see TeamDirectoryContext.isCurrent). */
+const stillCurrent = (ctx: TeamDirectoryContext): boolean => ctx.isCurrent?.() ?? true;
 
 /** The offer to show: "Your team (<name>) is set up on this relay." */
 export interface TeamDirectoryOffer {
@@ -347,6 +354,7 @@ export async function syncTeamKeyUp(ctx: TeamDirectoryContext, key: string, team
   try {
     const existing = await ctx.client.putTeamDirectoryKey(local);
     patchState(key, { hasKey: true });
+    if (!stillCurrent(ctx)) return;
     if (existing !== null && isTeamKey(existing) && minted && existing !== local) {
       settings.set('teamSessionsKey', existing);
       return;
@@ -440,7 +448,9 @@ export async function refreshTeamDirectory(
 
 async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): Promise<TeamDirectory | null> {
   if (offer && offer.key !== key) publishOffer(null);
-  if (!(await teamDirectorySupport(ctx))) {
+  const supported = await teamDirectorySupport(ctx);
+  if (!stillCurrent(ctx)) return null;
+  if (!supported) {
     publishOffer(null);
     return null;
   }
@@ -455,10 +465,14 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
   try {
     raw = await ctx.client.getTeamDirectory(conditional ? st.revision : undefined);
   } catch (err) {
+    if (!stillCurrent(ctx)) return null;
     if (!(err instanceof RoomsError && err.status === 0)) publishOffer(null);
     else fetchedAt.delete(key); // offline: ask again next time
     return cached;
   }
+  // Switched relays while this was in flight: the list is still that
+  // relay's (stored under its own key), but nothing of it is applied here.
+  if (!stillCurrent(ctx)) return null;
   let dir: TeamDirectory | null;
   if (raw === null) {
     dir = cached;
@@ -478,6 +492,7 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
   // it: then the Send popup's line asks for one.
   if (!state.imported && dir && settings.get('pairingDisplayName').trim() && ownDirectoryEntry()) {
     const out = await importTeamDirectory(ctx, dir, settings.get('pairingDisplayName'));
+    if (!stillCurrent(ctx)) return null;
     if (out.ok) {
       const team = dir.name.trim() || 'your team';
       showToast(
@@ -496,8 +511,10 @@ async function runRefresh(ctx: TeamDirectoryContext, key: string, now: number): 
     if (dir) applyImported(dir, relayTag(ctx.baseUrl), key);
     const relayHasKey = dir ? !!dir.teamKey : state.hasKey;
     if (!relayHasKey) await syncTeamKeyUp(ctx, key, dir?.name ?? '');
+    if (!stillCurrent(ctx)) return null;
     if (dir) {
       await syncMyGroups(ctx, key, dir);
+      if (!stillCurrent(ctx)) return null;
       publishSuggestions(key, dir);
     }
     return dir;
@@ -680,6 +697,9 @@ export async function importTeamDirectory(
     return { ok: false, reason: isNotConnected(err) ? 'not-connected' : 'failed' };
   }
   lastSent.set(key, `${me.code}\n${me.name}`);
+  // Registered on that relay, but the user has since switched: merging now
+  // would put that team's people and key under the new relay.
+  if (!stillCurrent(ctx)) return { ok: false, reason: 'failed' };
   const before = settings.get('pairingPartners');
   const merged = mergeTeamDirectory({
     directory: dir,

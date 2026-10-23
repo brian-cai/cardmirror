@@ -14,6 +14,7 @@ import { RoomsClient, RoomsError } from './room-client.js';
 import { WEB_DEFAULT_RELAY_URL } from './relay-endpoint.js';
 import { unlistRoom } from './team-sessions.js';
 import { customRelayExtHeaders } from './relay-info.js';
+import { tokenFromAnotherHost } from './relay-profiles.js';
 
 /** Baked relay endpoint from the desktop main process — resolved once,
  *  used as the LAST fallback so packaged builds work with zero setup.
@@ -103,17 +104,41 @@ export function relayClientWithGuestPass(pass: string): RoomsClient | null {
  *  the ENTITLEMENT that minted it — a settings/dev token override is
  *  never an entitlement, so the header must not ride along there. */
 function resolveCredential(): { token: string; routingCode: string } {
+  const settingsToken = settings.get('pairingRelayToken').trim();
+  if (settingsToken) return { token: settingsToken, routingCode: '' };
+  // A relay typed in Settings with no token gets no credential — never the
+  // built-in relay's shared token or an account entitlement handed to
+  // whatever host was typed — unless it IS the host the main process
+  // issued that credential for.
+  return sharedCredentialFor(settings.get('pairingRelayUrl'));
+}
+
+/** The built-in/linked credential, for `typedUrl` (the relay URL in
+ *  Settings, '' for none). Desktop: none for a typed host other than the
+ *  one main issued it for. */
+function sharedCredentialFor(typedUrl: string): { token: string; routingCode: string } {
+  const typed = typedUrl.trim();
+  if (typed && getElectronHost() && (!bakedRelay?.url || hostOf(typed) !== hostOf(bakedRelay.url))) {
+    return { token: '', routingCode: '' };
+  }
+  return resolveBuiltinCredential();
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/** The credential when no token is set in Settings: a linked account, a
+ *  dev relay, or the built-in one. Renews in the background (see above). */
+function resolveBuiltinCredential(): { token: string; routingCode: string } {
   const dev = collabDevRelay();
   const webToken = webEntitlementToken();
-  const settingsToken = settings.get('pairingRelayToken').trim();
-  const token = settingsToken || webToken || dev?.token || bakedRelay?.token || '';
-  const routingCode = settingsToken
-    ? ''
-    : webToken
-      ? webRoutingCodeSync()
-      : dev?.token
-        ? ''
-        : (bakedRelay?.routingCode ?? '');
+  const token = webToken || dev?.token || bakedRelay?.token || '';
+  const routingCode = webToken ? webRoutingCodeSync() : dev?.token ? '' : (bakedRelay?.routingCode ?? '');
   return { token, routingCode };
 }
 
@@ -131,23 +156,38 @@ export function relayUsable(): boolean {
 export function relayClient(): RoomsClient | null {
   const url = relayBaseUrl();
   if (!url || !resolveCredential().token) return null;
-  // LIVE suppliers — the entitlement swap seam the interface
-  // documents. The one construction-time decision is existence (null
-  // when nothing is configured); everything else is read per request
-  // so renewal/relink heals a running session on its next call.
+  // Mid-edit: the old relay's token with the new relay's URL. No client
+  // until the token is changed too (or this pair connects and is saved).
+  if (tokenFromAnotherHost(settings.get('pairingRelayUrl'), settings.get('pairingRelayToken'))) return null;
+  // PINNED to the relay it was made for. A client lives as long as the
+  // work it serves (a running session's stream, a team-list refresh,
+  // a team-sessions listing), and that work's keys and room belong to
+  // this relay: editing Settings mid-session must not send the
+  // session's next call to another relay with another token (it 404s
+  // there and the session tears itself down), nor this team's sealed
+  // listings to another team's relay. So a relay set in Settings is
+  // fixed, URL and token, for the client's life, and every client keeps
+  // its URL. The built-in or linked-account credential stays LIVE — the
+  // entitlement swap seam
+  // the interface documents: it expires after ~72h and renews in the
+  // background, and a frozen snapshot 401'd a long session (field case
+  // 2026-08-29). New work (the next client) picks up new settings.
+  const pinnedToken = settings.get('pairingRelayToken').trim();
+  const custom = Boolean(settings.get('pairingRelayUrl').trim()) || Boolean(pinnedToken);
+  const typedUrl = settings.get('pairingRelayUrl');
+  const credentials = pinnedToken
+    ? () => ({ token: pinnedToken, routingCode: '' })
+    : () => sharedCredentialFor(typedUrl);
   return new RoomsClient({
-    baseUrl: () => relayBaseUrl() || url,
-    token: () => resolveCredential().token,
-    routingCode: () => resolveCredential().routingCode,
-    // ONE resolution per request: the separate token/routingCode
-    // suppliers each re-ran the full resolution (~4 storage reads + the
-    // settings reads) — three times per request, at cursor-presence
-    // rates on the typing thread (2026-09-01 review, T13). Still
-    // re-read per request: no memo, no staleness.
-    credentials: () => resolveCredential(),
+    baseUrl: () => url,
+    token: () => credentials().token,
+    routingCode: () => credentials().routingCode,
+    // ONE resolution per request (2026-09-01 review, T13).
+    credentials,
     // Relay info v1: name this build (and, if allowed, this install) to
-    // a relay the user configured; {} on the built-in relay.
-    extHeaders: () => customRelayExtHeaders(),
+    // a relay the user configured; {} on the built-in relay (kept so when
+    // a custom relay is set later).
+    extHeaders: custom ? () => customRelayExtHeaders() : () => ({}),
   });
 }
 

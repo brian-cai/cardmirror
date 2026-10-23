@@ -143,7 +143,23 @@ function relayToken(): string {
     const ent = validEntitlement();
     if (ent) return ent.entitlement;
   }
-  return DEFAULT_RELAY_TOKEN;
+  return defaultTokenFor(config.relayUrl);
+}
+
+/** The built-in relay's shared token goes only to the built-in relay's
+ *  host: a custom relay typed with no token gets none ('' — it answers
+ *  401), never the shared one handed to whatever host was typed. */
+export function defaultTokenFor(url: string): string {
+  const typed = url.trim();
+  if (!typed) return DEFAULT_RELAY_TOKEN;
+  const host = (u: string): string => {
+    try {
+      return new URL(u).host.toLowerCase();
+    } catch {
+      return '';
+    }
+  };
+  return host(typed) !== '' && host(typed) === host(DEFAULT_RELAY_URL) ? DEFAULT_RELAY_TOKEN : '';
 }
 
 /** Is there a relay this install can actually use? A custom relay, a
@@ -977,7 +993,9 @@ export function registerPairingIpc(): void {
     async (_e, payload: { relayUrl?: unknown; relayToken?: unknown }) => {
       const url = typeof payload?.relayUrl === 'string' ? payload.relayUrl.trim().replace(/\/+$/, '') : '';
       if (!url) return { custom: false, ok: false, status: 0 };
-      const token = (typeof payload.relayToken === 'string' ? payload.relayToken.trim() : '') || DEFAULT_RELAY_TOKEN;
+      const token = (typeof payload.relayToken === 'string' ? payload.relayToken.trim() : '') || defaultTokenFor(url);
+      // No token for this host: nothing to check, and nothing is sent.
+      if (!token) return { custom: true, ok: false, status: 401 };
       try {
         const res = await fetch(`${url}/messages?recipient=${encodeURIComponent(ks().ownRoutingId())}`, {
           method: 'GET',

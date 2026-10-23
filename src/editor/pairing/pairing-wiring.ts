@@ -17,6 +17,7 @@ import { getElectronHost } from '../host/index.js';
 import { collabEnabled } from '../collab/collab-gate.js';
 import { isLiteBuild } from '../lite.js';
 import { settings } from '../settings.js';
+import { tokenFromAnotherHost } from '../collab/relay-profiles.js';
 import { appVersion, CARD_COMPAT_MIN_VERSION } from '../install-info.js';
 import { showToast } from '../toast.js';
 import { RELAY_FIX_PATH } from '../relay-decline.js';
@@ -56,7 +57,9 @@ function applyConfig(): void {
     minReceiverVersion: CARD_COMPAT_MIN_VERSION,
     pollSeconds: settings.get('pairingPollSeconds'),
     relayUrl: settings.get('pairingRelayUrl'),
-    relayToken: settings.get('pairingRelayToken'),
+    // Mid-edit (another relay's token under this URL): the poller gets no
+    // token until the user changes it too, rather than sending it there.
+    relayToken: tokenFromAnotherHost(settings.get('pairingRelayUrl'), settings.get('pairingRelayToken')) ? '' : settings.get('pairingRelayToken'),
     // Relay info v1: {} unless a custom relay is set.
     relayExtHeaders: customRelayExtHeaders(),
   };

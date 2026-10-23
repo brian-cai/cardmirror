@@ -266,6 +266,26 @@ export async function switchRelay(target: string, hooks: SwitchHooks, now = Date
   return 'switched';
 }
 
+/** Point Settings at `url` + `token` from a team file ("Use team relay"),
+ *  as a switch rather than an edit: the outgoing relay keeps its key, and
+ *  the new relay starts with the key it already had saved, or none, so the
+ *  file's key (applied by the caller right after) lands on the new relay
+ *  instead of being filed under the old one. */
+export function adoptRelay(url: string, token: string, now = Date.now()): void {
+  if (relayMatchKey(settings.get('pairingRelayUrl'), settings.get('pairingRelayToken')) === relayMatchKey(url, token)) return;
+  switching = true;
+  try {
+    stashOutgoingKey(now);
+    const into = findProfile(settings.get('relayProfiles'), url, token);
+    settings.set('teamSessionsKey', into?.teamKey ?? '');
+    settings.set('pairingRelayToken', token);
+    settings.set('pairingRelayUrl', url);
+    if (into) save(settings.get('relayProfiles').map((p) => (p.id === into.id ? { ...p, lastUsed: now } : p)));
+  } finally {
+    switching = false;
+  }
+}
+
 /** URL / token typed in Settings settled from `prev` to the current pair:
  *  the outgoing relay keeps its key (saved with it, so fixing a typo gets
  *  it back), and a saved relay switched to by typing its address gets its
@@ -305,6 +325,30 @@ export function keyBelongsHere(key: string): boolean {
   const cur = { url: settings.get('pairingRelayUrl'), token: settings.get('pairingRelayToken') };
   if (!normUrl(cur.url)) return true;
   return !settings.get('relayProfiles').some((p) => p.teamKey === key && !sameTeam(p, cur));
+}
+
+/**
+ * Is `token` saved for a relay on another host, with no saved relay for
+ * this URL + token? That is the middle of an edit (the new relay's URL
+ * typed, its token not yet): nothing may send that token to this host,
+ * which would hand one relay's credential to another's operator.
+ */
+export function tokenFromAnotherHost(url: string, token: string, profiles: readonly RelayProfile[] = settings.get('relayProfiles')): boolean {
+  const t = token.trim();
+  const host = urlHost(url);
+  if (!t || !host) return false;
+  if (profiles.some((p) => p.token.trim() === t && urlHost(p.url) === host)) return false;
+  return profiles.some((p) => p.token.trim() === t && urlHost(p.url) !== '' && urlHost(p.url) !== host);
+}
+
+function urlHost(url: string): string {
+  const u = url.trim();
+  if (!u) return '';
+  try {
+    return new URL(/^[a-z]+:\/\//i.test(u) ? u : `https://${u}`).host.toLowerCase();
+  } catch {
+    return '';
+  }
 }
 
 /** The list as shown: most recently used first. */
