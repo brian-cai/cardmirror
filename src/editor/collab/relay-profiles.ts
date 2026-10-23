@@ -45,9 +45,17 @@ export function relayHostPath(url: string): string {
   }
 }
 
-/** The label a relay gets until the user renames it: the relay's own
+/** The label a relay gets until the user renames it: the team's own part
+ *  of a per-team address (".../r/<name>" -> "<name>"), else the relay's
  *  operator name and access label when it says them, else its address. */
 export function defaultRelayLabel(url: string, info: RelayInfo | null = null): string {
+  let team = '';
+  try {
+    team = decodeURIComponent(/\/r\/([^/]+)\/?$/.exec(new URL(normUrl(url)).pathname)?.[1] ?? '');
+  } catch {
+    /* not a URL: fall through */
+  }
+  if (team.trim()) return team.trim().slice(0, 80);
   const parts = [info?.operator?.name ?? '', info?.access?.label ?? ''].map((s) => s.trim()).filter(Boolean);
   return (parts.length ? parts.join(' · ') : relayHostPath(url)).slice(0, 80);
 }

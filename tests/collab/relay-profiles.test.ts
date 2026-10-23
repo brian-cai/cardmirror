@@ -155,6 +155,9 @@ describe('labels', () => {
     expect(defaultRelayLabel(HS.url)).toBe('hs.relay.example/relay');
     expect(defaultRelayLabel(HS.url, info('Squad', 'Coach access'))).toBe('Squad · Coach access');
     expect(defaultRelayLabel(HS.url, info('', 'Squad access'))).toBe('Squad access');
+    // A per-team address is named after its team part, before the relay's own labels.
+    expect(defaultRelayLabel('https://relay.example/r/collegiate/', info('Squad', 'Coach access'))).toBe('collegiate');
+    expect(defaultRelayLabel('https://relay.example/r/lincoln%20hs')).toBe('lincoln hs');
     expect(relayHostPath('https://relay.example/')).toBe('relay.example');
   });
 
@@ -233,14 +236,14 @@ describe('switching', () => {
       leaveSessions: async () => (calls.push('leave'), leave),
     });
     expect(await switchRelay(hs.id, hooks(false, true))).toBe('cancelled');
-    expect(calls).toEqual(['confirm:college.example/r/squad']);
+    expect(calls).toEqual(['confirm:squad']);
     expect(settings.get('pairingRelayUrl')).toBe(COLLEGE.url);
     expect(await switchRelay(hs.id, hooks(true, false))).toBe('failed');
     expect(settings.get('pairingRelayUrl')).toBe(COLLEGE.url);
     expect(settings.get('teamSessionsKey')).toBe(KEY_B);
     calls.length = 0;
     expect(await switchRelay(hs.id, hooks(true, true))).toBe('switched');
-    expect(calls).toEqual(['confirm:college.example/r/squad', 'leave']);
+    expect(calls).toEqual(['confirm:squad', 'leave']);
     expect(settings.get('pairingRelayUrl')).toBe(HS.url);
     expect(college.id).not.toBe(hs.id);
   });
@@ -309,7 +312,7 @@ describe('quick switch menu and Saved relays list', () => {
     const menu = document.getElementById('relay-switch-menu')!;
     const items = [...menu.querySelectorAll<HTMLButtonElement>('.pmd-relay-menu-item')];
     expect(items.map((b) => b.querySelector('.pmd-relay-menu-label')?.textContent ?? b.textContent)).toEqual([
-      'college.example/r/squad',
+      'squad',
       'hs.relay.example/relay',
       'Built-in relay',
       'Manage saved relays…',
@@ -330,7 +333,7 @@ describe('quick switch menu and Saved relays list', () => {
       buttons: [...r.querySelectorAll('button')].map((b) => `${b.textContent}${b.disabled ? '(off)' : ''}`),
     }));
     expect(rows).toEqual([
-      { label: 'college.example/r/squad', buttons: ['In use(off)', 'Rename', 'Remove(off)'] },
+      { label: 'squad', buttons: ['In use(off)', 'Rename', 'Remove(off)'] },
       { label: 'hs.relay.example/relay', buttons: ['Use', 'Rename', 'Remove'] },
       { label: 'Built-in relay', buttons: ['Use'] },
     ]);

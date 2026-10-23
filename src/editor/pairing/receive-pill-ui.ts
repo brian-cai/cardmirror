@@ -28,7 +28,7 @@ import { addContact, canAddContact } from './add-contact.js';
 import { parseRoomInvite } from './room-invite.js';
 import { collabEnabled } from '../collab/collab-gate.js';
 import { offerSharingSetup } from './sharing-setup.js';
-import { collabSettingsAvailable, collabSettingsButton } from './collab-settings-button.js';
+import { collabSettingsAvailable, collabSettingsButton, relaySwitchButton } from './collab-settings-button.js';
 import { collabInviteJoiner, collabSessionJoinPrompt } from '../collab/collab-hooks.js';
 import { deletePrefetch } from '../collab/collab-store.js';
 import { checkedSliceFromJSON } from '../../schema/slice-check.js';
@@ -130,6 +130,8 @@ export class ReceivePillController {
     });
     this.actionsLi.appendChild(this.clearEl);
     if (collabSettingsAvailable()) {
+      const relay = relaySwitchButton('pmd-receive-action');
+      if (relay) this.actionsLi.appendChild(relay);
       this.actionsLi.appendChild(collabSettingsButton('pmd-receive-action', () => this.setOpen(false)));
     }
 

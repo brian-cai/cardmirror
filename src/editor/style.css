@@ -17248,3 +17248,11 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
 .pmd-pairing-relay-panel { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 4px 8px 8px 12px; font-size: 12px; }
 .pmd-pairing-relay-panel label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .pmd-send-elsewhere { font-size: 11px; opacity: .75; }
+
+/* Team-list offer: a line at the top of the Send popup, and a dot on Send while it waits. */
+.pmd-send-offer:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px;
+  margin: 2px 4px 6px; border-radius: 6px; background: var(--pmd-accent-soft, rgba(37, 99, 235, 0.08)); font-size: 12px; }
+.pmd-send-offer .pmd-team-join-requests-text { flex: 1 1 auto; min-width: 8rem; }
+.pmd-send-pill.pmd-send-has-offer .pmd-send-bar { position: relative; }
+.pmd-send-pill.pmd-send-has-offer .pmd-send-bar::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--pmd-accent, #2563eb); }

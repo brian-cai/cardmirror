@@ -1,8 +1,8 @@
 /**
- * Team directory: what the user sees — the offer "Your team (<name>) is
- * set up on this relay. Import it?" as a status-bar segment with Import /
- * Not now (non-modal: nothing floats over the page and the editor keeps
- * focus), the display-name prompt behind Import (the same prompt Import
+ * Team directory: what the user sees — the offer ("<team>: 3 teammates to
+ * add", or "Join <team>'s team list") as a line at the top of the Send
+ * popup with Import / Not now, and a dot on Send while it waits (nothing
+ * in the status bar, nothing floating over the page), the display-name prompt behind Import (the same prompt Import
  * team opens with), and the toasts. The logic lives in team-directory.ts.
  *
  * With no custom relay, card sharing off, a relay without the extension,
@@ -106,25 +106,17 @@ export function startTeamDirectory(): void {
 const ELEMENT_ID = 'team-directory-offer';
 let busy = false;
 
+/** The offer's slot: a line at the top of the Send popup (the pill makes
+ *  it each time it lists contacts). Not in the status bar: it stays quiet
+ *  until you open Send, with a dot on Send meanwhile. */
 function element(): HTMLElement | null {
   if (typeof document === 'undefined') return null;
-  let el = document.getElementById(ELEMENT_ID);
-  if (el) return el;
-  el = document.createElement('div');
-  el.id = ELEMENT_ID;
-  el.className = 'status-segment pmd-team-join-requests pmd-team-directory-offer';
-  el.setAttribute('role', 'status');
-  el.setAttribute('aria-live', 'polite');
-  el.hidden = true;
-  // In the status bar before the notices chip; a shell without one (tests,
-  // odd layouts) gets the same small fixed strip as join requests.
-  const anchor = document.getElementById('notice-chip');
-  if (anchor?.parentElement) anchor.insertAdjacentElement('beforebegin', el);
-  else {
-    el.classList.add('pmd-team-join-requests-floating');
-    document.body.appendChild(el);
-  }
-  return el;
+  return document.getElementById(ELEMENT_ID);
+}
+
+function markPill(on: boolean): void {
+  if (typeof document === 'undefined') return;
+  document.querySelector('.pmd-send-pill')?.classList.toggle('pmd-send-has-offer', on);
 }
 
 /** The offer's sentence. */
@@ -133,16 +125,14 @@ const addOnly = (o: TeamDirectoryOffer): boolean => o.missing === 0 && !o.listed
 
 export function offerText(o: TeamDirectoryOffer): string {
   const name = o.directory.name.trim();
-  if (addOnly(o)) {
-    return name
-      ? `Add yourself to your team’s list (${name}) on this relay?`
-      : 'Add yourself to your team’s list on this relay? Teammates who connect get you as a contact.';
-  }
-  return name ? `Your team (${name}) is set up on this relay. Import it?` : 'Your team is set up on this relay. Import it?';
+  if (addOnly(o)) return name ? `Join ${name}’s team list` : 'Join your team’s list';
+  const n = `${o.missing} teammate${o.missing === 1 ? '' : 's'}`;
+  return name ? `${name}: ${n} to add` : `Your team: ${n} to add`;
 }
 
 export function renderOffer(o: TeamDirectoryOffer | null = currentOffer()): void {
-  const el = o ? element() : typeof document !== 'undefined' ? document.getElementById(ELEMENT_ID) : null;
+  markPill(!!o);
+  const el = element();
   if (!el) return;
   if (!o) {
     el.hidden = true;

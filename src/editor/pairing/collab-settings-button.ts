@@ -9,6 +9,7 @@
 
 import { setIcon } from '../icons';
 import { visibleCategoryTabs } from '../settings-categories.js';
+import { settings } from '../settings.js';
 
 /** Whether this host has a Collaboration settings tab to open (it's
  *  desktop-only). The gear isn't rendered where it would land nowhere. */
@@ -32,6 +33,27 @@ export function collabSettingsButton(className: string, beforeOpen: () => void):
     e.stopPropagation();
     beforeOpen();
     void import('../settings-ui.js').then((m) => m.openSettings({ category: 'pairing' }));
+  });
+  return btn;
+}
+
+/** A globe button beside the gear: switch relays (saved relays + the
+ *  built-in one) from a menu next to it. Only once there's a saved relay
+ *  to switch to; null otherwise. The menu module loads on click. */
+export function relaySwitchButton(className: string): HTMLButtonElement | null {
+  if (settings.get('relayProfiles').length === 0) return null;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `${className} pmd-pill-settings pmd-pill-relay`;
+  btn.title = 'Switch relay';
+  btn.setAttribute('aria-label', 'Switch relay');
+  const icon = document.createElement('span');
+  icon.className = 'pmd-send-action-icon';
+  setIcon(icon, 'globe');
+  btn.appendChild(icon);
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    void import('../collab/relay-profiles-ui.js').then((m) => m.toggleRelayMenu(btn));
   });
   return btn;
 }

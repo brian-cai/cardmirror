@@ -287,7 +287,7 @@ describe('offer and Not now', () => {
     onTeamDirectoryOffer((o) => seen.push(o ? `${o.directory.revision}:${o.missing}` : null));
     await refreshTeamDirectory(relay.ctx, { now: clock });
     expect(currentOffer()?.missing).toBe(2);
-    expect(offerText(currentOffer()!)).toBe('Your team (Lincoln HS Debate) is set up on this relay. Import it?');
+    expect(offerText(currentOffer()!)).toBe('Lincoln HS Debate: 2 teammates to add');
     // Before Import nothing is sent but GETs.
     expect(relay.sent.every((s) => s.method === 'GET')).toBe(true);
 
@@ -539,6 +539,13 @@ describe('team key', () => {
 // ── the status-bar offer ──────────────────────────────────────────────
 
 describe('offer UI', () => {
+  // The Send popup makes this slot when it lists contacts.
+  beforeEach(() => {
+    document.getElementById('team-directory-offer')?.remove();
+    const slot = document.createElement('div');
+    slot.id = 'team-directory-offer';
+    document.body.appendChild(slot);
+  });
   const segment = () => document.getElementById('team-directory-offer')!;
   const button = (label: string) =>
     [...segment().querySelectorAll('button')].find((b) => b.textContent === label) as HTMLButtonElement;
@@ -550,7 +557,7 @@ describe('offer UI', () => {
     onTeamDirectoryOffer(renderOffer);
     await refreshTeamDirectory(relay.ctx, { now: clock });
     expect(segment().hidden).toBe(false);
-    expect(segment().textContent).toContain('Your team (Lincoln HS Debate) is set up on this relay. Import it?');
+    expect(segment().textContent).toContain('Lincoln HS Debate: 2 teammates to add');
     button('Not now').click();
     await settle();
     expect(segment().hidden).toBe(true);

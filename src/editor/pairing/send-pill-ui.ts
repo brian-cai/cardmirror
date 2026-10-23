@@ -28,7 +28,7 @@ import { showToast } from '../toast.js';
 import { relayClient, sendOutcomeToast, type SendItem } from './relay-client.js';
 import { collabEnabled } from '../collab/collab-gate.js';
 import { offerSharingSetup } from './sharing-setup.js';
-import { collabSettingsAvailable, collabSettingsButton } from './collab-settings-button.js';
+import { collabSettingsAvailable, collabSettingsButton, relaySwitchButton } from './collab-settings-button.js';
 import {
   collabActiveShareCode,
   collabInviter,
@@ -398,6 +398,14 @@ export class SendPillController {
     this.panel.innerHTML = '';
     this.targets.clear();
     this.recentRows.clear();
+    // The team-list offer's slot (team-directory-ui.ts fills it), at the
+    // far end from the search box.
+    const offer = document.createElement('div');
+    offer.id = 'team-directory-offer';
+    offer.className = 'pmd-send-offer';
+    offer.hidden = true;
+    this.panel.appendChild(offer);
+    void import('../collab/team-directory-ui.js').then((m) => m.renderOffer()).catch(() => {});
 
     // Click-open search (CSS hides it during a drag, when typing can't
     // happen anyway): filters the rows; Enter sends to the one nearest it. It sits
@@ -548,6 +556,8 @@ export class SendPillController {
     actions.appendChild(this.startSessionEl);
     // Click-open only (CSS hides it while the row is a drag's drop zones).
     if (collabSettingsAvailable()) {
+      const relay = relaySwitchButton('pmd-send-action');
+      if (relay) actions.appendChild(relay);
       actions.appendChild(collabSettingsButton('pmd-send-action', () => this.collapse()));
     }
     this.panel.appendChild(search);

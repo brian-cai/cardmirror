@@ -151,33 +151,10 @@ export function startRelayProfiles(): void {
 const CHIP_ID = 'relay-chip';
 const MENU_ID = 'relay-switch-menu';
 
-function chip(): HTMLButtonElement | null {
-  if (typeof document === 'undefined') return null;
-  let el = document.getElementById(CHIP_ID) as HTMLButtonElement | null;
-  if (el) return el;
-  const anchor = document.getElementById('notice-chip');
-  if (!anchor?.parentElement) return null;
-  el = document.createElement('button');
-  el.id = CHIP_ID;
-  el.type = 'button';
-  el.className = 'status-segment pmd-relay-chip';
-  el.hidden = true;
-  el.addEventListener('click', () => toggleRelayMenu());
-  anchor.insertAdjacentElement('beforebegin', el);
-  return el;
-}
-
-/** Shown once there's something to switch between: a saved relay. */
+/** No status-bar chip any more (switching lives in the Send / Receive
+ *  popups, Settings and the command): take down one an older build left. */
 export function renderChip(): void {
-  const el = chip();
-  if (!el) return;
-  const any = settings.get('relayProfiles').length > 0;
-  el.hidden = !any;
-  if (!any) return;
-  const label = currentRelayLabel();
-  el.textContent = label;
-  el.title = `Relay: ${label} — click to switch relays`;
-  el.setAttribute('aria-label', `Relay: ${label}. Switch relays`);
+  if (typeof document !== 'undefined') document.getElementById(CHIP_ID)?.remove();
 }
 
 function closeMenu(): void {
@@ -189,7 +166,7 @@ function closeMenu(): void {
 function onOutside(e: MouseEvent): void {
   const menu = document.getElementById(MENU_ID);
   const t = e.target as Node | null;
-  if (menu && t && (menu.contains(t) || document.getElementById(CHIP_ID)?.contains(t))) return;
+  if (menu && t && (menu.contains(t) || menuAnchor?.contains(t))) return;
   closeMenu();
 }
 
@@ -197,7 +174,7 @@ function onKey(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
     e.preventDefault();
     closeMenu();
-    document.getElementById(CHIP_ID)?.focus();
+    menuAnchor?.focus();
   }
 }
 
@@ -214,15 +191,25 @@ export function relayMenuEntries(): Array<{ id: string; label: string; detail: s
   return out;
 }
 
-/** Open (or close) the quick-switch menu above the status bar. */
-export function toggleRelayMenu(): void {
+let menuAnchor: HTMLElement | null = null;
+
+/** Open (or close) the quick-switch menu: next to `anchor` (the Send /
+ *  Receive popup's globe), else above the status bar (the command). */
+export function toggleRelayMenu(anchor: HTMLElement | null = null): void {
   if (document.getElementById(MENU_ID)) {
     closeMenu();
     return;
   }
+  menuAnchor = anchor;
   const menu = document.createElement('div');
   menu.id = MENU_ID;
   menu.className = 'pmd-relay-menu';
+  if (anchor) {
+    const r = anchor.getBoundingClientRect();
+    menu.style.right = 'auto';
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 16 * 16))}px`;
+    menu.style.bottom = `${Math.max(8, window.innerHeight - r.top + 6)}px`;
+  }
   menu.setAttribute('role', 'menu');
   menu.setAttribute('aria-label', 'Switch relay');
   const items: HTMLButtonElement[] = [];
@@ -296,7 +283,7 @@ export function buildSavedRelaysSection(onCleanup: (fn: () => void) => void): HT
   desc.className = 'pmd-settings-row-desc';
   desc.textContent =
     'Every custom relay you connect to is saved here with its own team key, so you can switch back in one click ' +
-    '(also from the relay name in the status bar). Contacts and groups stay the same on every relay.';
+    '(also from the globe in the Send and Receive popups). The Send pill shows the contacts on the relay you’re using.';
   const list = document.createElement('div');
   list.className = 'pmd-saved-relays-list';
   wrap.append(heading, desc, list);
