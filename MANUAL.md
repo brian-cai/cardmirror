@@ -1072,8 +1072,8 @@ into a folder, **Esc** steps back up (and closes the palette from the top
 level), and the header above the results shows where you are. Only folders
 that hold documents the file search can see are shown. Type after the prefix
 to search the folder you are in — every document beneath it, at any depth,
-plus subfolders whose name matches; each file shows the subfolder it sits
-in. Files here behave exactly as they do in an `f` search: Enter opens,
+plus every folder beneath it whose name matches, however deep; files and
+deeper folders each show the subfolder they sit in. Files here behave exactly as they do in an `f` search: Enter opens,
 Tab dives in, Alt-P pins. `/c` and a space starts in the folder of the
 document you are working in instead (it needs to be inside one of your
 file-search folders). Moving into or out of a folder clears what you had

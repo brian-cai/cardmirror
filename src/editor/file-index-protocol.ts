@@ -41,6 +41,9 @@ export type FileBrowseRow =
       kind: 'folder';
       name: string;
       relativeDirectory: string;
+      /** Directory of the folder relative to the browsed directory ('' for
+       *  an immediate subfolder) — the search view reaches any depth. */
+      subPath?: string;
     }
   | ({
       kind: 'file';

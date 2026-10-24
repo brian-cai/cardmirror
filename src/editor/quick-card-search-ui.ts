@@ -983,10 +983,11 @@ function browseResult(row: FileBrowseRow, root: string): PaletteResult {
   // A folder search reaches any depth: the meta line says where the file
   // sits below the folder being browsed ('' for a direct child).
   if (row.kind === 'file') return { ...fileResult(row), meta: pathParts(row.subPath).join(' / ') };
+  // A matching folder deeper down says where it sits too.
   return {
     source: 'folder',
     name: row.name,
-    meta: '',
+    meta: pathParts(row.subPath ?? '').join(' / '),
     matchedName: true,
     snippet: null,
     browseLocation: { root, relativeDirectory: row.relativeDirectory },
