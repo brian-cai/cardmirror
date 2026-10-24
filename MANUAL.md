@@ -1240,8 +1240,11 @@ Copying from a document in read mode copies what you see: the
 highlighted body, the cite text, and the headings — not the whole card
 underneath. It follows the other read-mode settings (keep entire cite,
 show undertags, show background color), so the clipboard matches the
-screen. If you'd rather a copy in read mode take the full card, turn off
-**Read mode: copy only what is shown** (Settings → General).
+screen — including returns: with *Read mode: preserve paragraph
+integrity* off, a card's body paragraphs copy as the single flowing
+paragraph you see; on, each keeps its own line. If you'd rather a copy
+in read mode take the full card, turn off **Read mode: copy only what is
+shown** (Settings → General).
 
 Press the eye again to exit. In the
 [multi-doc workspace](#7-the-multi-doc-workspace), read mode is

@@ -16,8 +16,10 @@
  * exactly like Convert Cards to Read Mode; a card the selection cuts
  * into (an open slice) is filtered child by child with its structure
  * kept, so the open depths still describe it, and the depths are clamped
- * if a hidden node on the open path had to go. Per-view: the other panes
- * of a multi-doc workspace copy normally.
+ * if a hidden node on the open path had to go. Returns follow "Read mode:
+ * preserve paragraph integrity" exactly as the display does — off, a
+ * card's bodies flow into one paragraph; on, each keeps its line.
+ * Per-view: the other panes of a multi-doc workspace copy normally.
  */
 
 import { Fragment, Slice, type Node as PMNode } from 'prosemirror-model';
@@ -32,8 +34,6 @@ import { settings } from './settings.js';
 const DOC_LEVEL_VISIBLE = new Set(['pocket', 'hat', 'block', 'card', 'analytic_unit', 'transclusion_ref']);
 /** Textblocks whose text read mode always shows. */
 const HEADINGS = new Set(['tag', 'analytic', 'pocket', 'hat', 'block']);
-/** Textblocks read mode filters down to their audible runs. */
-const FILTERED_TEXTBLOCKS = new Set(['cite_paragraph', 'undertag', 'card_body', 'paragraph']);
 
 /** True when a copy from `view` should be reduced to read mode's content. */
 export function isReadModeCopyActive(view: EditorView): boolean {
@@ -58,30 +58,86 @@ function audibleTextblock(node: PMNode, mustKeep: boolean): PMNode | null {
   return node.type.create(node.attrs, builder.nodes, node.marks);
 }
 
-/** Read mode shows a table's paragraphs as body text (`convertCard` does
- *  the same): one card_body per paragraph with audible text. */
-function tableAsBodies(table: PMNode): PMNode[] {
+/**
+ * The children of a card / analytic unit the selection cuts into, each
+ * reduced — the same shape `convertCard` gives a whole card, including
+ * the paragraph rule: with "Read mode: preserve paragraph integrity" OFF
+ * (read mode's default flow) consecutive body paragraphs join into one,
+ * so the copy carries no returns the screen doesn't show; ON, each body
+ * with audible text keeps its own line. Nodes on the slice's open path
+ * (`onStart` / `onEnd` for this container) must survive, emptied if need
+ * be, so the open depths keep meaning something.
+ */
+function convertContainerChildren(
+  node: PMNode,
+  depth: number,
+  onStart: boolean,
+  onEnd: boolean,
+  openStart: number,
+  openEnd: number,
+): Fragment {
+  const schema = node.type.schema;
+  const separate = settings.get('readModeParagraphIntegrity');
   const out: PMNode[] = [];
-  table.descendants((d) => {
-    if (d.type.name !== 'paragraph') return true;
-    const kept = audibleTextblock(d, false);
-    if (kept) out.push(d.type.schema.nodes['card_body']!.create(null, kept.content));
-    return false;
+  let body = new AudibleInlineBuilder();
+  let bodyMustKeep = false;
+  const flushBody = (): void => {
+    if (body.nodes.length > 0 || bodyMustKeep) out.push(schema.nodes['card_body']!.create(null, body.nodes));
+    body = new AudibleInlineBuilder();
+    bodyMustKeep = false;
+  };
+  const addBodyParagraph = (para: PMNode, mustKeep: boolean): void => {
+    if (!separate) {
+      body.addTextblock(para);
+      bodyMustKeep = bodyMustKeep || mustKeep;
+      return;
+    }
+    flushBody();
+    const kept = audibleTextblock(para, mustKeep);
+    if (kept) out.push(kept.type.name === 'card_body' ? kept : schema.nodes['card_body']!.create(null, kept.content));
+  };
+
+  const last = node.childCount - 1;
+  node.forEach((child, _offset, i) => {
+    const childOnStart = onStart && i === 0 && openStart > depth;
+    const childOnEnd = onEnd && i === last && openEnd > depth;
+    const mustKeep = childOnStart || childOnEnd;
+    const name = child.type.name;
+    if (HEADINGS.has(name)) {
+      flushBody();
+      out.push(headingWithoutImages(child));
+    } else if (name === 'cite_paragraph' || name === 'undertag') {
+      flushBody();
+      const kept = audibleTextblock(child, mustKeep);
+      if (kept) out.push(kept);
+    } else if (name === 'card_body' || name === 'paragraph') {
+      addBodyParagraph(child, mustKeep);
+    } else if (name === 'table' && !mustKeep) {
+      // Read mode shows a table's paragraphs as body text (convertCard too).
+      child.descendants((d) => {
+        if (d.type.name !== 'paragraph') return true;
+        addBodyParagraph(d, false);
+        return false;
+      });
+    } else {
+      flushBody();
+      out.push(child); // a table on the open path, or an unknown block: leave it
+    }
   });
-  return out;
+  flushBody();
+  return Fragment.from(out);
 }
 
 /**
- * The children of a container, each reduced. `depth` is the children's
- * depth in the slice; `parentOnStart` / `parentOnEnd` say whether the
- * container itself lies on the slice's open start / end path, so its
- * first / last child may too — a node on an open path must survive
- * (emptied if need be) for the open depths to keep meaning something.
+ * The children of a doc-level container (the slice itself, or a
+ * transclusion zone), each reduced. `depth` is the children's depth in
+ * the slice; `parentOnStart` / `parentOnEnd` say whether the container
+ * lies on the slice's open start / end path, so its first / last child
+ * may too.
  */
 function convertChildren(
   frag: Fragment,
   depth: number,
-  topLevel: boolean,
   parentOnStart: boolean,
   parentOnEnd: boolean,
   openStart: number,
@@ -96,32 +152,21 @@ function convertChildren(
     const name = child.type.name;
 
     if (child.isInline) {
-      out.push(child); // never reached for a filtered textblock; defensive
-    } else if (topLevel && !DOC_LEVEL_VISIBLE.has(name)) {
+      out.push(child); // defensive: doc-level content is block-level
+    } else if (!DOC_LEVEL_VISIBLE.has(name)) {
       // Hidden at doc level (a loose paragraph, a table, an image row…).
       if (mustKeep && child.isTextblock) out.push(child.type.create(child.attrs, undefined, child.marks));
     } else if (HEADINGS.has(name)) {
       out.push(headingWithoutImages(child));
-    } else if (FILTERED_TEXTBLOCKS.has(name)) {
-      const kept = audibleTextblock(child, mustKeep);
-      if (kept) out.push(kept);
     } else if (name === 'card' && !mustKeep) {
       out.push(convertCard(child)); // a whole card: exactly the zap
-    } else if (name === 'table' && !mustKeep) {
-      out.push(...tableAsBodies(child));
-    } else if (name === 'card' || name === 'analytic_unit' || name === 'transclusion_ref' || name === 'table') {
-      const children = convertChildren(
-        child.content,
-        depth + 1,
-        name === 'transclusion_ref',
-        onStart,
-        onEnd,
-        openStart,
-        openEnd,
-      );
+    } else if (name === 'card' || name === 'analytic_unit') {
+      const children = convertContainerChildren(child, depth + 1, onStart, onEnd, openStart, openEnd);
       if (children.childCount > 0 || mustKeep) out.push(child.type.create(child.attrs, children, child.marks));
     } else {
-      out.push(child); // unknown block: leave it
+      // transclusion_ref: a zone of cards — same rules as the doc level.
+      const children = convertChildren(child.content, depth + 1, onStart, onEnd, openStart, openEnd);
+      if (children.childCount > 0 || mustKeep) out.push(child.type.create(child.attrs, children, child.marks));
     }
   });
   return Fragment.from(out);
@@ -155,7 +200,7 @@ export function readModeVisibleSlice(slice: Slice, inlineParent?: PMNode | null)
     const kept = HEADINGS.has(inlineParent.type.name) ? headingWithoutImages(shell) : audibleTextblock(shell, true)!;
     return new Slice(kept.content, 0, 0);
   }
-  const content = convertChildren(slice.content, 0, true, true, true, slice.openStart, slice.openEnd);
+  const content = convertChildren(slice.content, 0, true, true, slice.openStart, slice.openEnd);
   return new Slice(
     content,
     Math.min(slice.openStart, maxOpen(content, 'start')),

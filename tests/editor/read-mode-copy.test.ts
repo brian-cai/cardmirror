@@ -115,10 +115,37 @@ describe('Cmd-C in read mode', () => {
     const before = view.state.selection.content();
     expect([before.openStart, before.openEnd]).toEqual([2, 2]);
     const out = copied(view);
-    expect(text(out)).toBe('READ ONE READ TWO\n');
+    // Paragraph integrity off: the two bodies flow into one, as on screen —
+    // no return the display doesn't show. The merged body is still a
+    // textblock at the end, so the open depth holds.
+    expect(text(out)).toBe('READ ONE READ TWO');
+    expect(out.content.firstChild!.childCount).toBe(1);
     expect(out.openStart).toBe(2);
-    expect(out.openEnd).toBe(2); // the open (empty) last body is kept so the depth still holds
+    expect(out.openEnd).toBe(2);
     expect(out.content.firstChild!.type.name).toBe('card');
+  });
+
+  it('…and keeps each body on its own line with "preserve paragraph integrity" on', () => {
+    settings.set('readModeParagraphIntegrity', true);
+    const doc = makeDoc();
+    const view = mount(doc, true);
+    select(view, posOf(doc, 'unread alpha', 3), posOf(doc, 'all of this', 6));
+    const out = copied(view);
+    // Two bodies: the audible first, and the open (empty) last one kept for the depth.
+    expect(out.content.firstChild!.childCount).toBe(2);
+    expect(text(out)).toBe('READ ONE READ TWO\n');
+    expect(out.openEnd).toBe(2);
+    settings.set('readModeParagraphIntegrity', false);
+  });
+
+  it('a selection across two cards: whole-card rules in the middle, open rules at the ends', () => {
+    const doc = makeDoc();
+    const view = mount(doc, true);
+    select(view, posOf(doc, 'unread bravo'), posOf(doc, 'READ THREE', 10));
+    const out = copied(view);
+    expect(text(out)).toBe('READ TWO\nTag two\nREAD THREE');
+    expect(out.openStart).toBe(2);
+    expect(out.openEnd).toBe(2);
   });
 
   it('a selection within one body keeps the highlighted runs only, spaced like the display', () => {
