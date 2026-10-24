@@ -1064,6 +1064,12 @@ export interface Settings {
    *  single nearest preceding cite paragraph. Off = every cite under
    *  the source card / run (the Verbatim-style behavior). */
   copyPreviousCiteNearestOnly: boolean;
+  /** Insert at cursor (receive pill, dropzone shelf, send-to-speech,
+   *  quick cards): a card or heading lands at the first valid outline
+   *  slot AT OR AFTER the cursor — a hat after the end of the hat section
+   *  the cursor is in — instead of the nearest slot in either direction,
+   *  which can be above the current section's heading. Off by default. */
+  insertHeadingsAfterSection: boolean;
   /** "New paragraph on Enter": what pressing Enter at the END of each
    *  structural textblock creates. 'normal' keeps the default
    *  behavior (a plain paragraph — or, for tag/analytic, the
@@ -2049,6 +2055,7 @@ const DEFAULTS: Settings = {
   navFollowScroll: false,
   dragInteractions: true,
   copyPreviousCiteNearestOnly: true,
+  insertHeadingsAfterSection: false,
   showOnboardingStarter: true,
   hasSeenUiTour: false,
   hasSeenCutInPlaceNotice: false,
@@ -4439,6 +4446,16 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     section: 'Insert surfaces',
   },
   {
+    key: 'insertHeadingsAfterSection',
+    label: 'Insert at cursor: headings go after the current section',
+    description:
+      'Cards and headings inserted at the cursor — from the Receive pill, the dropzone shelf, send to speech, or quick cards — land at the first valid slot at or after the cursor: a card after the card you\'re in, an F5 hat after the end of the F5 section you\'re in. Normally they snap to the nearest slot in either direction, which puts an F5 above the F5 heading you\'re under when the cursor is near its top — disorienting when compiling several documents into one. Text and card contents are unaffected. Off by default.',
+    kind: 'toggle',
+    category: 'editing',
+    section: 'Insert surfaces',
+    aliases: ['insert at cursor', 'insert below', 'insert after section', 'receive pill placement', 'dropzone placement', 'hat above', 'nearest slot'],
+  },
+  {
     key: 'showQuickCardButtons',
     label: 'Show quick card buttons',
     description:
@@ -5599,6 +5616,7 @@ function sanitize(s: Settings): Settings {
     flashcardDueDot: s.flashcardDueDot === false ? false : true,
     editorSpellcheck: !!s.editorSpellcheck,
     copyPreviousCiteNearestOnly: s.copyPreviousCiteNearestOnly === false ? false : true,
+    insertHeadingsAfterSection: !!s.insertHeadingsAfterSection,
     smartQuotes: !!s.smartQuotes,
     smartQuoteDatesAsApostrophes:
       s.smartQuoteDatesAsApostrophes === undefined

@@ -1644,7 +1644,11 @@ pill row; each row shows the card's label, who sent it, and when. From a
 row:
 
 - **Click** inserts the card at the cursor; **Alt-click** appends it at the
-  end of the document; or **drag** it in like any dropzone item. Inserting
+  end of the document; or **drag** it in like any dropzone item. "At the
+  cursor" snaps to where a drag would drop that content — a card between
+  cards, a hat between hats — at the nearest such slot, or at the first slot
+  after the cursor with **Insert at cursor: headings go after the current
+  section** on (Settings → Editing). Inserting
   copies — the card stays in the pill until you ✕ it. A bundled
   multi-selection send shows a **×N** count and is taken as one piece —
   click, drag, and ✕ all act on the whole bundle.
@@ -3165,6 +3169,13 @@ Typing helpers and the behavior of the cutting and condense commands
 - **Show quick card buttons** — show the Quick Cards ribbon cluster (off by
   default; quick cards still work while hidden, and the command bar still opens
   by shortcut).
+- **Insert at cursor: headings go after the current section** — cards and
+  headings inserted at the cursor (Receive pill, dropzone shelf, send to
+  speech, quick cards) land at the first valid slot at or after the cursor:
+  a card after the card you're in, an F5 hat after the end of the F5 section
+  you're in. Off (the default) snaps to the nearest slot in either
+  direction, which can put an F5 above the F5 heading you're under when the
+  cursor is near its top. Text and card contents are unaffected.
 
 **Translation**
 
