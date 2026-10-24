@@ -1298,13 +1298,15 @@ class Slot {
       return;
     }
     this.copresenceEl.hidden = false;
-    const text = cp.connected
+    let text = cp.connected
       ? cp.queued > 0
         ? `Sending ${cp.queued}…`
         : 'Synced'
       : cp.queued > 0
         ? `Offline · ${cp.queued}`
         : 'Offline';
+    if (cp.role === 'spectator') text = `Watching · ${text.toLowerCase()}`;
+    if (cp.watchers > 0) text += ` · ${cp.watchers} watching`;
     this.copresenceEl.title = cp.connected
       ? 'Show who\u2019s in this session'
       : 'Not connected. Your edits are saved on this computer and send when the session reconnects. Click to reconnect now.';

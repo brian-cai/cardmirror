@@ -65,6 +65,8 @@ export interface ActiveSession {
   unloadCleanup: () => void;
   /** Unsubscribe the meta-map (title) watcher installed by installSeams. */
   metaUnsub: () => void;
+  /** Spectators in the room, per the relay's last `w` frame / hello. */
+  watchers: number;
   /** Latest connection status for THIS session. The shared status-bar chip only
    *  ever reflects the focused doc's session; storing status per session lets
    *  each multi-pane slot footer render its own visible doc's state. */

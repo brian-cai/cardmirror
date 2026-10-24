@@ -32,6 +32,8 @@ import { collabSettingsAvailable, collabSettingsButton, relaySwitchButton } from
 import {
   collabActiveInviteLink,
   collabActiveShareCode,
+  collabActiveViewCode,
+  collabActiveViewLink,
   collabInviter,
   collabSessionStarter,
 } from '../collab/collab-hooks.js';
@@ -86,6 +88,9 @@ const RECENT_ICON =
   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>';
 
 /** Two-people glyph for the per-contact "invite to collaborate" button. */
+/** Eye glyph for the spectator ("view") actions. */
+const VIEW_ICON =
+  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 /** Chain-link glyph for "Copy link" (the session's invite URL). */
 const COPY_LINK_ICON =
   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
@@ -141,9 +146,13 @@ export class SendPillController {
   /** The always-rendered bottom actions row (click buttons / drag zones). */
   private addContactEl: HTMLButtonElement | null = null;
   private startSessionEl: HTMLButtonElement | null = null;
-  /** "Copy link": the focused doc's session invite URL. Click-open only,
-   *  and only while that doc has a live session (no drag-mode role). */
+  /** "Copy edit link": the focused doc's session invite URL. Click-open
+   *  only, and only while that doc has a live session (no drag-mode role). */
   private copyLinkEl: HTMLButtonElement | null = null;
+  /** "Copy view code" / "Copy view link": the spectator twins. Same
+   *  visibility rules; the link additionally needs the room's view pass. */
+  private viewCodeEl: HTMLButtonElement | null = null;
+  private viewLinkEl: HTMLButtonElement | null = null;
   /** Drag-only recent-senders sub-list + its rows (subset of targets). */
   private recentSection: HTMLDivElement | null = null;
   private recentRows = new Set<HTMLElement>();
@@ -512,23 +521,27 @@ export class SendPillController {
     }
     this.root.appendChild(this.recentSection);
 
-    // The actions row — the pill's own bottom row, in BOTH modes: on a
-    // click-open these are buttons (add a contact / start a session);
-    // during a drag the same two footprints are drop zones (send by
-    // code / send to a recent sender), so the two modalities stay
-    // spatially consistent.
+    // The actions area — the pill's own bottom, in BOTH modes. On a
+    // click-open it is a 2×2 grid of session actions (Start session /
+    // Copy edit code · Copy edit link / Copy view code · Copy view link)
+    // with a side column holding the settings gear over an icon-only Add
+    // contact. During a drag only two footprints remain and become drop
+    // zones (send by code on the left, recent senders on the right); the
+    // CSS reflows to that two-zone row so the drag modality keeps its
+    // old shape.
     const actions = document.createElement('div');
     actions.className = 'pmd-send-actions';
-    this.addContactEl = this.actionButton(
-      ADD_CONTACT_ICON,
-      'Add contact',
-      'Add a contact by send code',
-      () => {
-        this.collapse();
-        void this.addContactFlow();
-      },
-    );
-    actions.appendChild(this.addContactEl);
+    const grid = document.createElement('div');
+    grid.className = 'pmd-send-actions-grid';
+    const side = document.createElement('div');
+    side.className = 'pmd-send-actions-side';
+    const copyTo = (text: string | null, okMsg: string, failMsg: string): void => {
+      if (text === null) return;
+      void navigator.clipboard?.writeText(text).then(
+        () => showToast(okMsg),
+        () => showToast(failMsg),
+      );
+    };
     const canInvite = collabEnabled() && collabSessionStarter() !== null;
     this.startSessionEl = this.actionButton(
       COLLAB_INVITE_ICON,
@@ -542,39 +555,60 @@ export class SendPillController {
         // session" dead end.
         const live = collabActiveShareCode();
         if (live !== null) {
-          void navigator.clipboard?.writeText(live).then(
-            () => showToast('Session code copied — paste it to a teammate'),
-            () => showToast('Could not copy the session code'),
-          );
+          copyTo(live, 'Edit code copied — paste it to a teammate', 'Could not copy the edit code');
           return;
         }
         collabSessionStarter()?.();
       },
     );
     this.startSessionEl.classList.toggle('pmd-send-action-collab-hidden', !canInvite);
-    actions.appendChild(this.startSessionEl);
-    // Copy link — the invite URL (share code + guest pass packed for a
-    // browser joiner). Shown only while the focused doc has a live
-    // session, and click-open only (`pmd-send-action-link` hides it in
-    // drag mode, like the gear) so a drag never sees it as a zone. It
-    // takes an equal third of the row with the two labelled actions.
-    this.copyLinkEl = this.actionButton(COPY_LINK_ICON, 'Copy link', 'Copy this session’s invite link', () => {
-      const link = collabActiveInviteLink();
-      if (link === null) return;
-      void navigator.clipboard?.writeText(link).then(
-        () => showToast('Session link copied — paste it to a teammate'),
-        () => showToast('Could not copy the session link'),
-      );
+    grid.appendChild(this.startSessionEl);
+    // The three copy actions exist only while the focused doc has a live
+    // session, and only on a click-open (`pmd-send-action-link` hides
+    // them in drag mode, like the gear) so a drag never sees them as
+    // zones. Edit = co-editing seat; view = spectator (sees every edit
+    // live, cannot change anything).
+    this.copyLinkEl = this.actionButton(COPY_LINK_ICON, 'Copy edit link', 'Copy this session’s invite link (co-editing)', () => {
+      this.collapse();
+      copyTo(collabActiveInviteLink(), 'Edit link copied — whoever opens it co-edits', 'Could not copy the edit link');
     });
     this.copyLinkEl.classList.add('pmd-send-action-link');
-    this.refreshSessionAction();
-    actions.appendChild(this.copyLinkEl);
-    // Click-open only (CSS hides it while the row is a drag's drop zones).
+    grid.appendChild(this.copyLinkEl);
+    this.viewCodeEl = this.actionButton(VIEW_ICON, 'Copy view code', 'Copy this session’s view code (watch only, no editing)', () => {
+      this.collapse();
+      copyTo(collabActiveViewCode(), 'View code copied — whoever joins with it watches, without editing', 'Could not copy the view code');
+    });
+    this.viewCodeEl.classList.add('pmd-send-action-link');
+    grid.appendChild(this.viewCodeEl);
+    this.viewLinkEl = this.actionButton(COPY_LINK_ICON, 'Copy view link', 'Copy this session’s view link (watch only, no editing)', () => {
+      this.collapse();
+      copyTo(collabActiveViewLink(), 'View link copied — whoever opens it watches, without editing', 'Could not copy the view link');
+    });
+    this.viewLinkEl.classList.add('pmd-send-action-link');
+    grid.appendChild(this.viewLinkEl);
+    actions.appendChild(grid);
+    // Side column: the gear (click-open only; CSS hides it while the row
+    // is a drag's drop zones) over Add contact, which is icon-only on a
+    // click-open (glyph + tooltip say enough) and the labelled "Send by
+    // code" zone during a drag.
     if (collabSettingsAvailable()) {
       const relay = relaySwitchButton('pmd-send-action');
-      if (relay) actions.appendChild(relay);
-      actions.appendChild(collabSettingsButton('pmd-send-action', () => this.collapse()));
+      if (relay) side.appendChild(relay);
+      side.appendChild(collabSettingsButton('pmd-send-action', () => this.collapse()));
     }
+    this.addContactEl = this.actionButton(
+      ADD_CONTACT_ICON,
+      'Add contact',
+      'Add a contact by send code',
+      () => {
+        this.collapse();
+        void this.addContactFlow();
+      },
+    );
+    this.addContactEl.classList.add('pmd-send-action-contact');
+    side.appendChild(this.addContactEl);
+    actions.appendChild(side);
+    this.refreshSessionAction();
     // The team-list line (team-directory-ui.ts fills it) sits right above
     // the search box, where the pill opens: visible without scrolling up.
     const offer = document.createElement('div');
@@ -595,12 +629,14 @@ export class SendPillController {
     if (!this.startSessionEl) return;
     const live = collabActiveShareCode() !== null;
     (this.startSessionEl.lastChild as HTMLElement).textContent = live
-      ? 'Copy code'
+      ? 'Copy edit code'
       : 'Start session';
     this.startSessionEl.title = live
-      ? 'Copy the session code for a teammate to join'
+      ? 'Copy this session’s edit code for a teammate to join and co-edit'
       : 'Start a collaboration session on this document';
     this.copyLinkEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveInviteLink() === null);
+    this.viewCodeEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveViewCode() === null);
+    this.viewLinkEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveViewLink() === null);
   }
 
   /** One action-row entry: icon + label. Click behavior is live only in
@@ -701,18 +737,23 @@ export class SendPillController {
   private addInviteButton(row: HTMLElement): void {
     const target = this.targets.get(row);
     if (!target) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'pmd-send-invite-btn';
-    btn.title = 'Invite to collaborate';
-    btn.setAttribute('aria-label', 'Invite to collaborate');
-    btn.innerHTML = COLLAB_INVITE_ICON;
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.collapse();
-      collabInviter()?.({ codes: target.codes, label: target.label, via: target.via });
-    });
-    row.appendChild(btn);
+    const mk = (icon: string, label: string, mode: 'edit' | 'view'): HTMLButtonElement => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pmd-send-invite-btn' + (mode === 'view' ? ' pmd-send-invite-btn-view' : '');
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+      btn.innerHTML = icon;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.collapse();
+        collabInviter()?.({ codes: target.codes, label: target.label, via: target.via, mode });
+      });
+      return btn;
+    };
+    row.appendChild(mk(COLLAB_INVITE_ICON, 'Invite to collaborate', 'edit'));
+    // Spectate: they see every edit live and cannot change anything.
+    row.appendChild(mk(VIEW_ICON, 'Invite to spectate', 'view'));
   }
 
   private sectionLabel(text: string): HTMLElement {

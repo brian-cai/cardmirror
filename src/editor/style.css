@@ -15503,12 +15503,51 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
 .pmd-send-pill:not(.pmd-send-invite-mode) .pmd-pill-settings {
   display: none;
 }
-/* "Copy link" (the session invite URL): a third labelled action that
-   shares the row evenly with Add contact / Copy code (the shared
-   `flex: 1 1 0`), present only while the focused doc has a live session
-   and, like the gear, only on a click-open — a drag's row is drop zones. */
+/* The Send pill's session actions. Click-open: a 2×2 grid (Start session /
+   Copy edit code · Copy edit link / Copy view code · Copy view link) beside
+   a side column (gear over an icon-only Add contact). The copy actions
+   exist only while the focused doc has a live session and, like the gear,
+   only on a click-open — a drag's row is two drop zones. */
+.pmd-send-actions-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.pmd-send-actions-side {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pmd-send-actions-grid > .pmd-send-action {
+  min-width: 0;
+}
 .pmd-send-pill:not(.pmd-send-invite-mode) .pmd-send-action-link {
   display: none;
+}
+/* Click-open: Add contact is the glyph alone (its tooltip says the rest),
+   a square like the gear above it. */
+.pmd-send-invite-mode .pmd-send-action-contact {
+  width: 30px;
+  padding: 5px 0;
+}
+.pmd-send-invite-mode .pmd-send-action-contact > span:last-child {
+  display: none;
+}
+/* Drag mode: back to the two-zone row — "Send by code" (Add contact) on the
+   left, "Recent senders" (the session footprint) on the right. */
+.pmd-send-pill:not(.pmd-send-invite-mode) .pmd-send-actions-grid {
+  display: flex;
+}
+.pmd-send-pill:not(.pmd-send-invite-mode) .pmd-send-actions-side {
+  order: -1;
+  flex: 1 1 0;
+  flex-direction: row;
+}
+.pmd-send-pill:not(.pmd-send-invite-mode) .pmd-send-action-contact {
+  flex: 1 1 0;
 }
 /* Drag-revealed recent-senders FLYOUT: a separate area to the right of
    the panel (left/bottom set in JS from the panel's live rect). Same
@@ -15761,6 +15800,10 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
 .pmd-send-invite-mode .pmd-send-invite-btn:hover {
   background: var(--pmd-c-hover);
   border-color: var(--pmd-c-accent);
+}
+/* The second per-row invite button (spectate) sits right after the first. */
+.pmd-send-invite-mode .pmd-send-invite-btn-view {
+  margin-left: 2px;
 }
 /* Click-open: clicking a row sends the cursor's card to it (its invite
    button still invites). */

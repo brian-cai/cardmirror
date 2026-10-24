@@ -23,8 +23,11 @@ import { schema, newHeadingId } from '../../src/schema/index.js';
 import { settings } from '../../src/editor/settings.js';
 import {
   setCollabInviteLinkGetter,
+  setCollabInviter,
   setCollabSessionStarter,
   setCollabShareCodeGetter,
+  setCollabViewCodeGetter,
+  setCollabViewLinkGetter,
 } from '../../src/editor/collab/collab-hooks.js';
 import { showToast } from '../../src/editor/toast.js';
 import * as collabGate from '../../src/editor/collab/collab-gate.js';
@@ -54,6 +57,8 @@ afterEach(() => {
   setCollabSessionStarter(null);
   setCollabShareCodeGetter(null);
   setCollabInviteLinkGetter(null);
+  setCollabViewCodeGetter(null);
+  setCollabViewLinkGetter(null);
   vi.restoreAllMocks();
 });
 
@@ -83,11 +88,63 @@ describe('send pill actions row + hidden recipients', () => {
   it('the actions row renders; Start session hides while the collab gate is closed', () => {
     const { root } = mountPill();
     const actions = root.querySelectorAll('.pmd-send-action:not(.pmd-pill-settings)');
-    // Add contact, Start session, Copy link (the last hidden until a session is live).
-    expect(actions.length).toBe(3);
-    expect(actions[0]!.textContent).toContain('Add contact');
+    // Grid: Start session, Copy edit link, Copy view code, Copy view link
+    // (the copies hidden until a session is live); side: Add contact.
+    expect(actions.length).toBe(5);
+    expect(actions[0]!.textContent).toContain('Start session');
+    expect(actions[4]!.textContent).toContain('Add contact');
+    expect(root.querySelector('.pmd-send-actions-side .pmd-send-action-contact')).toBeTruthy();
     // No collab starter registered (gate closed) → hidden by class.
-    expect(actions[1]!.classList.contains('pmd-send-action-collab-hidden')).toBe(true);
+    expect(actions[0]!.classList.contains('pmd-send-action-collab-hidden')).toBe(true);
+  });
+
+  it('view actions appear with a live session: view code copies the code, view link needs the pass', () => {
+    vi.spyOn(collabGate, 'collabEnabled').mockReturnValue(true);
+    setCollabSessionStarter(vi.fn());
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const { root } = mountPill();
+    const find = (label: string) =>
+      [...root.querySelectorAll('.pmd-send-action')].find((b) => b.textContent === label) as HTMLElement;
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click();
+    expect(find('Copy view code').classList.contains('pmd-send-action-collab-hidden')).toBe(true);
+    expect(find('Copy view link').classList.contains('pmd-send-action-collab-hidden')).toBe(true);
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click();
+
+    setCollabShareCodeGetter(() => 'cmshare2.abc');
+    setCollabViewCodeGetter(() => 'cmview1.abc');
+    setCollabViewLinkGetter(() => null); // pass not fetched yet
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click();
+    expect(find('Copy view code').classList.contains('pmd-send-action-collab-hidden')).toBe(false);
+    expect(find('Copy view link').classList.contains('pmd-send-action-collab-hidden')).toBe(true);
+    find('Copy view code').click();
+    expect(writeText).toHaveBeenCalledWith('cmview1.abc');
+
+    setCollabViewLinkGetter(() => 'https://cardmirror.app/#join=cmview1.abc&pass=v');
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click();
+    expect(find('Copy view link').classList.contains('pmd-send-action-collab-hidden')).toBe(false);
+    find('Copy view link').click();
+    expect(writeText).toHaveBeenLastCalledWith('https://cardmirror.app/#join=cmview1.abc&pass=v');
+    // Grid order: edit row then view row.
+    const gridLabels = [...root.querySelectorAll('.pmd-send-actions-grid .pmd-send-action')].map((b) => b.textContent);
+    expect(gridLabels).toEqual(['Copy edit code', 'Copy edit link', 'Copy view code', 'Copy view link']);
+  });
+
+  it('each contact row offers invite-to-collaborate and invite-to-spectate', () => {
+    vi.spyOn(collabGate, 'collabEnabled').mockReturnValue(true);
+    setCollabSessionStarter(vi.fn());
+    const invites: unknown[] = [];
+    setCollabInviter((t) => invites.push(t));
+    settings.set('pairingPartners', [{ code: 'cmk1.aaa', name: 'Awake' }]);
+    const { root } = mountPill();
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click();
+    const row = root.querySelector('.pmd-send-target') as HTMLElement;
+    const btns = row.querySelectorAll('.pmd-send-invite-btn');
+    expect(btns.length).toBe(2);
+    expect(btns[1]!.getAttribute('aria-label')).toBe('Invite to spectate');
+    (btns[1] as HTMLElement).click();
+    expect(invites).toEqual([{ codes: ['cmk1.aaa'], label: 'Awake', via: undefined, mode: 'view' }]);
+    setCollabInviter(null);
   });
 
   it('Copy link appears only with a live session and copies the invite URL', () => {
@@ -99,7 +156,7 @@ describe('send pill actions row + hidden recipients', () => {
     // No session: hidden.
     const { root } = mountPill();
     (root.querySelector('.pmd-send-bar') as HTMLElement).click();
-    const linkBtn = [...root.querySelectorAll('.pmd-send-action')].find((b) => b.textContent?.includes('Copy link')) as HTMLElement;
+    const linkBtn = [...root.querySelectorAll('.pmd-send-action')].find((b) => b.textContent === 'Copy edit link') as HTMLElement;
     expect(linkBtn).toBeTruthy();
     expect(linkBtn.classList.contains('pmd-send-action-collab-hidden')).toBe(true);
     (root.querySelector('.pmd-send-bar') as HTMLElement).click(); // collapse
@@ -112,9 +169,9 @@ describe('send pill actions row + hidden recipients', () => {
     expect(linkBtn.classList.contains('pmd-send-action-collab-hidden')).toBe(false);
     linkBtn.click();
     expect(writeText).toHaveBeenCalledWith(LINK);
-    // Sits between Copy code and the gear.
+    // Sits right after Copy edit code in the grid.
     const labels = [...root.querySelectorAll('.pmd-send-action')].map((b) => b.textContent);
-    expect(labels.indexOf('Copy link')).toBe(labels.indexOf('Copy code') + 1);
+    expect(labels.indexOf('Copy edit link')).toBe(labels.indexOf('Copy edit code') + 1);
   });
 
   it('session action toggles: Copy code with a live session, Start session without', () => {
@@ -131,9 +188,9 @@ describe('send pill actions row + hidden recipients', () => {
 
     const { root } = mountPill();
     (root.querySelector('.pmd-send-bar') as HTMLElement).click();
-    const btn = root.querySelectorAll('.pmd-send-action')[1] as HTMLElement;
+    const btn = root.querySelectorAll('.pmd-send-action')[0] as HTMLElement;
     expect(btn.classList.contains('pmd-send-action-collab-hidden')).toBe(false);
-    expect(btn.textContent).toContain('Copy code');
+    expect(btn.textContent).toContain('Copy edit code');
     btn.click();
     expect(writeText).toHaveBeenCalledWith(CODE);
     expect(starter).not.toHaveBeenCalled();
@@ -166,7 +223,7 @@ describe('send pill actions row + hidden recipients', () => {
     const { root } = mountPill();
     // Open click mode and press the button.
     (root.querySelector('.pmd-send-bar') as HTMLElement).click();
-    (root.querySelector('.pmd-send-action') as HTMLElement).click();
+    (root.querySelector('.pmd-send-action-contact') as HTMLElement).click();
     await new Promise((r) => setTimeout(r, 0));
 
     const partners = settings.get('pairingPartners');
@@ -182,7 +239,7 @@ describe('send pill actions row + hidden recipients', () => {
     (root.querySelector('.pmd-send-bar') as HTMLElement).click();
     promptForText.mockResolvedValueOnce('cmk1.someone'); // code accepted
     promptForText.mockResolvedValueOnce(null); // name cancelled
-    (root.querySelector('.pmd-send-action') as HTMLElement).click();
+    (root.querySelector('.pmd-send-action-contact') as HTMLElement).click();
     await new Promise((r) => setTimeout(r, 0));
     expect(settings.get('pairingPartners')).toHaveLength(0);
   });
@@ -193,13 +250,13 @@ describe('send pill actions row + hidden recipients', () => {
     (root.querySelector('.pmd-send-bar') as HTMLElement).click();
 
     promptForText.mockResolvedValueOnce('cmk1.first');
-    (root.querySelector('.pmd-send-action') as HTMLElement).click();
+    (root.querySelector('.pmd-send-action-contact') as HTMLElement).click();
     await new Promise((r) => setTimeout(r, 0));
     expect(settings.get('pairingPartners')).toHaveLength(1);
 
     (root.querySelector('.pmd-send-bar') as HTMLElement).click();
     promptForText.mockResolvedValueOnce('not a code');
-    (root.querySelector('.pmd-send-action') as HTMLElement).click();
+    (root.querySelector('.pmd-send-action-contact') as HTMLElement).click();
     await new Promise((r) => setTimeout(r, 0));
     expect(settings.get('pairingPartners')).toHaveLength(1);
     expect(vi.mocked(showToast).mock.calls.flat().join(' ')).toContain('send code');

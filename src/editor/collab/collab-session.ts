@@ -33,9 +33,11 @@
 import { installRemoteStepBuilder } from './remote-steps.js';
 import { LoroDoc, VersionVector, decodeImportBlobMeta } from 'loro-crdt';
 import { Fragment, type Node as PMNode } from 'prosemirror-model';
-import type { Plugin } from 'prosemirror-state';
+import { Plugin } from 'prosemirror-state';
 import { EditorState } from 'prosemirror-state';
-import { LoroSyncPlugin, updateLoroToPmState } from 'loro-prosemirror';
+import { isSyncOrigin } from '../sync-origin.js';
+import { roleCanEdit, type SessionRole } from './session-role.js';
+import { LoroSyncPlugin, updateLoroToPmState, loroSyncPluginKey, loroUndoPluginKey } from 'loro-prosemirror';
 import { appVersion } from '../install-info.js';
 import { compareAppVersions, MOVABLE_ROOMS_MIN_VERSION } from '../relay-protocol.js';
 import { schema } from '../../schema/index.js';
@@ -124,8 +126,11 @@ export interface CollabSessionCallbacks {
   onGuestAuthExpired?: () => void;
   /** The session ended (host ended it, or the room was GC'd). Terminal. */
   onEnded?: () => void;
-  /** The room is at participant capacity. Terminal for this attempt. */
-  onFull?: () => void;
+  /** The room is at participant capacity. Terminal for this attempt.
+   *  `viewPass` (2026-10-24+ relays) lets the UI offer "watch instead". */
+  onFull?: (viewPass: string | null) => void;
+  /** Spectator count in the room (hello + every change). */
+  onWatchers?: (count: number) => void;
   /** An established session's reconnects keep 409ing (seat taken past
    *  the relay's reap window). Retrying continues; the UI should explain. */
   onCrowdedOut?: () => void;
@@ -146,7 +151,7 @@ export interface CollabSessionOptions {
   client: RoomsClient;
   roomId: string;
   key: CryptoKey;
-  role: 'host' | 'participant';
+  role: SessionRole;
   callbacks?: CollabSessionCallbacks;
   /** Outbound debounce; keystrokes within a window coalesce into one
    *  wire update. */
@@ -187,6 +192,29 @@ export interface CollabSessionOptions {
    *  relay's per-update cap) instead of as updates; injectable for
    *  tests. Default sits under the relay's 5MB update cap. */
   updateByteLimit?: number;
+}
+
+/** Plugin state key so the lock can be found (tests, the shell's
+ *  "is this doc view-only?" check). */
+export const SPECTATOR_LOCK_META = 'collabSpectatorLock';
+
+/** Reject every document-changing transaction except the binding's own
+ *  (sync-origin). See CollabSession.plugins(). */
+export function spectatorLockPlugin(): Plugin {
+  return new Plugin({
+    filterTransaction(tr) {
+      if (!tr.docChanged) return true;
+      // The shell's tagger stamps binding transactions sync-origin; the
+      // binding's own metas are checked too so the lock holds in any view
+      // (a pane without the tagger, a test harness) without blocking the
+      // remote updates the spectator is there to see.
+      return (
+        isSyncOrigin(tr) ||
+        tr.getMeta(loroSyncPluginKey) !== undefined ||
+        tr.getMeta(loroUndoPluginKey) !== undefined
+      );
+    },
+  });
 }
 
 function bytesEq(a: Uint8Array, b: Uint8Array): boolean {
@@ -274,7 +302,11 @@ export class JoinCancelledError extends Error {
 export class CollabSession {
   readonly loroDoc: LoroDoc;
   readonly roomId: string;
-  readonly role: 'host' | 'participant';
+  readonly role: SessionRole;
+  /** The room's SPECTATOR credential, when this peer holds one: hosts get
+   *  it at create, joiners fetch it lazily (any room credential may), a
+   *  spectator's own bearer IS one. Null until known / on old relays. */
+  viewPass: string | null = null;
 
   private readonly client: RoomsClient;
   private readonly key: CryptoKey;
@@ -535,7 +567,7 @@ export class CollabSession {
     await yieldToUi();
     checkCancelled();
 
-    const { roomId, guestPass } = await opts.client.createRoom();
+    const { roomId, guestPass, viewPass } = await opts.client.createRoom();
     const session = new CollabSession({ ...opts, roomId, key, role: 'host', loroDoc });
     session.seedMapping = seedMapping;
     let seq: number;
@@ -582,6 +614,7 @@ export class CollabSession {
     const floor =
       session.childrenFormat() === 'movable' ? MOVABLE_ROOMS_MIN_VERSION : undefined;
     session.guestPass = guestPass;
+    session.viewPass = viewPass;
     return { session, shareCode: encodeShareCode(roomId, keyBytes, floor), guestPass };
   }
 
@@ -590,6 +623,9 @@ export class CollabSession {
   static async join(opts: {
     roomId: string;
     keyBytes: Uint8Array;
+    /** 'spectator' joins view-only (the client MUST authenticate with a
+     *  view pass for the relay side to hold). Default 'participant'. */
+    role?: 'participant' | 'spectator';
     client: RoomsClient;
     callbacks?: CollabSessionCallbacks;
     flushMs?: number;
@@ -615,7 +651,7 @@ export class CollabSession {
     const session = new CollabSession({
       ...opts,
       key,
-      role: 'participant',
+      role: opts.role ?? 'participant',
       loroDoc,
     });
     session.beforeFirstImport = opts.confirmLargeJoin ?? null;
@@ -655,7 +691,7 @@ export class CollabSession {
   static async resume(opts: {
     roomId: string;
     keyBytes: Uint8Array;
-    role: 'host' | 'participant';
+    role: SessionRole;
     snapshot: Uint8Array;
     increments: Uint8Array[];
     lastSeq: number;
@@ -757,12 +793,33 @@ export class CollabSession {
   plugins(): Plugin[] {
     // Partner edits render as exact steps (see remote-steps.ts).
     installRemoteStepBuilder();
-    return [
-      LoroSyncPlugin({
-        doc: this.loroDoc as SyncDoc,
-        ...(this.seedMapping ? { mapping: this.seedMapping as never } : {}),
-      }),
-    ];
+    const sync = LoroSyncPlugin({
+      doc: this.loroDoc as SyncDoc,
+      ...(this.seedMapping ? { mapping: this.seedMapping as never } : {}),
+    });
+    // A spectator's editor admits ONLY the binding's own transactions
+    // (tagged sync-origin by the shell's tagger): typing, paste, drag,
+    // comments, markers, undo — every local document change is refused
+    // here, before the CRDT ever sees it, so nothing is queued and the
+    // relay's write refusal is a backstop rather than the gate. Selection
+    // and meta-only transactions pass (caret, read mode, decorations).
+    if (this.readOnly) return [sync, spectatorLockPlugin()];
+    return [sync];
+  }
+
+  /** True for a spectator: no local edits, no outbound writes. */
+  get readOnly(): boolean {
+    return !roleCanEdit(this.role);
+  }
+
+  /** The room's view pass, fetching it once from the relay when this
+   *  peer doesn't hold one yet (any room credential may mint it). Null
+   *  on relays without spectators or when the guest-pass feature is off. */
+  async ensureViewPass(): Promise<string | null> {
+    if (this.viewPass || this.ended) return this.viewPass;
+    const p = await this.client.fetchViewPass(this.roomId);
+    if (p && !this.viewPass) this.viewPass = p;
+    return this.viewPass;
   }
 
   start(): void {
@@ -821,8 +878,11 @@ export class CollabSession {
         },
         onEnded: () => this.handleEnded(),
         onAuthDead: (detail) => this.handleAuthDead(detail),
-        onFull: () => {
-          this.callbacks.onFull?.();
+        onFull: (viewPass) => {
+          this.callbacks.onFull?.(viewPass);
+        },
+        onWatchers: (n) => {
+          this.callbacks.onWatchers?.(n);
         },
         onCrowdedOut: () => {
           this.callbacks.onCrowdedOut?.();
@@ -925,7 +985,7 @@ export class CollabSession {
    *  persist record to the next resume. Re-posting is idempotent for the
    *  CRDT, so a duplicate row costs nothing. */
   flushForUnload(): void {
-    if (this.ended) return;
+    if (this.ended || this.readOnly) return;
     this.flush();
     const head = this.outQueue[0];
     if (head?.encrypted && head.encrypted.length <= UNLOAD_KEEPALIVE_MAX_BYTES) {
@@ -1084,7 +1144,7 @@ export class CollabSession {
   }
 
   flush(): void {
-    if (this.ended) return;
+    if (this.ended || this.readOnly) return;
     this.loroDoc.commit();
     const version = this.loroDoc.version();
     // An empty diff still exports a ~22-byte header blob, so gate on the
@@ -1737,6 +1797,7 @@ export class CollabSession {
       if (this.outQueue.length > 0) return;
       if (this.loroDoc.version().compare(this.lastSentVersion) !== 0) return;
       if (!this.versionMissingFrom(roomMax)) return;
+      if (this.readOnly) return; // nothing of ours can be missing; never write
       console.warn(
         '[collab] the room lost ops this replica holds (compacted away?) — reposting full history',
       );
@@ -1801,7 +1862,8 @@ export class CollabSession {
   // --- presence ---
 
   async sendPresence(blob: Uint8Array, opts: { keepalive?: boolean } = {}): Promise<void> {
-    if (this.ended) return;
+    // Spectators are a count, not cursors (and the relay would 403).
+    if (this.ended || this.readOnly) return;
     // Presence frames are DELIVERED over the stream, so while it isn't
     // connected nobody can see ours (and we can't see theirs) — posting
     // is pure waste, and on a dead credential it was the bulk of an

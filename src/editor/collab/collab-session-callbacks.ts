@@ -11,6 +11,9 @@ import { notifyCollabCopresenceChange } from './collab-hooks.js';
 import { type ActiveSession, type CollabUiDeps, sessions } from './collab-ui-state.js';
 import { isChipSession, refreshChipForFocus, updateChip } from './collab-chip.js';
 import { teardownFor } from './collab-seams.js';
+import { confirmDialog } from '../text-prompt.js';
+import { deleteSessionRecord } from './collab-store.js';
+import { decodeShareCode, viewCodeFromShareCode } from './collab-crypto.js';
 
 export let offlineNoticeMs = 3 * 60_000;
 export function __setOfflineNoticeMsForTests(ms: number | null): void {
@@ -92,6 +95,13 @@ export function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSessio
       notifyCollabCopresenceChange();
     },
     onPresence: (bytes: Uint8Array) => getSess()?.cursors.applyRemote(bytes),
+    onWatchers: (n: number) => {
+      const sess = getSess();
+      if (!sess || sess.watchers === n) return;
+      sess.watchers = n;
+      if (isChipSession(sess.ownerUid) && sess.lastStatus) updateChip(sess.lastStatus);
+      notifyCollabCopresenceChange();
+    },
     onGuestAuthExpired: () => {
       // Terminal-cause notice for a guest whose (immutable, 7-day) pass
       // the relay refused: onEnded fires right after this and its toast
@@ -177,10 +187,12 @@ export function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSessio
       showToast(
         wasHost
           ? 'Collaboration session ended'
-          : 'Session ended — this copy is now yours alone',
+          : sess.session.role === 'spectator'
+            ? 'Session ended — this copy is now yours to edit'
+            : 'Session ended — this copy is now yours alone',
       );
     },
-    onFull: () => {
+    onFull: (viewPass: string | null) => {
       const sess = getSess();
       if (!sess || !sessions.has(sess.ownerUid)) {
         showToast('That session is full');
@@ -191,14 +203,40 @@ export function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSessio
       // offline chip forever (audit find, 2026-07-10). Tear down but KEEP
       // the record so the user can rejoin from the Sessions list when
       // someone leaves.
+      const shareCode = sess.shareCode;
+      const ownerUid = sess.ownerUid;
       void teardownFor(sess, 'full').catch((e) => surfaceError('collab teardown', e));
       refreshChipForFocus(); // repaint from live truth (a stale snapshot left ghost chips — field find, 2026-08-12)
-      if (deps.refreshPluginsForUid) deps.refreshPluginsForUid(sess.ownerUid);
+      if (deps.refreshPluginsForUid) deps.refreshPluginsForUid(ownerUid);
       else deps.refreshPlugins();
-      showToast(
-        'The session is full — your copy is saved; rejoin from the ' +
-          'Sessions list when someone leaves.',
-      );
+      // "Watch instead": the relay handed the refused editor a spectator
+      // pass (2026-10-24+). Offer it — a full room is exactly the moment a
+      // view-only seat is worth having. The kept editor record is deleted
+      // on yes (the spectator session writes its own, and a later edit
+      // join must not resume into a view-only record or vice versa).
+      const viewCode = viewPass ? viewCodeFromShareCode(shareCode) : null;
+      if (!viewCode || !viewPass) {
+        showToast(
+          'The session is full — your copy is saved; rejoin from the ' +
+            'Sessions list when someone leaves.',
+        );
+        return;
+      }
+      void (async () => {
+        const watch = await confirmDialog(
+          'Every editing seat is taken. You can watch the document live instead — ' +
+            'you will see every edit as it happens but cannot make changes. ' +
+            'Your copy is saved either way; rejoin from the Sessions list when a seat opens.',
+          { title: 'Session is full — watch instead?', okLabel: 'Watch' },
+        );
+        if (!watch) {
+          showToast('Your copy is saved — rejoin from the Sessions list when someone leaves.');
+          return;
+        }
+        await deleteSessionRecord(decodeShareCode(shareCode)?.roomId ?? '').catch(() => {});
+        const { joinSessionWithCode } = await import('./collab-join-flows.js');
+        await joinSessionWithCode(deps, viewCode, { guestPass: viewPass });
+      })();
     },
   };
 }

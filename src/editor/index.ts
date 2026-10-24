@@ -487,9 +487,12 @@ if (!getElectronHost() && !isLiteBuild() && window.location.hash.includes('join=
     }, 600);
   } else if (joinParts) {
     const offerJoin = async (): Promise<void> => {
+      const view = joinParts.shareCode.startsWith('cmview');
       const go = await confirmDialog(
-        'Join the shared session from this link? You will edit the document live with its host.',
-        { okLabel: 'Join Session' },
+        view
+          ? 'Watch the shared session from this link? You will see every edit live but cannot make changes.'
+          : 'Join the shared session from this link? You will edit the document live with its host.',
+        { okLabel: view ? 'Watch Session' : 'Join Session' },
       );
       if (!go) return;
       const m = await loadCollabUi();
@@ -1778,6 +1781,12 @@ const ribbonContext: RibbonContext = {
   },
   collabCopyInviteLink: () => {
     void loadCollabUi().then((m) => m.copyInviteLinkFlow());
+  },
+  collabCopyViewCode: () => {
+    void loadCollabUi().then((m) => m.copyViewCodeFlow());
+  },
+  collabCopyViewLink: () => {
+    void loadCollabUi().then((m) => m.copyViewLinkFlow());
   },
   collabInviteStarred: () => {
     void loadCollabUi().then((m) => m.inviteStarredFlow());
@@ -10481,10 +10490,11 @@ export function confirmCloseUnsaved(): Promise<'save' | 'saveAs' | 'discard' | '
  *  removes ambiguity about which one is closing (multi-pane). */
 function confirmCloseCoEditedDoc(
   docName: string,
-  info: { role: 'host' | 'participant'; unsynced: number },
+  info: { role: 'host' | 'participant' | 'spectator'; unsynced: number },
 ): Promise<'keep' | 'end' | 'cancel'> {
   const name = docName ? `"${docName}"` : 'this document';
   const isHost = info.role === 'host';
+  const isSpectator = info.role === 'spectator';
   const syncing =
     info.unsynced > 0
       ? ` Your ${info.unsynced} change${info.unsynced === 1 ? '' : 's'} not yet sent will go out when you reopen it.`
@@ -10496,17 +10506,20 @@ function confirmCloseCoEditedDoc(
     choices: [
       {
         value: 'keep',
-        label: 'Close, but stay in the session',
-        description:
-          'Everyone else keeps editing. Reopen it anytime from Sessions on the home ' +
-          `screen (or Join Session → Recent sessions) and you'll catch up on their changes.${syncing}`,
+        label: isSpectator ? 'Close, but keep watching' : 'Close, but stay in the session',
+        description: isSpectator
+          ? 'Reopen it anytime from Sessions on the home screen (or Join Session → Recent sessions) to keep watching.'
+          : 'Everyone else keeps editing. Reopen it anytime from Sessions on the home ' +
+            `screen (or Join Session → Recent sessions) and you'll catch up on their changes.${syncing}`,
       },
       {
         value: 'end',
-        label: isHost ? 'End the session for everyone' : 'Leave the session',
+        label: isHost ? 'End the session for everyone' : isSpectator ? 'Stop watching' : 'Leave the session',
         description: isHost
           ? 'Disconnects everyone; the session can\u2019t be rejoined. You keep this document as your own copy (you\u2019ll be asked to save it if it has unsaved changes).'
-          : 'Stop editing with the others. You keep this document as your own copy, without their future changes (you\u2019ll be asked to save it if it has unsaved changes).',
+          : isSpectator
+            ? 'Stop watching. This copy stays as it is, and becomes yours to edit.'
+            : 'Stop editing with the others. You keep this document as your own copy, without their future changes (you\u2019ll be asked to save it if it has unsaved changes).',
       },
     ],
   }).then((c) => c ?? 'cancel');

@@ -8,7 +8,8 @@ import { showToast } from '../toast.js';
 import { surfaceError } from '../error-surface.js';
 import { offerSharingSetup } from '../pairing/sharing-setup.js';
 import { confirmDialog } from '../text-prompt.js';
-import { ensureBakedRelay, relayClient, relayClientWithGuestPass } from './collab-relay.js';
+import { ensureBakedRelay, relayClient, relayClientWithGuestPass, relayClientWithViewPass } from './collab-relay.js';
+import type { RoomsClient } from './room-client.js';
 import { loadSessionRecord, loadPrefetch, deletePrefetch, deleteRecentRoom } from './collab-store.js';
 import { importRoomKey, decryptBlob } from './collab-crypto.js';
 import { collabEnabled } from './collab-gate.js';
@@ -87,19 +88,35 @@ export async function joinSessionWithCodeInner(
     return false;
   }
   await ensureBakedRelay();
-  // Own credentials (baked token / linked account / self-host settings)
-  // outrank a guest pass — they're strictly more capable. The pass is
-  // the fallback that lets an account-less browser join at all.
-  const client =
-    relayClient() ?? (opts?.guestPass ? relayClientWithGuestPass(opts.guestPass) : null);
-  if (!client) {
-    void offerSharingSetup('Joining a co-editing session');
-    return false;
-  }
   const decoded = decodeShareCode(code);
   if (!decoded) {
     showToast('That does not look like a session code or invite link');
     return false;
+  }
+  let client: RoomsClient | null;
+  if (decoded.view) {
+    // SPECTATOR join: authenticate with the room's view pass and NOTHING
+    // else — own credentials would be an editor seat, and the relay
+    // enforces view-only per credential. A view link carries the pass;
+    // a pasted view code gets one minted with whatever credentials this
+    // install has (the relay mints view passes for any room credential).
+    let pass = opts?.guestPass ?? null;
+    if (!pass) pass = (await relayClient()?.fetchViewPass(decoded.roomId)) ?? null;
+    client = pass ? relayClientWithViewPass(pass) : null;
+    if (!client) {
+      if (relayClient()) showToast('Could not get a viewer pass for this session — ask for a fresh view link');
+      else void offerSharingSetup('Watching a co-editing session');
+      return false;
+    }
+  } else {
+    // Own credentials (baked token / linked account / self-host settings)
+    // outrank a guest pass — they're strictly more capable. The pass is
+    // the fallback that lets an account-less browser join at all.
+    client = relayClient() ?? (opts?.guestPass ? relayClientWithGuestPass(opts.guestPass) : null);
+    if (!client) {
+      void offerSharingSetup('Joining a co-editing session');
+      return false;
+    }
   }
   // v2 codes carry the room's compatibility floor. (Old builds never
   // get this far — the v2 format fails their parser above — this check
@@ -115,7 +132,13 @@ export async function joinSessionWithCodeInner(
   // the room. A fresh join minted a second copy from the relay state, and a
   // later Leave deleted the old record, making those edits unrecoverable
   // (audit find, 2026-07-10).
-  if (await loadSessionRecord(decoded.roomId)) {
+  // …but only a record of the SAME kind: an edit code never resumes into
+  // a view-only record (that would silently keep the user a spectator), and
+  // a view code never resumes an editor record (whose seat may be the one
+  // that is full). The mismatched record is superseded by the new
+  // session's own persistence.
+  const prior = await loadSessionRecord(decoded.roomId);
+  if (prior && (prior.role === 'spectator') === decoded.view) {
     return resumeSessionFlow(deps, decoded.roomId);
   }
   // Resolved after newSessionDoc/installSeams; callbacks read it lazily.
@@ -125,7 +148,9 @@ export async function joinSessionWithCodeInner(
     let joinedOffline = false;
     try {
       session = await CollabSession.join({
-        ...decoded,
+        roomId: decoded.roomId,
+        keyBytes: decoded.keyBytes,
+        role: decoded.view ? 'spectator' : 'participant',
         client,
         callbacks: sessionCallbacks(deps, () => sessRef),
         // Asked after the download, before the (synchronous, possibly
@@ -140,7 +165,11 @@ export async function joinSessionWithCodeInner(
           });
         },
       });
-      session.guestPass = opts?.guestPass ?? null;
+      // A spectator's bearer IS the view pass: persisted as the session's
+      // credential (resume authenticates the same way) and as its view
+      // pass (so it can hand out view links too).
+      session.guestPass = decoded.view ? client.opts.token() : opts?.guestPass ?? null;
+      if (decoded.view) session.viewPass = client.opts.token();
     } catch (err) {
       // An ENDED (410) or expired/GC'd (404) room is not an offline
       // condition — the seed would resume a session that no longer exists.
@@ -158,7 +187,7 @@ export async function joinSessionWithCodeInner(
       session = await CollabSession.resume({
         roomId: decoded.roomId,
         keyBytes: decoded.keyBytes,
-        role: 'participant',
+        role: decoded.view ? 'spectator' : 'participant',
         snapshot: blobs[0]!,
         increments: blobs.slice(1),
         lastSeq: pre.lastSeq,
@@ -207,9 +236,13 @@ export async function joinSessionWithCodeInner(
     // path the seed's content lives on in the session + its persist record).
     void deletePrefetch(decoded.roomId).catch((e) => surfaceError('collab seed cleanup', e));
     showToast(
-      joinedOffline
-        ? 'Joined from the prefetched copy — will sync when you reconnect'
-        : 'Joined the session',
+      decoded.view
+        ? joinedOffline
+          ? 'Watching from the prefetched copy — will catch up when you reconnect'
+          : 'Watching the session — you see every edit live; editing here is off'
+        : joinedOffline
+          ? 'Joined from the prefetched copy — will sync when you reconnect'
+          : 'Joined the session',
     );
     deps.getView()?.focus();
     return true;
@@ -293,11 +326,17 @@ export async function resumeSessionFlowInner(
   // the room is unknown (404) and would read as ended, deleting the record.
   if (!(await onSessionRelay(record.relay))) return false;
   await ensureBakedRelay();
+  // A spectator record resumes with its view pass ONLY (see the join flow);
+  // everyone else prefers their own credentials.
   const client =
-    relayClient() ??
-    (record.guestPass ? relayClientWithGuestPass(record.guestPass) : null);
+    record.role === 'spectator'
+      ? record.guestPass
+        ? relayClientWithViewPass(record.guestPass)
+        : null
+      : relayClient() ?? (record.guestPass ? relayClientWithGuestPass(record.guestPass) : null);
   if (!client) {
-    void offerSharingSetup('Rejoining a co-editing session');
+    if (record.role === 'spectator') showToast('This watched session has no viewer pass saved — ask for a fresh view link');
+    else void offerSharingSetup('Rejoining a co-editing session');
     return false;
   }
   const decoded = decodeShareCode(record.shareCode);
@@ -319,6 +358,7 @@ export async function resumeSessionFlowInner(
       callbacks: sessionCallbacks(deps, () => sessRef),
     });
     session.guestPass = record.guestPass ?? null;
+    if (record.role === 'spectator') session.viewPass = record.guestPass ?? null;
     // Host resume without a stored pass: re-mint so fresh invite links
     // stay possible (no-op 404 while the relay flip is off, and guests
     // never pass the send-auth gate on this endpoint).
@@ -348,7 +388,7 @@ export async function resumeSessionFlowInner(
     session.start();
     sessRef.lastStatus = { connected: false, queuedUpdates: session.queuedUpdates };
     updateChip({ connected: false, queuedUpdates: session.queuedUpdates });
-    showToast('Session resumed — syncing');
+    showToast(record.role === 'spectator' ? 'Watching again — catching up' : 'Session resumed — syncing');
     deps.getView()?.focus();
     return true;
   } catch (err) {

@@ -172,6 +172,7 @@ export function installSeams(
     wakeCleanup,
     unloadCleanup,
     metaUnsub,
+    watchers: 0,
     lastStatus: null,
     offlineSince: null,
     offlineTimer: null,
@@ -179,6 +180,13 @@ export function installSeams(
     teamWatchStop: startTeamWatch(session, shareCode, ownerUid),
   };
   sessions.set(ownerUid, sess);
+  // Editors fetch the room's view pass once so "Copy view link" / spectate
+  // invites work from any seat, not just the host's. Fire-and-forget: the
+  // getters read session.viewPass lazily; a relay without spectators
+  // yields null and the view-link affordances stay hidden.
+  if (session.role !== 'spectator' && !session.viewPass) {
+    void session.ensureViewPass().catch(() => {});
+  }
   // Cross-window live-session claim: while this session is live, other
   // windows' Sessions rows (and join-by-code) refuse the same room and focus
   // this window instead — same registry as the duplicate-file-open guard.

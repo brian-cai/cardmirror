@@ -4732,6 +4732,8 @@ export type RibbonCommandId =
   | 'collabJoinSession'
   | 'collabCopyShareCode'
   | 'collabCopyInviteLink'
+  | 'collabCopyViewCode'
+  | 'collabCopyViewLink'
   | 'collabInviteStarred'
   | 'collabEndSession'
   | 'collabSwitchRelay'
@@ -5017,6 +5019,8 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'collabJoinSession',
   'collabCopyShareCode',
   'collabCopyInviteLink',
+  'collabCopyViewCode',
+  'collabCopyViewLink',
   'collabInviteStarred',
   'collabEndSession',
   'collabSwitchRelay',
@@ -5254,6 +5258,8 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   collabJoinSession: 'Join or Rejoin Collaboration Session',
   collabCopyShareCode: 'Copy Session Code',
   collabCopyInviteLink: 'Copy Session Invite Link',
+  collabCopyViewCode: 'Copy Session View Code (Spectators)',
+  collabCopyViewLink: 'Copy Session View Link (Spectators)',
   collabInviteStarred: 'Invite Starred Partner to Session',
   collabEndSession: 'End or Leave Collaboration Session',
   collabSwitchRelay: 'Switch Relay…',
@@ -5366,6 +5372,8 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
   collabJoinSession: ['join session', 'rejoin session', 'resume session', 'recent sessions', 'share code', 'coedit'],
   collabCopyShareCode: ['share code', 'invite code', 'session code'],
   collabCopyInviteLink: ['invite link', 'share link', 'join link', 'session link'],
+  collabCopyViewCode: ['view code', 'spectator code', 'watch code', 'read-only code', 'spectate'],
+  collabCopyViewLink: ['view link', 'spectator link', 'watch link', 'read-only link', 'spectate link'],
   collabInviteStarred: ['invite partner', 'session invite', 'invite to session'],
   openDevConsole: ['devtools', 'dev console', 'debug console', 'inspect', 'developer tools'],
   collabEndSession: ['leave session', 'stop session', 'stop collaborating'],
@@ -5738,6 +5746,8 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   collabJoinSession: '',
   collabCopyShareCode: '',
   collabCopyInviteLink: '',
+  collabCopyViewCode: '',
+  collabCopyViewLink: '',
   collabInviteStarred: '',
   collabEndSession: '',
   collabSwitchRelay: '',
@@ -6059,6 +6069,8 @@ export interface RibbonContext {
   collabJoinSession: () => void;
   collabCopyShareCode: () => void;
   collabCopyInviteLink: () => void;
+  collabCopyViewCode: () => void;
+  collabCopyViewLink: () => void;
   collabInviteStarred: () => void;
   collabEndSession: () => void;
   collabSwitchRelay: () => void;
@@ -6251,6 +6263,8 @@ const DEFAULT_RIBBON_CONTEXT: RibbonContext = {
   collabJoinSession: () => {},
   collabCopyShareCode: () => {},
   collabCopyInviteLink: () => {},
+  collabCopyViewCode: () => {},
+  collabCopyViewLink: () => {},
   collabInviteStarred: () => {},
   collabEndSession: () => {},
   collabSwitchRelay: () => {},
@@ -7005,6 +7019,18 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
       return (_state, dispatch) => {
         if (!dispatch) return true;
         ctx.collabCopyShareCode();
+        return true;
+      };
+    case 'collabCopyViewCode':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.collabCopyViewCode();
+        return true;
+      };
+    case 'collabCopyViewLink':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.collabCopyViewLink();
         return true;
       };
     case 'collabCopyInviteLink':

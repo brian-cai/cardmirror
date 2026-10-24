@@ -26,7 +26,7 @@ import { showToast } from '../toast.js';
 import { surfaceError } from '../error-surface.js';
 import { offerSharingSetup } from '../pairing/sharing-setup.js';
 import { promptForText, confirmDialog } from '../text-prompt.js';
-import { setCollabCopresenceProvider, setCollabCloseActions, setCollabHandoffProvider, setCollabSessionCountProvider, setCollabLiveRoomProbe, setCollabFocusChangeHandler, setCollabShareCodeGetter, setCollabInviteLinkGetter } from './collab-hooks.js';
+import { setCollabCopresenceProvider, setCollabCloseActions, setCollabHandoffProvider, setCollabSessionCountProvider, setCollabLiveRoomProbe, setCollabFocusChangeHandler, setCollabShareCodeGetter, setCollabInviteLinkGetter, setCollabViewCodeGetter, setCollabViewLinkGetter } from './collab-hooks.js';
 import { getElectronHost } from '../host/index.js';
 import { ensureBakedRelay, relayClient, relayClientWithGuestPass, endRoomOnRelay } from './collab-relay.js';
 import { teamSessionsSupportWithin } from './team-sessions.js';
@@ -34,7 +34,7 @@ import { buildJoinLink, parseJoinLinkHash } from './join-link.js';
 import { resolveStarredTarget } from '../pairing/send-to-starred.js';
 import { loadSessionRecord, loadPrefetch, deletePrefetch, deleteRecentRoom } from './collab-store.js';
 import { loadRejoinCandidates, pickSessionToJoin } from './rejoin-picker.js';
-import { importRoomKey, decryptBlob } from './collab-crypto.js';
+import { importRoomKey, decryptBlob, viewCodeFromShareCode } from './collab-crypto.js';
 import { collabEnabled } from './collab-gate.js';
 import { decodeShareCode } from './collab-crypto.js';
 import { CollabSession, JoinCancelledError, SessionStartCancelledError } from './collab-session.js';
@@ -75,6 +75,7 @@ setCollabCopresenceProvider((uid) => {
     offlineSince: sess.offlineSince,
     reconnect: () => sess.session.restart(),
     peers: sess.cursors.presence().map((p) => ({ name: p.name, color: p.color, self: p.self, code: p.code })),
+    watchers: sess.watchers,
   };
 });
 
@@ -113,6 +114,20 @@ setCollabInviteLinkGetter(() => {
   const s = actionSession();
   if (!s) return null;
   return buildJoinLink({ shareCode: s.shareCode, guestPass: s.session.guestPass });
+});
+// Spectator invites: the view code is the share code's twin (any
+// participant may hand it out); the view LINK also needs the room's view
+// pass, which hosts hold from create and joiners fetch at install — null
+// until then (the Send pill hides "Copy view link" meanwhile).
+setCollabViewCodeGetter(() => {
+  const s = actionSession();
+  return s ? viewCodeFromShareCode(s.shareCode) : null;
+});
+setCollabViewLinkGetter(() => {
+  const s = actionSession();
+  if (!s || !s.session.viewPass) return null;
+  const viewCode = viewCodeFromShareCode(s.shareCode);
+  return viewCode ? buildJoinLink({ shareCode: viewCode, guestPass: s.session.viewPass }) : null;
 });
 
 /** Start-session gate: a session is started FOR a focused document, so a
@@ -349,6 +364,42 @@ export async function copyInviteLinkFlow(): Promise<void> {
   showToast(ok ? 'Invite link copied' : 'Could not copy the invite link');
 }
 
+/** Copy the focused session's VIEW code (spectator twin of the share code). */
+export async function copyViewCodeFlow(): Promise<void> {
+  const sess = actionSession();
+  const code = sess ? viewCodeFromShareCode(sess.shareCode) : null;
+  if (!sess || !code) {
+    showToast('This document has no active session');
+    return;
+  }
+  const ok = await navigator.clipboard?.writeText(code).then(
+    () => true,
+    () => false,
+  );
+  showToast(ok ? 'View code copied — whoever joins with it watches, without editing' : 'Could not copy the view code');
+}
+
+/** Copy the focused session's VIEW link (view code + view pass). */
+export async function copyViewLinkFlow(): Promise<void> {
+  const sess = actionSession();
+  if (!sess) {
+    showToast('This document has no active session');
+    return;
+  }
+  const pass = await sess.session.ensureViewPass().catch(() => null);
+  const code = viewCodeFromShareCode(sess.shareCode);
+  if (!pass || !code) {
+    showToast('View links are not available for this session — share the view code instead');
+    return;
+  }
+  const link = buildJoinLink({ shareCode: code, guestPass: pass });
+  const ok = await navigator.clipboard?.writeText(link).then(
+    () => true,
+    () => false,
+  );
+  showToast(ok ? 'View link copied — whoever opens it watches, without editing' : 'Could not copy the view link');
+}
+
 export async function copyShareCodeFlow(): Promise<void> {
   const sess = actionSession();
   if (!sess) {
@@ -423,7 +474,7 @@ export async function inviteStarredFlow(): Promise<void> {
  *  picked partner/group; with one active, just invite. */
 export async function inviteTargetFlow(
   deps: CollabUiDeps,
-  target: { codes: string[]; label: string; via?: string },
+  target: { codes: string[]; label: string; via?: string; mode?: 'edit' | 'view' },
 ): Promise<void> {
   if (!collabEnabled()) return;
   if (!settings.get('pairingEnabled')) {
@@ -439,6 +490,12 @@ export async function inviteTargetFlow(
     await startSessionFlow(deps);
     sess = sessionFor(deps.getOwnerUid?.());
     if (!sess) return; // start failed/cancelled — its toast explains
+  }
+  if (target.mode === 'view') {
+    const viewCode = viewCodeFromShareCode(sess.shareCode);
+    if (!viewCode) return;
+    await sendInviteTo(target, viewCode, sess.ownerUid, 'view');
+    return;
   }
   await sendInviteTo(target, sess.shareCode, sess.ownerUid);
 }
@@ -537,14 +594,19 @@ export async function endSessionFlow(deps: CollabUiDeps): Promise<void> {
     return;
   }
   const isHost = sess.session.role === 'host';
+  const isSpectator = sess.session.role === 'spectator';
   // In-app overlay, NOT window.confirm: Electron's native confirm on
   // Windows/Linux never hands keyboard focus back to the renderer —
   // the editor was untypeable until a reload (field bug, 2026-07-03).
   const choice = await confirmDialog(
-    isHost ? 'Participants keep their current copy.' : 'Your copy stays as it is now.',
+    isHost
+      ? 'Participants keep their current copy.'
+      : isSpectator
+        ? 'This copy stays as it is now and becomes editable.'
+        : 'Your copy stays as it is now.',
     {
-      title: isHost ? 'End the session for everyone?' : 'Leave the session?',
-      okLabel: isHost ? 'End Session' : 'Leave Session',
+      title: isHost ? 'End the session for everyone?' : isSpectator ? 'Stop watching?' : 'Leave the session?',
+      okLabel: isHost ? 'End Session' : isSpectator ? 'Stop Watching' : 'Leave Session',
     },
   );
   if (!choice) return;
@@ -553,7 +615,7 @@ export async function endSessionFlow(deps: CollabUiDeps): Promise<void> {
   if (!(await endOrLeaveSession(sess))) return;
   if (deps.refreshPluginsForUid) deps.refreshPluginsForUid(sess.ownerUid);
   else deps.refreshPlugins();
-  showToast(isHost ? 'Session ended' : 'Left the session');
+  showToast(isHost ? 'Session ended' : isSpectator ? 'Stopped watching' : 'Left the session');
   deps.getView()?.focus();
 }
 

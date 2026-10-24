@@ -47,6 +47,8 @@ export const RIBBON_GROUPS: RibbonGroup[] = [
       'collabJoinSession',
       'collabCopyShareCode',
       'collabCopyInviteLink',
+      'collabCopyViewCode',
+      'collabCopyViewLink',
       'collabInviteStarred',
       'collabEndSession',
       'collabSwitchRelay',

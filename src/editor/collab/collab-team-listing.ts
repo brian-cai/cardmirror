@@ -26,6 +26,7 @@ export async function sendInviteTo(
   target: { codes: string[]; label: string; via?: string },
   shareCode: string,
   ownerUid: string | null | undefined,
+  mode: 'edit' | 'view' = 'edit',
 ): Promise<boolean> {
   const item = buildRoomInviteItem({
     shareCode,
@@ -42,11 +43,12 @@ export async function sendInviteTo(
   const format = (sessionFor(ownerUid) ?? actionSession())?.session.childrenFormat() ?? 'list';
   const res = await pairingRelayClient.send(target.codes, item, {
     via: target.via,
-    minReceiverVersion: roomInviteFloor(format),
+    minReceiverVersion: roomInviteFloor(format, mode),
   });
-  if (res.fail === 0) showToast(`Invited ${target.label} ✓`);
+  const verb = mode === 'view' ? 'Invited to watch' : 'Invited';
+  if (res.fail === 0) showToast(`${verb} ${target.label} ✓`);
   else if (res.ok === 0) showToast(`Couldn't reach ${target.label}`);
-  else showToast(`Invited ${target.label} (${res.fail} failed)`);
+  else showToast(`${verb} ${target.label} (${res.fail} failed)`);
   return res.ok > 0;
 }
 
@@ -94,7 +96,8 @@ export function relistSession(roomId: string, name: string, shareCode: string, p
 /** Watch a live session's join requests and drive the approval prompt.
  *  Returns the stop function (a no-op stub when the feature is off). */
 export function startTeamWatch(session: CollabSession, shareCode: string, ownerUid: string): () => void {
-  if (!teamContext()) return () => {};
+  // A spectator holds a view code only: it can't approve anyone into the room.
+  if (session.role === 'spectator' || !teamContext()) return () => {};
   const roomId = session.roomId;
   // A resumed host refreshes its listing (name may have changed while
   // the app was closed). A fresh start lists after start() instead.
@@ -122,7 +125,7 @@ export function startTeamWatch(session: CollabSession, shareCode: string, ownerU
   };
   const watcher = watchJoinRequests({
     roomId,
-    role: session.role,
+    role: session.role === 'host' ? 'host' : 'participant',
     context: teamContext,
     ownCode: ownPairingCode,
     onRequests: (reqs) => setJoinRequests(roomId, reqs, handlers),

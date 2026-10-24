@@ -52,13 +52,19 @@ export function updateChip(status: { connected: boolean; queuedUpdates: number }
       }
     });
   }
-  const text = status.connected
+  const cs = chipSession();
+  const watching = cs?.session.role === 'spectator';
+  const head = watching ? 'Watching' : 'Session';
+  let text = status.connected
     ? status.queuedUpdates > 0
-      ? `Session: sending ${status.queuedUpdates}…`
-      : 'Session: synced'
+      ? `${head}: sending ${status.queuedUpdates}…`
+      : `${head}: synced`
     : status.queuedUpdates > 0
-      ? `Session: offline — ${status.queuedUpdates} queued`
-      : 'Session: offline';
+      ? `${head}: offline — ${status.queuedUpdates} queued`
+      : `${head}: offline`;
+  // Spectators post no cursor, so they appear as a count, not a dot.
+  const n = cs?.watchers ?? 0;
+  if (n > 0) text += ` · ${n} watching`;
   // Chip = a text label + a presence-dots strip (kept as stable children so
   // the dots can refresh on their own timer without rebuilding the label).
   let label = chip.querySelector('.pmd-collab-chip-label');

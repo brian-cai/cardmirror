@@ -1621,15 +1621,21 @@ the pill; **Send to Recipient** (unbound by default — run it from the
 command bar or give it a key) does the same but asks which contact or
 group to send to first.
 
-The pill's bottom row does more than send. **Clicking** the pill opens it
-with two buttons there: **Add contact** (paste a send code, name them,
-and they join the bottom of your recipients) and **Start session** (the
-same flow as the Start Collaboration Session command, for the current
-document). Once the document is in a session, that second button becomes
-**Copy code** and a third, **Copy link**, appears beside it: the code is
-for teammates joining from CardMirror, the link opens the session in a
-browser for someone without the app. While **dragging**, the first two
-spots become drop zones:
+The pill's bottom does more than send. **Clicking** the pill opens it
+with **Start session** (the same flow as the Start Collaboration Session
+command, for the current document) and, in a column on the right, the
+collaboration-settings gear over an **Add contact** button (the
+person-plus glyph: paste a send code, name them, and they join the
+bottom of your recipients). Once the document is in a session, the
+left side becomes a two-by-two set of copy buttons: **Copy edit code**
+and **Copy edit link** on the top row, **Copy view code** and **Copy
+view link** below. Codes are for teammates joining from CardMirror;
+links open the session in a browser for someone without the app. *Edit*
+gives a co-editing seat; *view* makes the person a **spectator** who sees
+every edit live but cannot change anything (see
+[Spectators](#spectators)). Each contact row carries two invite buttons
+to match: **Invite to collaborate** and **Invite to spectate**. While
+**dragging**, the bottom becomes two drop zones:
 the left sends the card to a pasted send code as a one-off (no contact
 saved), and hovering the right opens a list of people who **recently sent
 you** things — drop on one to send back, no pairing setup needed.
@@ -1653,7 +1659,9 @@ row:
   cards, a hat between hats — at the nearest such slot, or at the first slot
   after the cursor with **Insert at cursor: headings go after the current
   section** on (Settings → Editing). Inserting
-  copies — the card stays in the pill until you ✕ it. A bundled
+  copies — the card stays in the pill until you ✕ it. A session invite shows
+  as its own row with a **Join** button, or **Watch** when you were invited
+  to spectate. A bundled
   multi-selection send shows a **×N** count and is taken as one piece —
   click, drag, and ✕ all act on the whole bundle.
 - **Preview** opens the card (or the whole bundle) full-size in a read-only
@@ -1709,8 +1717,31 @@ however you like (**Copy Session Code** re-copies it). The other
 person runs **Join or Rejoin Collaboration Session** and pastes it. The shared
 document opens in a new window — in three-pane, you pick which pane.
 
-**Interruptions:** joiners past the 10-person cap get a "session is full"
-message until someone leaves. Offline edits queue and sync on reconnect
+### Spectators
+
+Every session also has a **view code** and a **view link** (the Send
+pill's *Copy view code* / *Copy view link*, the commands **Copy Session
+View Code (Spectators)** and **Copy Session View Link (Spectators)**, or
+a contact row's **Invite to spectate**). Whoever joins with one becomes a
+**spectator**: they see the document and every edit live, with the same
+caret, selection, copy-out and Save As as anyone else, but nothing they
+do changes the document — typing, pasting, dragging, comments and
+reading markers are all refused in their window, and the relay refuses
+their credential for every write as a second lock. Editors see spectators
+as a count ("· 2 watching" on the session chip and pane footers), not as
+cursors. Spectators have their own cap (100 per session) separate from
+the 30 editing seats, and anyone in the session can hand out view codes
+and links, not just the host. Leaving is **Stop Watching**; the copy
+stays and becomes an ordinary editable document, as it does when the
+host ends the session. Spectating needs CardMirror 1.16 or newer on the
+spectator's side: older builds don't recognise view codes at all, so a
+view invite can never turn into an editing seat by accident. View-only
+is a courtesy gate for trusted viewers, not a secrecy boundary — a
+spectator holds the same document key as everyone in the room.
+
+**Interruptions:** joiners past the 30-seat cap get a "session is full"
+message and an offer to **watch instead** (join as a spectator); a seat
+opens when someone leaves. Offline edits queue and sync on reconnect
 (a notice appears only after a real offline stretch whose sync actually
 changed the document). You can close the app entirely — the session is
 saved under **Sessions** on the home screen, and rejoining syncs your
@@ -1758,7 +1789,8 @@ differences:
 - **Invite links.** Starting a session on the web copies an **invite
   link** (`https://cardmirror.app/#join=…`) instead of a bare share
   code; on any edition, **Copy Session Invite Link** produces one for
-  the current session. Opening the link in a desktop-layout browser
+  the current session (and **Copy Session View Link** its spectator
+  twin, which opens the session watch-only). Opening the link in a desktop-layout browser
   offers the join directly — no account, no setup; pasting it into the
   **Join or Rejoin Collaboration Session** dialog works too, so a Chromebook with
   the app already open can join from a link received in a chat. Treat
