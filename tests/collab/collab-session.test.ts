@@ -127,7 +127,12 @@ describe('collab session end-to-end', () => {
     await host.stop();
   });
 
-  it('inbound micro-batching: a burst imports in at most two binding transactions (leading edge + batch)', async () => {
+  it('inbound micro-batching: a burst of frames drains at most twice (leading edge + batch) and keeps the undo stack', async () => {
+    // Field report 2026-10-24: a partner types, you delete it, Ctrl+Z does
+    // nothing. The burst used to land as one importBatch, whose
+    // checkout-to-latest clears the UndoManager — and the next local edit
+    // (the delete) never reached the stack.
+    const { UndoManager } = await import('loro-crdt');
     const { session: host, shareCode } = await CollabSession.host({
       pmDoc: mixedDoc(),
       client,
@@ -143,24 +148,16 @@ describe('collab session end-to-end', () => {
       ...FAST,
       receiveBatchMs: 250, // wide window so the whole burst lands in one drain
     });
-    // Count the joiner's doc-changing dispatches (the binding's imports).
-    let docDispatches = 0;
-    const el = document.createElement('div');
-    document.body.appendChild(el);
-    const { EditorState } = await import('prosemirror-state');
-    const { EditorView } = await import('prosemirror-view');
-    const { schema } = await import('../../src/schema/index.js');
-    const joinView: InstanceType<typeof EditorView> = new EditorView(el, {
-      state: EditorState.create({ schema, plugins: joiner.plugins() }),
-      dispatchTransaction(tx) {
-        if (tx.docChanged) docDispatches++;
-        joinView.updateState(joinView.state.apply(tx));
-      },
-    });
+    const joinView = mkView(joiner.plugins());
     await settle();
     joiner.start();
     await sleep(400);
-    const baseline = docDispatches; // initial sync import(s)
+    const ldoc = (joiner as unknown as { loroDoc: import('loro-crdt').LoroDoc }).loroDoc;
+    const um = new UndoManager(ldoc, { mergeInterval: 0 });
+    typeAfter(joinView, 'Second analytic', ' MINE');
+    await settle();
+    expect(um.canUndo()).toBe(true);
+    const drainsBefore = joiner.debugState().inboundDrains;
 
     // Three flush-frames' worth of typing inside one 250ms window.
     for (let i = 0; i < 3; i++) {
@@ -169,10 +166,19 @@ describe('collab session end-to-end', () => {
     }
     await sleep(600); // drain + settle
     expect(docText(joinView.state.doc)).toContain('batch2');
-    // All frames landed in at most TWO imports: the first frame after a
-    // quiet spell imports at once (leading edge, for latency); the rest
-    // of the burst collects into one batch behind it.
-    expect(docDispatches - baseline).toBeLessThanOrEqual(2);
+    // The first frame after a quiet spell drains at once (leading edge, for
+    // latency); the rest of the burst collects into one drain behind it.
+    expect(joiner.debugState().inboundDrains - drainsBefore, 'at most two drains for the burst').toBeLessThanOrEqual(2);
+    expect(um.canUndo(), 'the burst left my undo history alone').toBe(true);
+
+    // Delete the partner's text, then undo: it comes back.
+    const { from, to } = findText(joinView.state.doc, ' batch1');
+    joinView.dispatch(joinView.state.tr.delete(from, to));
+    await settle();
+    expect(docText(joinView.state.doc)).not.toContain('batch1');
+    expect(um.undo()).toBe(true);
+    await settle();
+    expect(docText(joinView.state.doc)).toContain('batch1');
 
     await joiner.stop();
     await host.stop();
@@ -639,19 +645,19 @@ describe('catch-up skips rows the stream already delivered', () => {
 });
 
 describe('a failed inbound import batch is not on the catch-up skip list', () => {
-  it('rows from a batch importBatch rejected are re-fetched and imported by catch-up', async () => {
+  it('rows from a batch the import rejected are re-fetched and imported by catch-up', async () => {
     // The skip list (T8) records stream-delivered seqs so catch-up does
     // not re-import them. Recording them BEFORE the import meant a batch
-    // that failed (one corrupt frame fails the whole importBatch) had
+    // that failed (one corrupt frame fails the drain) had
     // every row in it skipped by every later catch-up — a permanent gap
     // (knock-on audit 2026-09-02). Now the seqs are recorded only after a
     // successful import.
     const { host, hostView, joiner, joinView } = await hostAndJoin(simpleDoc('seed'));
     try {
-      const ldoc = (joiner as unknown as { loroDoc: { importBatch: (b: Uint8Array[]) => unknown } }).loroDoc;
-      const orig = ldoc.importBatch.bind(ldoc);
+      const ldoc = (joiner as unknown as { loroDoc: { import: (b: Uint8Array) => unknown } }).loroDoc;
+      const orig = ldoc.import.bind(ldoc);
       let failures = 0;
-      ldoc.importBatch = (b: Uint8Array[]) => {
+      ldoc.import = (b: Uint8Array) => {
         if (failures === 0) {
           failures++;
           throw new Error('simulated corrupt frame');
