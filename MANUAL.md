@@ -1219,6 +1219,16 @@ it's deliberately effortless: **Space, Enter, or Mod-Shift-D** all drop one;
 triggering it again on a marker removes it. (Red text stays visible in read
 mode, so the marker shows.)
 
+A card holds one marker at a time: dropping a new one removes any other
+marker in that card. So if a card counts as marked and you can't see why
+(a stray marker fragment, say), put the cursor in it and trigger the
+marker twice — once to replace whatever was there, once to remove the
+fresh marker — and the card is clean. Only the markers CardMirror writes
+count: text you color red yourself, red text from a Verbatim file, and
+the "redden text after a marker" tint baked into a Word export are just
+red, and never make a card marked. A marker you've typed into or half
+deleted stops counting the next time the file opens.
+
 You can also drop a marker while editing — **Mod-Shift-D** works any time
 (Space and Enter only stand in for it inside read mode).
 

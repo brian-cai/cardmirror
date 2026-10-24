@@ -4335,6 +4335,11 @@ body.pmd-override-shading [data-shading] {
 :root[data-theme="dark"][data-theme-doc="dark"] .ProseMirror span[data-color="ff0000" i] {
   color: var(--pmd-color-reading-marker) !important;
 }
+/* The atom form of the reading marker (dormant `reading_marker` node) — same
+   hue as the run form. Not an image, so read mode's img hiding leaves it. */
+.ProseMirror .pmd-reading-marker {
+  color: var(--pmd-color-reading-marker) !important;
+}
 
 /* ProseMirror selection visibility */
 .ProseMirror:focus { outline: none; }
