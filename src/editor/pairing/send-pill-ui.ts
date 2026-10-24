@@ -555,8 +555,9 @@ export class SendPillController {
     actions.appendChild(this.startSessionEl);
     // Copy link — the invite URL (share code + guest pass packed for a
     // browser joiner). Shown only while the focused doc has a live
-    // session; `pmd-pill-settings` borrows the gear's "click-open only"
-    // CSS so a drag never sees it as a zone.
+    // session, and click-open only (`pmd-send-action-link` hides it in
+    // drag mode, like the gear) so a drag never sees it as a zone. It
+    // takes an equal third of the row with the two labelled actions.
     this.copyLinkEl = this.actionButton(COPY_LINK_ICON, 'Copy link', 'Copy this session’s invite link', () => {
       const link = collabActiveInviteLink();
       if (link === null) return;
@@ -565,7 +566,7 @@ export class SendPillController {
         () => showToast('Could not copy the session link'),
       );
     });
-    this.copyLinkEl.classList.add('pmd-pill-settings');
+    this.copyLinkEl.classList.add('pmd-send-action-link');
     this.refreshSessionAction();
     actions.appendChild(this.copyLinkEl);
     // Click-open only (CSS hides it while the row is a drag's drop zones).

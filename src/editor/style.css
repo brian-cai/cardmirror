@@ -15503,6 +15503,13 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
 .pmd-send-pill:not(.pmd-send-invite-mode) .pmd-pill-settings {
   display: none;
 }
+/* "Copy link" (the session invite URL): a third labelled action that
+   shares the row evenly with Add contact / Copy code (the shared
+   `flex: 1 1 0`), present only while the focused doc has a live session
+   and, like the gear, only on a click-open — a drag's row is drop zones. */
+.pmd-send-pill:not(.pmd-send-invite-mode) .pmd-send-action-link {
+  display: none;
+}
 /* Drag-revealed recent-senders FLYOUT: a separate area to the right of
    the panel (left/bottom set in JS from the panel's live rect). Same
    chrome as the panel so the pair reads as one surface. */
