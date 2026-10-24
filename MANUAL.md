@@ -1763,7 +1763,9 @@ the session (rejoin later from the Sessions list) or end/leave it now. The
 or just forget your copy; as guest, forgets your copy.
 
 **Rejoining:** **Join or Rejoin Collaboration Session** (or **Join session** on the
-Receive pill) opens with a box for a session code or invite link, ready to
+Receive pill, or on a Mac **File → Rejoin Recent Session**, which lists the
+same saved sessions as the home screen — **File → Open Recent** does the
+same for files) opens with a box for a session code or invite link, ready to
 paste into: paste and press Enter to join a new session. Below it are the
 sessions you can get back into: saved copies (the same ones as the home
 screen's Sessions list; rejoining syncs your offline edits) and sessions you

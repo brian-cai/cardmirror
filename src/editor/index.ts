@@ -146,7 +146,8 @@ import { openBulkCompress, runCompressSingleFileWeb } from './bulk-compress-ui.j
 import { bulkCompressEnabled } from './bulk-compress-gate.js';
 import { openClean, runCleanSingleFileWeb } from './clean-ui.js';
 import { homeScreen, type HomeScreenCallbacks } from './home-screen.js';
-import { recordRecent, removeRecent, listRecents, type RecentFile } from './recents-store.js';
+import { recordRecent, removeRecent, listRecents, clearRecents, subscribeRecents, type RecentFile } from './recents-store.js';
+import { buildMenuRecents } from './menu-recents.js';
 import {
   reportWindowWorkspace,
   rolloverLastWorkspace,
@@ -275,7 +276,7 @@ import { imageContextMenuPlugin } from './image-context-menu-plugin.js';
 import { editorNodeViews } from './image-resize-nodeview.js';
 import { setViewDocPath, getViewDocPath } from './transclusion-doc-path.js';
 import { isSyncOrigin } from './sync-origin.js';
-import { listSessionRecords, deleteSessionRecord } from './collab/collab-store.js';
+import { listSessionRecords, deleteSessionRecord, subscribeSessionRecords } from './collab/collab-store.js';
 import { collabEnabled } from './collab/collab-gate.js';
 import { parseJoinLinkHash } from './collab/join-link.js';
 import { setRePickOpener, setOpenSourceOpener } from './transclusion-actions.js';
@@ -7628,6 +7629,59 @@ async function loadFileInPlace(file: {
   view?.focus();
 }
 
+/** Resume a saved session from the home screen's Sessions list — and from
+ *  File → Rejoin Recent Session, which mirrors it. */
+async function resumeSessionFromHome(roomId: string): Promise<void> {
+  // Duplicate guards BEFORE any spawn, so a redundant click never mints
+  // a stray window. This-window: the synchronous live-room probe.
+  // Other-window: the session's claim in the duplicate-open registry —
+  // probing it also focuses the owning window.
+  if (collabRoomIsLive(roomId)) {
+    homeScreen.hide(); // the live doc is somewhere in this window
+    showToast('That session is already open in this window.');
+    return;
+  }
+  let liveElsewhere = false;
+  try {
+    liveElsewhere =
+      (await getElectronHost()?.openPathCheck(collabRoomClaimKey(roomId)))?.takenByOther ??
+      false;
+  } catch {
+    /* openPath API absent (old preload / web) — skip the cross-window guard */
+  }
+  if (liveElsewhere) {
+    showToast('That session is already open in another CardMirror window.');
+    return;
+  }
+  homeScreen.hide();
+  // Single-pane with a real doc behind the home screen: resume in a NEW
+  // window (the session doc would otherwise evict this one) — the spawned
+  // window opens a blank starter and runs the full resume, mirroring the
+  // spawn-to-join flow.
+  if (!multiDocActive && !isPristineStarter && getHost().canSpawnWindow) {
+    void getHost()
+      .spawnWindow({
+        filename: '',
+        bytes: new Uint8Array(),
+        handle: null,
+        format: null,
+        uid: null,
+        resumeRoomId: roomId,
+      })
+      .catch((err) => {
+        console.error('Spawn-to-resume failed:', err);
+        showToast('Could not open a new window for the session.');
+      });
+    return;
+  }
+  // Multi-pane resumes into a user-picked slot (the home screen is
+  // reachable there via the Home button); a pristine single-pane
+  // starter resumes in place.
+  void loadCollabUi().then((m) =>
+    m.resumeSessionFlow(multiDocActive ? makeMultiPaneSessionDeps() : collabDeps, roomId),
+  );
+}
+
 const homeCallbacks: HomeScreenCallbacks = {
   // Single-doc: load in-place in this window. Multi-pane: hide
   // home and route through the shell flows, which present the
@@ -7696,56 +7750,7 @@ const homeCallbacks: HomeScreenCallbacks = {
       }
     : {}),
   resumeSession: (roomId: string) => {
-    void (async (): Promise<void> => {
-      // Duplicate guards BEFORE any spawn, so a redundant click never mints
-      // a stray window. This-window: the synchronous live-room probe.
-      // Other-window: the session's claim in the duplicate-open registry —
-      // probing it also focuses the owning window.
-      if (collabRoomIsLive(roomId)) {
-        homeScreen.hide(); // the live doc is somewhere in this window
-        showToast('That session is already open in this window.');
-        return;
-      }
-      let liveElsewhere = false;
-      try {
-        liveElsewhere =
-          (await getElectronHost()?.openPathCheck(collabRoomClaimKey(roomId)))?.takenByOther ??
-          false;
-      } catch {
-        /* openPath API absent (old preload / web) — skip the cross-window guard */
-      }
-      if (liveElsewhere) {
-        showToast('That session is already open in another CardMirror window.');
-        return;
-      }
-      homeScreen.hide();
-      // Single-pane with a real doc behind the home screen: resume in a NEW
-      // window (the session doc would otherwise evict this one) — the spawned
-      // window opens a blank starter and runs the full resume, mirroring the
-      // spawn-to-join flow.
-      if (!multiDocActive && !isPristineStarter && getHost().canSpawnWindow) {
-        void getHost()
-          .spawnWindow({
-            filename: '',
-            bytes: new Uint8Array(),
-            handle: null,
-            format: null,
-            uid: null,
-            resumeRoomId: roomId,
-          })
-          .catch((err) => {
-            console.error('Spawn-to-resume failed:', err);
-            showToast('Could not open a new window for the session.');
-          });
-        return;
-      }
-      // Multi-pane resumes into a user-picked slot (the home screen is
-      // reachable there via the Home button); a pristine single-pane
-      // starter resumes in place.
-      void loadCollabUi().then((m) =>
-        m.resumeSessionFlow(multiDocActive ? makeMultiPaneSessionDeps() : collabDeps, roomId),
-      );
-    })();
+    void resumeSessionFromHome(roomId);
   },
   manageQuickCards: () => {
     void quickCardsManageUI.open();
@@ -10174,6 +10179,30 @@ function pushNativeMenuBindings(): void {
 {
   const electronHost = getElectronHost();
   if (electronHost) {
+    // File → Open Recent / Rejoin Recent Session mirror the home screen's
+    // Recent and Sessions lists: push a compact payload now and on every
+    // change of either store; main rebuilds the two submenus from it.
+    const pushNativeMenuRecents = (): void => {
+      void (async () => {
+        const records = collabEnabled() ? await listSessionRecords().catch(() => []) : null;
+        await electronHost.setMenuRecents(buildMenuRecents(listRecents(), records));
+      })().catch(() => {});
+    };
+    pushNativeMenuRecents();
+    subscribeRecents(pushNativeMenuRecents);
+    subscribeSessionRecords(pushNativeMenuRecents);
+    electronHost.onMenuOpenRecent((pick) => {
+      if (pick.kind === 'file') {
+        // Same path as a home-screen Recent click: in-place on a pristine
+        // starter, a new window over a real doc, the slot picker in
+        // three-pane; a vanished file is pruned with a toast.
+        const recent = listRecents().find((r) => r.handle === pick.id);
+        if (recent) void openRecentInPlace(recent);
+        else showToast('That file is no longer in the recent list');
+        return;
+      }
+      void resumeSessionFromHome(pick.id);
+    });
     electronHost.onMenuCommand((command) => {
       switch (command) {
         case 'newDocument':
@@ -10208,6 +10237,11 @@ function pushNativeMenuBindings(): void {
               await handleUserCloseRequest();
             }
           })();
+          break;
+        case 'clearRecents':
+          // File → Open Recent → Clear Menu (the home screen's list too —
+          // they are one store).
+          clearRecents();
           break;
         default:
           // Fallback for the Speech / View / Help / Toggle Autosave
