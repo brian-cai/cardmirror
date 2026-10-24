@@ -5,6 +5,21 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.39 — 2026-10-24
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Updates
+
+- **Easier to spot.** When an update is waiting, the update button in
+  the status bar (and on the start screen) is now a solid, gently
+  pulsing button with an arrow instead of a thin outline.
+- **A weekly reminder on Wednesdays.** If an update is waiting, CardMirror
+  asks once on Wednesday, the quietest day for tournaments, whether to
+  install it now. "Later" waits a week. It never asks while the
+  tournament pause is on or during a live co-editing session.
+
 ## 1.15.38 — 2026-10-23
 
 BCai's (@brian-cai) build of CardMirror, updating from
