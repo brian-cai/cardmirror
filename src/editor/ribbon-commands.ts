@@ -93,6 +93,7 @@ import { classifyChar, isWordChar } from './word-break.js';
 import { moveContainerUp, moveContainerDown } from './move-container.js';
 import { toggleNumberRole, toggleSubRole, toggleNumRestart } from './numbering-commands.js';
 import { settings } from './settings.js';
+import { hasCiteMark } from './cite-classifier-plugin.js';
 import { matchAcronymPattern } from './acronym-patterns.js';
 import {
   getTimerState,
@@ -3355,7 +3356,7 @@ function computeSmartShrinkBlocks(
       const out: SmartShrinkBlock[] = [];
       let offset = 1;
       docLevel.forEach((child) => {
-        if (child.type.name === 'card_body') {
+        if (isShrinkBodyBlock(child)) {
           const childStart = docLevelStart + offset;
           out.push({ node: child, from: childStart + 1, to: childStart + child.nodeSize - 1 });
         }
@@ -3363,7 +3364,7 @@ function computeSmartShrinkBlocks(
       });
       return out;
     }
-    if (t === 'paragraph') {
+    if (isShrinkBodyBlock(docLevel)) {
       return [{ node: docLevel, from: docLevelStart + 1, to: docLevelStart + docLevel.nodeSize - 1 }];
     }
     return [];
@@ -3371,8 +3372,7 @@ function computeSmartShrinkBlocks(
   const out: SmartShrinkBlock[] = [];
   state.doc.nodesBetween(sel.from, sel.to, (node, pos) => {
     if (!node.isTextblock) return true;
-    const t = node.type.name;
-    if (t !== 'card_body' && t !== 'paragraph') return false;
+    if (!isShrinkBodyBlock(node)) return false;
     const from = Math.max(sel.from, pos + 1);
     const to = Math.min(sel.to, pos + node.nodeSize - 1);
     if (from < to) out.push({ node, from, to });
@@ -3404,7 +3404,7 @@ export function smartShrinkText(
   return (state, dispatch) => {
     const blocks = computeSmartShrinkBlocks(state);
     if (blocks.length === 0) {
-      if (dispatch && state.selection.$from.parent.type.name === 'cite_paragraph') {
+      if (dispatch && caretInCiteLine(state)) {
         showToast(SHRINK_ON_CITE_MESSAGE, { durationMs: 2200 });
       }
       return false;
@@ -3482,7 +3482,7 @@ function sizeCycleCommand(
       // (imported cite-style debris keeps the paragraph classified
       // as cite) — toast so the refusal is diagnosable. Still
       // returns false: the command didn't run.
-      if (dispatch && state.selection.$from.parent.type.name === 'cite_paragraph') {
+      if (dispatch && caretInCiteLine(state)) {
         showToast(SHRINK_ON_CITE_MESSAGE, { durationMs: 2200 });
       }
       return false;
@@ -3561,6 +3561,25 @@ function nextShrinkSize(sizes: Set<number>, normalPt: number): number {
   return normalPt;
 }
 
+/** A textblock the shrink cycle may touch: body text (card_body / doc-
+ *  level paragraph) that is not a cite line. The node TYPE check alone
+ *  is not enough — the cite classifier retypes a paragraph from its
+ *  content, and a paragraph carrying cite-marked text whose type has not
+ *  (or not yet) caught up is still a cite. Cite-ness IS the mark, so
+ *  shrink reads the same signal the classifier does. */
+function isShrinkBodyBlock(node: PMNode): boolean {
+  const t = node.type.name;
+  if (t !== 'card_body' && t !== 'paragraph') return false;
+  return !hasCiteMark(node);
+}
+
+/** True when the caret's paragraph is a cite line by type or content —
+ *  the case the shrink refusal toast explains. */
+function caretInCiteLine(state: import('prosemirror-state').EditorState): boolean {
+  const parent = state.selection.$from.parent;
+  return parent.type.name === 'cite_paragraph' || (parent.isTextblock && hasCiteMark(parent));
+}
+
 function computeShrinkScope(state: import('prosemirror-state').EditorState): { from: number; to: number }[] {
   const sel = state.selection;
   if (sel.empty) {
@@ -3573,7 +3592,7 @@ function computeShrinkScope(state: import('prosemirror-state').EditorState): { f
       const out: { from: number; to: number }[] = [];
       let offset = 1;
       docLevel.forEach((child) => {
-        if (child.type.name === 'card_body') {
+        if (isShrinkBodyBlock(child)) {
           const childStart = docLevelStart + offset;
           out.push({ from: childStart + 1, to: childStart + child.nodeSize - 1 });
         }
@@ -3581,7 +3600,7 @@ function computeShrinkScope(state: import('prosemirror-state').EditorState): { f
       });
       return out;
     }
-    if (t === 'paragraph') {
+    if (isShrinkBodyBlock(docLevel)) {
       return [{ from: docLevelStart + 1, to: docLevelStart + docLevel.nodeSize - 1 }];
     }
     return [];
@@ -3591,8 +3610,7 @@ function computeShrinkScope(state: import('prosemirror-state').EditorState): { f
   const out: { from: number; to: number }[] = [];
   state.doc.nodesBetween(sel.from, sel.to, (node, pos) => {
     if (!node.isTextblock) return true;
-    const t = node.type.name;
-    if (t !== 'card_body' && t !== 'paragraph') return false;
+    if (!isShrinkBodyBlock(node)) return false;
     const contentFrom = pos + 1;
     const contentTo = pos + node.nodeSize - 1;
     const from = Math.max(sel.from, contentFrom);
