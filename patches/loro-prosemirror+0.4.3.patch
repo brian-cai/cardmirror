@@ -1,5 +1,5 @@
 diff --git a/node_modules/loro-prosemirror/dist/index.cjs b/node_modules/loro-prosemirror/dist/index.cjs
-index 74c4b30..3a1c5b5 100644
+index 74c4b30..4de74e5 100644
 --- a/node_modules/loro-prosemirror/dist/index.cjs
 +++ b/node_modules/loro-prosemirror/dist/index.cjs
 @@ -15,6 +15,7 @@ const NODE_NAME_KEY = "nodeName";
@@ -322,8 +322,7 @@ index 74c4b30..3a1c5b5 100644
 +	const keys = new Set([...Object.keys(av), ...Object.keys(bv)]);
 +	for (const key of keys) {
 +		if (!cardmirrorCanonicalAttrsEqual(av[key] ?? null, bv[key] ?? null)) return false;
- 	}
--	return eq;
++	}
 +	return true;
 +}
 +function cardmirrorCanonicalizeAttrs(attrs) {
@@ -331,7 +330,8 @@ index 74c4b30..3a1c5b5 100644
 +	for (const key of Object.keys(attrs ?? {})) {
 +		const v = attrs[key];
 +		if (v !== null && v !== undefined) out[key] = v;
-+	}
+ 	}
+-	return eq;
 +	return out;
 +}
 +// PATCHED (cardmirror): canonical equality — the old form counted
@@ -651,8 +651,7 @@ index 74c4b30..3a1c5b5 100644
 +		/* detached/odd shape — fall through to the seed flag */
 +	}
 +	return globalThis.__CM_MOVABLE_LIST__ ? "movable" : "list";
- }
--function updateLoroMapChildren(obj, node, mapping) {
++}
 +/**
 + * CardMirror patch: identity-preserving reconcile for MOVABLE lists when
 + * the span is NOT a pure permutation — a child was inserted or removed
@@ -834,7 +833,8 @@ index 74c4b30..3a1c5b5 100644
 +		updateLoroMap(loroChildren.get(left + j), news[j], mapping);
 +	}
 +	return true;
-+}
+ }
+-function updateLoroMapChildren(obj, node, mapping) {
 +/**
 + * CardMirror patch: EXACT text ops for local edits.
 + *
@@ -1300,7 +1300,7 @@ index 74c4b30..3a1c5b5 100644
  		const tr = view.state.tr.replace(0, view.state.doc.content.size, new prosemirror_model.Slice(prosemirror_model.Fragment.from(node), 0, 0));
  		tr.setMeta(loroSyncPluginKey, {
  			type: "update-state",
-@@ -642,22 +1653,245 @@ function init(view) {
+@@ -642,22 +1653,274 @@ function init(view) {
  		view.dispatch(tr);
  	}
  }
@@ -1435,11 +1435,40 @@ index 74c4b30..3a1c5b5 100644
 +	mapping.set(obj.id, retval);
 +	return retval;
 +}
++// PATCHED (cardmirror): an import BURST renders once. CollabSession imports a
++// burst of relay frames one import() at a time (see importLive: importBatch's
++// checkout clears the UndoManager). Inside a hold each frame's event only
++// marks the view; closing the hold renders the burst's net diff through
++// updateNodeOnLoroEvent — one transaction, as importBatch gave.
++const CARDMIRROR_IMPORT_HOLDS = new WeakMap();
++globalThis.__CM_HOLD_IMPORTS__ = (doc, run) => {
++	if (CARDMIRROR_IMPORT_HOLDS.has(doc)) return run();
++	const hold = { from: doc.frontiers(), views: new Set() };
++	CARDMIRROR_IMPORT_HOLDS.set(doc, hold);
++	try {
++		return run();
++	} finally {
++		CARDMIRROR_IMPORT_HOLDS.delete(doc);
++		if (hold.views.size > 0) {
++			const events = doc.diff(hold.from, doc.frontiers(), false).map(([target, diff]) => ({ target, diff }));
++			for (const view of hold.views) updateNodeOnLoroEvent(view, { by: "import", events });
++		}
++	}
++};
  function updateNodeOnLoroEvent(view, event) {
  	if (view.isDestroyed) return;
  	const state = loroSyncPluginKey.getState(view.state);
  	state.changedBy = event.by;
  	if (event.by === "local" && event.origin !== "undo") return;
++	const cardmirrorHold = CARDMIRROR_IMPORT_HOLDS.get(state.doc);
++	if (cardmirrorHold && event.by === "import") {
++		// Nothing renders until the hold closes, so the cached nodes stay put:
++		// the net-diff event at close plans the partial rebuild against them
++		// (cardmirrorPlanRemoteReuse needs the pre-burst mapping) and clears
++		// exactly the containers the burst changed.
++		cardmirrorHold.views.add(view);
++		return;
++	}
  	const mapping = state.mapping;
 +	// CardMirror patch: plan the partial rebuild BEFORE the mapping is cleared
 +	// (it records each ancestor's previous node) — see cardmirrorPlanRemoteReuse.
@@ -1553,7 +1582,7 @@ index 74c4b30..3a1c5b5 100644
  }
  /**
  * Update ProseMirror selection based on the given Loro cursors.
-@@ -848,7 +2082,14 @@ const LoroUndoPlugin = (props) => {
+@@ -848,7 +2111,14 @@ const LoroUndoPlugin = (props) => {
  				if (!undoState || !loroState) return state;
  				const canUndo = undoState.undoManager.canUndo();
  				const canRedo = undoState.undoManager.canRedo();
@@ -1570,7 +1599,7 @@ index 74c4b30..3a1c5b5 100644
  					lastSelection = {
  						anchor: anchor ?? null,
 diff --git a/node_modules/loro-prosemirror/dist/index.js b/node_modules/loro-prosemirror/dist/index.js
-index e41095d..17aad73 100644
+index e41095d..b4661ad 100644
 --- a/node_modules/loro-prosemirror/dist/index.js
 +++ b/node_modules/loro-prosemirror/dist/index.js
 @@ -1,6 +1,185 @@
@@ -2079,7 +2108,8 @@ index e41095d..17aad73 100644
 +	const keys = new Set([...Object.keys(av), ...Object.keys(bv)]);
 +	for (const key of keys) {
 +		if (!cardmirrorCanonicalAttrsEqual(av[key] ?? null, bv[key] ?? null)) return false;
-+	}
+ 	}
+-	return eq;
 +	return true;
 +}
 +function cardmirrorCanonicalizeAttrs(attrs) {
@@ -2087,8 +2117,7 @@ index e41095d..17aad73 100644
 +	for (const key of Object.keys(attrs ?? {})) {
 +		const v = attrs[key];
 +		if (v !== null && v !== undefined) out[key] = v;
- 	}
--	return eq;
++	}
 +	return out;
 +}
 +// PATCHED (cardmirror): canonical equality — the old form counted
@@ -2412,7 +2441,8 @@ index e41095d..17aad73 100644
 +		updateLoroMap(loroChildren.get(left + j), news[j], mapping);
 +	}
 +	return true;
-+}
+ }
+-function updateLoroMapChildren(obj, node, mapping) {
 +/**
 + * CardMirror patch: EXACT text ops for local edits.
 + *
@@ -2572,8 +2602,7 @@ index e41095d..17aad73 100644
 +	}
 +	cardmirrorReconcileTextAttrs(obj, nodes.map((p) => ({ insert: p.text, attributes: nodeMarksToAttributes(p.marks) })));
 +	return true;
- }
--function updateLoroMapChildren(obj, node, mapping) {
++}
 +function updateLoroMapChildren(obj, node, mapping, prev) {
  	const loroChildren = getLoroMapChildren(obj);
  	const loroChildLength = loroChildren.length;
@@ -2879,7 +2908,7 @@ index e41095d..17aad73 100644
  		const tr = view.state.tr.replace(0, view.state.doc.content.size, new Slice(Fragment.from(node), 0, 0));
  		tr.setMeta(loroSyncPluginKey, {
  			type: "update-state",
-@@ -641,22 +1653,254 @@ function init(view) {
+@@ -641,22 +1653,283 @@ function init(view) {
  		view.dispatch(tr);
  	}
  }
@@ -3014,11 +3043,40 @@ index e41095d..17aad73 100644
 +	mapping.set(obj.id, retval);
 +	return retval;
 +}
++// PATCHED (cardmirror): an import BURST renders once. CollabSession imports a
++// burst of relay frames one import() at a time (see importLive: importBatch's
++// checkout clears the UndoManager). Inside a hold each frame's event only
++// marks the view; closing the hold renders the burst's net diff through
++// updateNodeOnLoroEvent — one transaction, as importBatch gave.
++const CARDMIRROR_IMPORT_HOLDS = new WeakMap();
++globalThis.__CM_HOLD_IMPORTS__ = (doc, run) => {
++	if (CARDMIRROR_IMPORT_HOLDS.has(doc)) return run();
++	const hold = { from: doc.frontiers(), views: new Set() };
++	CARDMIRROR_IMPORT_HOLDS.set(doc, hold);
++	try {
++		return run();
++	} finally {
++		CARDMIRROR_IMPORT_HOLDS.delete(doc);
++		if (hold.views.size > 0) {
++			const events = doc.diff(hold.from, doc.frontiers(), false).map(([target, diff]) => ({ target, diff }));
++			for (const view of hold.views) updateNodeOnLoroEvent(view, { by: "import", events });
++		}
++	}
++};
  function updateNodeOnLoroEvent(view, event) {
  	if (view.isDestroyed) return;
  	const state = loroSyncPluginKey.getState(view.state);
  	state.changedBy = event.by;
  	if (event.by === "local" && event.origin !== "undo") return;
++	const cardmirrorHold = CARDMIRROR_IMPORT_HOLDS.get(state.doc);
++	if (cardmirrorHold && event.by === "import") {
++		// Nothing renders until the hold closes, so the cached nodes stay put:
++		// the net-diff event at close plans the partial rebuild against them
++		// (cardmirrorPlanRemoteReuse needs the pre-burst mapping) and clears
++		// exactly the containers the burst changed.
++		cardmirrorHold.views.add(view);
++		return;
++	}
  	const mapping = state.mapping;
 +	// CardMirror patch: plan the partial rebuild BEFORE the mapping is cleared
 +	// (it records each ancestor's previous node) — see cardmirrorPlanRemoteReuse.
@@ -3141,7 +3199,7 @@ index e41095d..17aad73 100644
  }
  /**
  * Update ProseMirror selection based on the given Loro cursors.
-@@ -847,7 +2091,14 @@ const LoroUndoPlugin = (props) => {
+@@ -847,7 +2120,14 @@ const LoroUndoPlugin = (props) => {
  				if (!undoState || !loroState) return state;
  				const canUndo = undoState.undoManager.canUndo();
  				const canRedo = undoState.undoManager.canRedo();
