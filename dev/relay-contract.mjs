@@ -10,6 +10,8 @@
 // Usage:  BASE=http://127.0.0.1:8411/relay TOKEN=<token> [HB=1] node dev/relay-contract.mjs
 // (HB=1 adds the 25s heartbeat check; omit for fast runs.)
 const BASE = process.env.BASE || 'http://127.0.0.1:8300/relay';
+// Relay MAX_STREAMS_PER_ROOM (relay_rooms.py); override with ROOM_CAP when testing another build.
+const ROOM_CAP_DEFAULT = 30;
 const TOK = process.env.TOKEN || 'dev-pairing-token';
 const AUTH = { Authorization: `Bearer ${TOK}` };
 let pass = 0, fail = 0;
@@ -249,7 +251,7 @@ if (process.env.ROOMS !== '0') {
 
   // 12. participant cap: MAX streams hold, the next connect is 409.
   {
-    const CAP = Number(process.env.ROOM_CAP || 10);
+    const CAP = Number(process.env.ROOM_CAP || ROOM_CAP_DEFAULT);
     const ctls = [];
     let opened = 0;
     for (let i = 0; i < CAP; i++) {
@@ -379,11 +381,12 @@ if (process.env.ROOMS !== '0') {
     ctls.push(ctl);
     return res.status;
   };
+  const CAP = Number(process.env.ROOM_CAP || ROOM_CAP_DEFAULT);
   const statuses = [];
-  for (let i = 0; i < 10; i++) statuses.push(await open(`sid${i}`));
-  check('rooms: 10 streams open', statuses.every((st) => st === 200), statuses.join(','));
-  const eleventh = await open('sid-new');
-  check('rooms: 11th distinct sid → 409', eleventh === 409, String(eleventh));
+  for (let i = 0; i < CAP; i++) statuses.push(await open(`sid${i}`));
+  check(`rooms: ${CAP} streams open`, statuses.every((st) => st === 200), statuses.join(','));
+  const over = await open('sid-new');
+  check(`rooms: ${CAP + 1}th distinct sid → 409`, over === 409, String(over));
   // Drop sid0 abruptly (no server-side reap yet) and reconnect AS sid0.
   ctls[0].abort();
   await new Promise((r2) => setTimeout(r2, 50));
