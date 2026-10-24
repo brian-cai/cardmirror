@@ -2072,6 +2072,15 @@ control is hidden, and AI features gray out cleanly when you're offline.
 | **Generate table from image** | Right-click an image | Extracts a real, editable table from a picture of one. |
 | **Draft a flashcard** | From Create Flashcard | Drafts a question/answer or cloze from the selection. |
 
+The cite-formatting prompt can be saved as up to ten named **presets**
+(Settings → Comments & AI → *AI cite-creator prompt*): one for law
+reviews, one for news, one for a teammate's house style. Switch with
+the picker there, or bind the *AI Cite Creator: Use Prompt Preset 1…10*
+commands (unbound by default; *Use Built-in Prompt* returns to the
+default). Format Cite and Reformat Every Cite both use whichever preset
+is in use. A prompt you had customized before presets existed is kept
+as a preset named "My prompt".
+
 You can set the author name AI notes are attributed under, customize
 the cite-formatting prompt, and — on the Anthropic provider — point AI
 at a specific Claude model (**AI model (advanced)** — leave blank to use
@@ -3179,8 +3188,12 @@ remove one, **↺** to restore its default. A few window-level shortcuts
   one is retired. A malformed entry is ignored.
 - **Enable Clod mode** — the playful in-flight placeholder ("Clod is
   making toast…") while the AI composes a reply.
-- **AI cite-creator prompt** — the system prompt the cite creator uses;
-  leave blank for the built-in default.
+- **AI cite-creator prompt** — the system prompt the cite creator uses.
+  Pick the built-in default or one of up to ten named presets you've
+  saved; **Edit** changes the selected preset, **New preset** saves a
+  copy of the prompt in use under a new name, **Delete** (click twice)
+  removes it. Each preset has a bindable *AI Cite Creator: Use Prompt
+  Preset N* command, and *Use Built-in Prompt* switches back.
 
 ### Accessibility
 

@@ -193,6 +193,39 @@ export const RIBBON_GROUPS: RibbonGroup[] = [
       'setNavDepth4',
 
       'alphabetizeSelectedHeadings',
+
+
+      'aiCitePromptDefault',
+
+
+      'aiCitePromptPreset1',
+
+
+      'aiCitePromptPreset2',
+
+
+      'aiCitePromptPreset3',
+
+
+      'aiCitePromptPreset4',
+
+
+      'aiCitePromptPreset5',
+
+
+      'aiCitePromptPreset6',
+
+
+      'aiCitePromptPreset7',
+
+
+      'aiCitePromptPreset8',
+
+
+      'aiCitePromptPreset9',
+
+
+      'aiCitePromptPreset10',
       'toggleMorphMode',
       'wordCountSelection',
       'openSettings',

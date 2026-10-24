@@ -66,6 +66,7 @@ import {
 import { applyPlainPasteFromText, togglePlainPaste } from './paste-plugin.js';
 import { lockHighlighting } from './create-reference.js';
 import { showToast } from './toast.js';
+import { activateCitePromptPreset, citePromptPresets } from './ai/cite-prompt-presets.js';
 import { surfaceError } from './error-surface.js';
 import { TYPE_TO_LEVEL, TYPE_LABEL } from './headings.js';
 import { selectedTransclusion, enclosingZonePos, isTransclusionNode } from './transclusion.js';
@@ -4740,6 +4741,17 @@ export type RibbonCommandId =
   | 'setNavDepth3'
   | 'setNavDepth4'
   | 'alphabetizeSelectedHeadings'
+  | 'aiCitePromptDefault'
+  | 'aiCitePromptPreset1'
+  | 'aiCitePromptPreset2'
+  | 'aiCitePromptPreset3'
+  | 'aiCitePromptPreset4'
+  | 'aiCitePromptPreset5'
+  | 'aiCitePromptPreset6'
+  | 'aiCitePromptPreset7'
+  | 'aiCitePromptPreset8'
+  | 'aiCitePromptPreset9'
+  | 'aiCitePromptPreset10'
   // Commands that ship without a default binding — bindable via
   // Settings → Keyboard shortcuts. Each maps to a ribbon button or
   // menu item.
@@ -5010,6 +5022,17 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'setNavDepth3',
   'setNavDepth4',
   'alphabetizeSelectedHeadings',
+  'aiCitePromptDefault',
+  'aiCitePromptPreset1',
+  'aiCitePromptPreset2',
+  'aiCitePromptPreset3',
+  'aiCitePromptPreset4',
+  'aiCitePromptPreset5',
+  'aiCitePromptPreset6',
+  'aiCitePromptPreset7',
+  'aiCitePromptPreset8',
+  'aiCitePromptPreset9',
+  'aiCitePromptPreset10',
   // Bindable ribbon actions with no default keys.
   'adjustFontSizeUp',
   'adjustFontSizeDown',
@@ -5235,6 +5258,17 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   setNavDepth3: 'Navigation Pane: Show Levels 1–3 (Blocks)',
   setNavDepth4: 'Navigation Pane: Show Levels 1–4 (Tags)',
   alphabetizeSelectedHeadings: 'Navigation Pane: Alphabetize Selected Headings',
+  aiCitePromptDefault: 'AI Cite Creator: Use Built-in Prompt',
+  aiCitePromptPreset1: 'AI Cite Creator: Use Prompt Preset 1',
+  aiCitePromptPreset2: 'AI Cite Creator: Use Prompt Preset 2',
+  aiCitePromptPreset3: 'AI Cite Creator: Use Prompt Preset 3',
+  aiCitePromptPreset4: 'AI Cite Creator: Use Prompt Preset 4',
+  aiCitePromptPreset5: 'AI Cite Creator: Use Prompt Preset 5',
+  aiCitePromptPreset6: 'AI Cite Creator: Use Prompt Preset 6',
+  aiCitePromptPreset7: 'AI Cite Creator: Use Prompt Preset 7',
+  aiCitePromptPreset8: 'AI Cite Creator: Use Prompt Preset 8',
+  aiCitePromptPreset9: 'AI Cite Creator: Use Prompt Preset 9',
+  aiCitePromptPreset10: 'AI Cite Creator: Use Prompt Preset 10',
   adjustFontSizeUp: 'Increase Font Size by 1pt',
   adjustFontSizeDown: 'Decrease Font Size by 1pt',
   applyFontColor: 'Apply Font Color',
@@ -5329,6 +5363,17 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
   setNavDepth3: ['nav depth', 'navigation depth', 'outline level', 'level 3', 'blocks'],
   setNavDepth4: ['nav depth', 'navigation depth', 'outline level', 'level 4', 'tags'],
   alphabetizeSelectedHeadings: ['alphabetize', 'sort headings', 'sort selected', 'sort cards', 'sort alphabetically', 'a to z'],
+  aiCitePromptDefault: ['cite prompt', 'cite preset', 'prompt preset', 'default prompt', 'built-in prompt'],
+  aiCitePromptPreset1: ['cite prompt', 'cite preset', 'prompt preset', 'preset 1'],
+  aiCitePromptPreset2: ['cite prompt', 'cite preset', 'prompt preset', 'preset 2'],
+  aiCitePromptPreset3: ['cite prompt', 'cite preset', 'prompt preset', 'preset 3'],
+  aiCitePromptPreset4: ['cite prompt', 'cite preset', 'prompt preset', 'preset 4'],
+  aiCitePromptPreset5: ['cite prompt', 'cite preset', 'prompt preset', 'preset 5'],
+  aiCitePromptPreset6: ['cite prompt', 'cite preset', 'prompt preset', 'preset 6'],
+  aiCitePromptPreset7: ['cite prompt', 'cite preset', 'prompt preset', 'preset 7'],
+  aiCitePromptPreset8: ['cite prompt', 'cite preset', 'prompt preset', 'preset 8'],
+  aiCitePromptPreset9: ['cite prompt', 'cite preset', 'prompt preset', 'preset 9'],
+  aiCitePromptPreset10: ['cite prompt', 'cite preset', 'prompt preset', 'preset 10'],
   convertCardsToReadMode: ['zap card', 'zap cards'],
   findUnformattedCites: ['detect cites', 'auto cite', 'format cites', 'missing cites', 'f8 cites', 'read mode cites', 'author year'],
   toggleReadMode: ['show read mode', 'hide read mode', 'invisibility mode'],
@@ -5727,6 +5772,17 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   setNavDepth3: '',
   setNavDepth4: '',
   alphabetizeSelectedHeadings: '',
+  aiCitePromptDefault: '',
+  aiCitePromptPreset1: '',
+  aiCitePromptPreset2: '',
+  aiCitePromptPreset3: '',
+  aiCitePromptPreset4: '',
+  aiCitePromptPreset5: '',
+  aiCitePromptPreset6: '',
+  aiCitePromptPreset7: '',
+  aiCitePromptPreset8: '',
+  aiCitePromptPreset9: '',
+  aiCitePromptPreset10: '',
   // Word's font-size keys: Ctrl+Shift+> / < (named by the unshifted key,
   // as Superscript's Mod-Shift-=; prosemirror-keymap matches the shifted
   // character through the key code) and Ctrl+] / Ctrl+[ (desktop only:
@@ -7092,6 +7148,39 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
         if (!dispatch) return true;
         return ctx.alphabetizeSelectedHeadings();
       };
+    // AI cite-creator prompt presets (ai/cite-prompt-presets.ts): switch
+    // the prompt in use. Pure settings work — no view, no context.
+    case 'aiCitePromptDefault':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        activateCitePromptPreset(-1);
+        showToast('Cite prompt: built-in default');
+        return true;
+      };
+    case 'aiCitePromptPreset1':
+    case 'aiCitePromptPreset2':
+    case 'aiCitePromptPreset3':
+    case 'aiCitePromptPreset4':
+    case 'aiCitePromptPreset5':
+    case 'aiCitePromptPreset6':
+    case 'aiCitePromptPreset7':
+    case 'aiCitePromptPreset8':
+    case 'aiCitePromptPreset9':
+    case 'aiCitePromptPreset10':
+    {
+      const n = Number(id.slice('aiCitePromptPreset'.length));
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        const preset = citePromptPresets()[n - 1];
+        if (!preset) {
+          showToast(`No cite-prompt preset ${n} — add one under Settings → Comments & AI.`);
+          return true;
+        }
+        activateCitePromptPreset(n - 1);
+        showToast(`Cite prompt: ${preset.name}`);
+        return true;
+      };
+    }
     // ─── No-default-binding commands (keybinding parity for
     //     ribbon-button / menu actions) ──────────────────────────
     case 'adjustFontSizeUp':
