@@ -135,6 +135,38 @@ describe('read mode edit lock (filterTransaction)', () => {
     expect(after.doc.textContent).toContain('Z');
   });
 
+  it('allows adding a comment (a comment_range mark and nothing else)', () => {
+    const s = readModeState('hello world', 5);
+    const comment = schema.marks['comment_range']!;
+    const tr = s.tr.addMark(s.selection.head - 3, s.selection.head + 3, comment.create({ threadId: 'c1' }));
+    const after = s.applyTransaction(tr).state;
+    let found = false;
+    after.doc.descendants((n: any) => { if (n.marks.some((m: any) => m.type.name === 'comment_range')) found = true; return true; });
+    expect(found).toBe(true);
+    expect(after.doc.textContent).toBe('TAGhello world');
+  });
+
+  it('allows deleting a comment (removing its comment_range mark)', () => {
+    const s0 = readModeState('hello world', 5);
+    const comment = schema.marks['comment_range']!;
+    const s = s0.applyTransaction(s0.tr.addMark(4, 9, comment.create({ threadId: 'c1' }))).state;
+    const after = s.applyTransaction(s.tr.removeMark(4, 9, comment)).state;
+    let found = false;
+    after.doc.descendants((n: any) => { if (n.marks.some((m: any) => m.type.name === 'comment_range')) found = true; return true; });
+    expect(found).toBe(false);
+  });
+
+  it('still blocks other mark edits (a highlight) and a comment bundled with a text edit', () => {
+    const s = readModeState('hello world', 5);
+    const hl = schema.marks['highlight']!.create({ color: 'yellow' });
+    const painted = s.applyTransaction(s.tr.addMark(4, 9, hl)).state;
+    expect(painted.doc.eq(s.doc)).toBe(true);
+    const comment = schema.marks['comment_range']!;
+    const mixed = s.tr.addMark(4, 9, comment.create({ threadId: 'c2' })).insertText('Z', s.selection.head);
+    const after = s.applyTransaction(mixed).state;
+    expect(after.doc.eq(s.doc)).toBe(true);
+  });
+
   it('allows selection-only changes (cursor stays usable)', () => {
     const s = readModeState('hello world', 5);
     const tr = s.tr.setSelection(TextSelection.create(s.doc, s.selection.head + 2));

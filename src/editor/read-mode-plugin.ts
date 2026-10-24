@@ -37,6 +37,8 @@ import { Plugin } from 'prosemirror-state';
 import type { Command } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import type { Node as PMNode } from 'prosemirror-model';
+import { AddMarkStep, RemoveMarkStep } from 'prosemirror-transform';
+import type { Transaction } from 'prosemirror-state';
 import { undo, redo, undoDepth, redoDepth } from 'prosemirror-history';
 import { changedRange, expandToTopLevel } from './decoration-range.js';
 import { isSyncOrigin } from './sync-origin.js';
@@ -182,6 +184,12 @@ export const readModePlugin: Plugin<ReadModeState> = new Plugin<ReadModeState>({
   // output (a normalizer only fires in response to a transaction this
   // filter already admitted; blocking the fix-up would strand the doc
   // half-normalized until read mode exits).
+  //
+  // Comments pass too: adding or deleting one only adds or removes a
+  // `comment_range` mark — the text you're reading is untouched, same as
+  // a private note or a flashcard, which never enter the document at all.
+  // Judged on the steps, not a meta flag, so nothing but comment marks
+  // can ride through on it.
   filterTransaction(tr, state) {
     if (!readModePlugin.getState(state)?.on) return true;
     if (!tr.docChanged) return true;
@@ -190,10 +198,22 @@ export const readModePlugin: Plugin<ReadModeState> = new Plugin<ReadModeState>({
       tr.getMeta(NORMALIZER_META) === true ||
       tr.getMeta(READING_MARKER_META) === true ||
       tr.getMeta(READ_MODE_UNDO_META) === true ||
-      tr.getMeta(READ_MODE_DRAG_META) === true
+      tr.getMeta(READ_MODE_DRAG_META) === true ||
+      isCommentMarkOnly(tr)
     );
   },
 });
+
+/** True when every step of `tr` adds or removes a `comment_range` mark and
+ *  nothing else — the shape of adding or deleting a comment. */
+export function isCommentMarkOnly(tr: Transaction): boolean {
+  if (tr.steps.length === 0) return false;
+  return tr.steps.every(
+    (step) =>
+      (step instanceof AddMarkStep || step instanceof RemoveMarkStep) &&
+      step.mark.type.name === 'comment_range',
+  );
+}
 
 /** Undo — but in read mode, only as far back as the markers dropped since
  *  read mode was entered (never earlier edits). Outside read mode, plain

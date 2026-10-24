@@ -1215,7 +1215,7 @@ entire cite* is on. Undo restores the cards.
 - It **locks the keyboard**, so a stray key or trackpad twitch at the
   podium can't edit your file.
 
-Only two editing actions are allowed in read mode. First, you can drop a
+Only a few editing actions are allowed in read mode. First, you can drop a
 **reading-position marker** — red text like "Marked 7:32" at your cursor
 (Verbatim's red-text convention), for when you stop mid-card. In read mode
 it's deliberately effortless: **Space, Enter, or Mod-Shift-D** all drop one;
@@ -1243,6 +1243,11 @@ do. Typing is simply ignored.
 Second, you can perform **click-and drag** actions - move headers around in
 the document, add received cards to your document, or grab cards from the
 Dropzone.
+
+Comments work in read mode as well — add one to a selection, reply,
+resolve, or delete — since a comment only anchors to the text and never
+changes it, just as private notes, AI questions and flashcards (which
+don't live in the document at all) have always worked while reading.
 
 Copying from a document in read mode copies what you see: the
 highlighted body, the cite text, and the headings — not the whole card
