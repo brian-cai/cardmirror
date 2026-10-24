@@ -30,6 +30,7 @@ import { collabEnabled } from '../collab/collab-gate.js';
 import { offerSharingSetup, sharingReady } from './sharing-setup.js';
 import { collabSettingsAvailable, collabSettingsButton, relaySwitchButton } from './collab-settings-button.js';
 import {
+  collabActiveInviteLink,
   collabActiveShareCode,
   collabInviter,
   collabSessionStarter,
@@ -85,6 +86,9 @@ const RECENT_ICON =
   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>';
 
 /** Two-people glyph for the per-contact "invite to collaborate" button. */
+/** Chain-link glyph for "Copy link" (the session's invite URL). */
+const COPY_LINK_ICON =
+  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
 const COLLAB_INVITE_ICON =
   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
 
@@ -137,6 +141,9 @@ export class SendPillController {
   /** The always-rendered bottom actions row (click buttons / drag zones). */
   private addContactEl: HTMLButtonElement | null = null;
   private startSessionEl: HTMLButtonElement | null = null;
+  /** "Copy link": the focused doc's session invite URL. Click-open only,
+   *  and only while that doc has a live session (no drag-mode role). */
+  private copyLinkEl: HTMLButtonElement | null = null;
   /** Drag-only recent-senders sub-list + its rows (subset of targets). */
   private recentSection: HTMLDivElement | null = null;
   private recentRows = new Set<HTMLElement>();
@@ -545,8 +552,22 @@ export class SendPillController {
       },
     );
     this.startSessionEl.classList.toggle('pmd-send-action-collab-hidden', !canInvite);
-    this.refreshSessionAction();
     actions.appendChild(this.startSessionEl);
+    // Copy link — the invite URL (share code + guest pass packed for a
+    // browser joiner). Shown only while the focused doc has a live
+    // session; `pmd-pill-settings` borrows the gear's "click-open only"
+    // CSS so a drag never sees it as a zone.
+    this.copyLinkEl = this.actionButton(COPY_LINK_ICON, 'Copy link', 'Copy this session’s invite link', () => {
+      const link = collabActiveInviteLink();
+      if (link === null) return;
+      void navigator.clipboard?.writeText(link).then(
+        () => showToast('Session link copied — paste it to a teammate'),
+        () => showToast('Could not copy the session link'),
+      );
+    });
+    this.copyLinkEl.classList.add('pmd-pill-settings');
+    this.refreshSessionAction();
+    actions.appendChild(this.copyLinkEl);
     // Click-open only (CSS hides it while the row is a drag's drop zones).
     if (collabSettingsAvailable()) {
       const relay = relaySwitchButton('pmd-send-action');
@@ -578,6 +599,7 @@ export class SendPillController {
     this.startSessionEl.title = live
       ? 'Copy the session code for a teammate to join'
       : 'Start a collaboration session on this document';
+    this.copyLinkEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveInviteLink() === null);
   }
 
   /** One action-row entry: icon + label. Click behavior is live only in

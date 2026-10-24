@@ -1625,7 +1625,11 @@ The pill's bottom row does more than send. **Clicking** the pill opens it
 with two buttons there: **Add contact** (paste a send code, name them,
 and they join the bottom of your recipients) and **Start session** (the
 same flow as the Start Collaboration Session command, for the current
-document). While **dragging**, the same two spots become drop zones:
+document). Once the document is in a session, that second button becomes
+**Copy code** and a third, **Copy link**, appears beside it: the code is
+for teammates joining from CardMirror, the link opens the session in a
+browser for someone without the app. While **dragging**, the first two
+spots become drop zones:
 the left sends the card to a pasted send code as a one-off (no contact
 saved), and hovering the right opens a list of people who **recently sent
 you** things — drop on one to send back, no pairing setup needed.

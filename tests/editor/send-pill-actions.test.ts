@@ -22,6 +22,7 @@ import { Slice, Fragment } from 'prosemirror-model';
 import { schema, newHeadingId } from '../../src/schema/index.js';
 import { settings } from '../../src/editor/settings.js';
 import {
+  setCollabInviteLinkGetter,
   setCollabSessionStarter,
   setCollabShareCodeGetter,
 } from '../../src/editor/collab/collab-hooks.js';
@@ -52,6 +53,7 @@ afterEach(() => {
   settings.set('pairingEnabled', false);
   setCollabSessionStarter(null);
   setCollabShareCodeGetter(null);
+  setCollabInviteLinkGetter(null);
   vi.restoreAllMocks();
 });
 
@@ -85,6 +87,33 @@ describe('send pill actions row + hidden recipients', () => {
     expect(actions[0]!.textContent).toContain('Add contact');
     // No collab starter registered (gate closed) → hidden by class.
     expect(actions[1]!.classList.contains('pmd-send-action-collab-hidden')).toBe(true);
+  });
+
+  it('Copy link appears only with a live session and copies the invite URL', () => {
+    vi.spyOn(collabGate, 'collabEnabled').mockReturnValue(true);
+    setCollabSessionStarter(vi.fn());
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+
+    // No session: hidden.
+    const { root } = mountPill();
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click();
+    const linkBtn = [...root.querySelectorAll('.pmd-send-action')].find((b) => b.textContent?.includes('Copy link')) as HTMLElement;
+    expect(linkBtn).toBeTruthy();
+    expect(linkBtn.classList.contains('pmd-send-action-collab-hidden')).toBe(true);
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click(); // collapse
+
+    // Live session: shown; click copies the LINK (not the bare code).
+    const LINK = 'https://cardmirror.app/#join=cmshare2.abc&pass=xyz';
+    setCollabShareCodeGetter(() => 'cmshare2.abc');
+    setCollabInviteLinkGetter(() => LINK);
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click();
+    expect(linkBtn.classList.contains('pmd-send-action-collab-hidden')).toBe(false);
+    linkBtn.click();
+    expect(writeText).toHaveBeenCalledWith(LINK);
+    // Sits between Copy code and the gear.
+    const labels = [...root.querySelectorAll('.pmd-send-action')].map((b) => b.textContent);
+    expect(labels.indexOf('Copy link')).toBe(labels.indexOf('Copy code') + 1);
   });
 
   it('session action toggles: Copy code with a live session, Start session without', () => {
