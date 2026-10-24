@@ -2636,6 +2636,14 @@ headers shown inside each tab.
   the outline by hand to look somewhere else — leaves it where you put
   it. Only the outline's scroll position moves; your cursor and the
   document stay put.
+- **Navigation pane follows scrolling** — off by default. Once you
+  scroll the document far enough that the cursor is out of sight, the
+  outline's highlight moves to the section at the top of the window, so
+  the pane shows where you are *looking* rather than where you last
+  typed. While the cursor is on screen its own section keeps the
+  highlight, so typing or arrowing that scrolls the page doesn't steal
+  it. This only moves the highlight; whether the outline scrolls to
+  show the lit row is still **Navigation pane follows the cursor**.
 - **Multi-doc layout** — with three docs open, show all three at once
   (compact) or two-and-a-bit with click-to-snap (wide). No effect with
   one or two docs.

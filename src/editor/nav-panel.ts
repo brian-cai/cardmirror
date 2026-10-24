@@ -1955,7 +1955,9 @@ export class NavigationPanel {
         if (!hit) return;
         this.setCaretHeading(hit.pos);
       }
-      this.scrollCaretRowIntoView('nearest');
+      // Pane scrolling stays `navFollowCursor`'s call: `setCaretHeading`
+      // already brings the lit row into view when that is on, and a user
+      // who turned it off asked the pane to hold still.
     };
     const onScroll = (e: Event): void => {
       const t = e.target;
