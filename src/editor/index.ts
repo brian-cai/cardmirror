@@ -6116,6 +6116,9 @@ export function buildEditorPlugins(targetUid?: string | null): Plugin[] {
     // reproduces cursor-join shapes). A logged no-op is the honest
     // outcome — the edit had no legal result.
     keymap(Object.fromEntries(Object.entries(baseKeymap).map(([k, c]) => [k, neverThrow(c)]))),
+    // After the keymaps on purpose: read mode's `handleKeyDown` swallows
+    // bare keys nobody claimed, so a ribbon/macro binding on a bare key
+    // (Send to Speech's backtick) keeps working while reading.
     readModePlugin,
     markUnreadPlugin,
     commentsPlugin,

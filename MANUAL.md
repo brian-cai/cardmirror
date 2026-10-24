@@ -1232,6 +1232,11 @@ deleted stops counting the next time the file opens.
 You can also drop a marker while editing — **Mod-Shift-D** works any time
 (Space and Enter only stand in for it inside read mode).
 
+Keyboard shortcuts for commands that don't change the document you're
+reading keep working in read mode — Send to Speech (the backtick by
+default), copy, navigation, the timer — exactly as their ribbon buttons
+do. Typing is simply ignored.
+
 Second, you can perform **click-and drag** actions - move headers around in
 the document, add received cards to your document, or grab cards from the
 Dropzone.
