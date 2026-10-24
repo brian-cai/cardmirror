@@ -121,6 +121,7 @@ export const RIBBON_GROUPS: RibbonGroup[] = [
       'regrow',
       'copyPreviousCite',
       'findUnformattedCites',
+      'extractCard',
       'convertCardsToReadMode',
       'createReference',
       'extractUndertag',
