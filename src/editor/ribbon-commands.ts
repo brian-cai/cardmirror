@@ -1807,6 +1807,12 @@ function gapFixRanges(state: EditorState): { from: number; to: number }[] {
  *  actually painted, when that is less than its operating ranges. */
 const META_PAINTED_RANGES = 'pmd-painted-ranges';
 
+/** Textblocks "Highlight underlined text only" leaves alone — painted
+ *  whole, whatever their marks: structural headings, tags, cites and
+ *  analytics. Body paragraphs (card_body, loose paragraphs, undertags,
+ *  table cells) are the ones the filter is for. */
+const UNDERLINE_FILTER_EXEMPT = new Set(['pocket', 'hat', 'block', 'tag', 'cite_paragraph', 'analytic']);
+
 /** The marks that count as "underlined" for "Highlight underlined text
  *  only": the body underline style, its structural-block twin, and
  *  emphasis (underline + bold). Cite is bold-only, so it doesn't count. */
@@ -1829,6 +1835,11 @@ const UNDERLINED_MARKS = new Set(['underline_mark', 'underline_direct', 'emphasi
  * how the setting composes with "Bridge formatting across gaps". Returns
  * the kept pieces clipped to the input ranges, merged where contiguous; an
  * empty list when nothing in the selection qualifies.
+ *
+ * Only BODY text is filtered. Headings (pocket / hat / block / tag), cites
+ * and analytics are painted whole — their text is read in full, so there's
+ * no "underlined part" to single out, and a highlight there is a deliberate
+ * emphasis, not a reading pass (see `UNDERLINE_FILTER_EXEMPT`).
  */
 export function restrictToUnderlinedText(
   doc: PMNode,
@@ -1845,6 +1856,13 @@ export function restrictToUnderlinedText(
       if (!node.isTextblock) return !node.isLeaf;
       const base = pos + 1;
       const size = node.content.size;
+      if (UNDERLINE_FILTER_EXEMPT.has(node.type.name)) {
+        // Whole textblock (clipped to the range), underlined or not.
+        const lo = Math.max(from, base);
+        const hi = Math.min(to, base + size);
+        if (hi > lo) push(lo, hi);
+        return false;
+      }
       // Per-position character and style maps for the textblock; inline
       // leaves read as whitespace so they end a word.
       const ch = new Array<string>(size).fill(' ');

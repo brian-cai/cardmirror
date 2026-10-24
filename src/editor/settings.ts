@@ -4355,7 +4355,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'highlightUnderlinedOnly',
     label: 'Highlight underlined text only',
     description:
-      'When on, Toggle Highlight and Toggle Background Color (F11 / \u2318/Ctrl+F11, the paintbrush, and the color pickers) only paint text that is underlined or emphasized, so painting over a mix of underlined and plain text highlights just the underlined parts. In a word that mixes emphasis and plain underline, only the emphasized part is painted. Toggling off and "No highlight" still clear the whole selection. Composes with the automatic gap bridging above.',
+      'When on, Toggle Highlight and Toggle Background Color (F11 / \u2318/Ctrl+F11, the paintbrush, and the color pickers) only paint body text that is underlined or emphasized, so painting over a mix of underlined and plain text highlights just the underlined parts. In a word that mixes emphasis and plain underline, only the emphasized part is painted. Tags, cites, analytics and the pocket / hat / block headings are always painted whole. Toggling off and "No highlight" still clear the whole selection. Composes with the automatic gap bridging above.',
     kind: 'toggle',
     category: 'editing',
     section: 'Highlighting',

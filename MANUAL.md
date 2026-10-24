@@ -665,8 +665,11 @@ is underlined or emphasized, so you can sweep across a whole paragraph
 and have just the underlined parts light up. In a word that mixes
 emphasis and plain underline, only the emphasized part is painted. The
 spaces between two painted words fill in when "Bridge formatting across
-gaps automatically" is on. Toggling a highlight off and the "no color"
-pen still clear the whole selection.
+gaps automatically" is on. Only card body text is filtered this way:
+tags, cites, analytics, and the pocket / hat / block headings always
+paint whole, since a highlight there is deliberate emphasis rather than
+a reading pass. Toggling a highlight off and the "no color" pen still
+clear the whole selection.
 
 **Paintbrush mode** (the way Word's highlighter works): click a main
 color button with *nothing* selected to arm it. The cursor changes, and
@@ -3089,10 +3092,12 @@ Typing helpers and the behavior of the cutting and condense commands
 
 - **Highlight underlined text only** — when on, highlight and background
   color paints (F11, Mod-F11, the paintbrush, and the color pickers) only
-  land on text that is underlined or emphasized; in a word that mixes
-  emphasis and plain underline, only the emphasized part is painted.
-  Toggling off and the "no color" pen still clear the whole selection.
-  Composes with the automatic gap bridging. Off by default.
+  land on body text that is underlined or emphasized; in a word that
+  mixes emphasis and plain underline, only the emphasized part is
+  painted. Tags, cites, analytics and the pocket / hat / block headings
+  always paint whole. Toggling off and the "no color" pen still clear
+  the whole selection. Composes with the automatic gap bridging. Off by
+  default.
 
 **Standardize exceptions**
 
