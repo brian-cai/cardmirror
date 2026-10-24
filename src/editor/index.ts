@@ -27,6 +27,7 @@ import type { Thread, Comment } from './comments-plugin.js';
 import type { LocalComment } from './learn-store.js';
 import { NavigationPanel, showNavContextMenu } from './nav-panel.js';
 import { initUpdateChip } from './update-chip.js';
+import { initUpdateNudge } from './update-nudge.js';
 import { mountTimerUI } from './timer-ui.js';
 import { initTimerAudio } from './timer-audio.js';
 import {
@@ -1015,6 +1016,12 @@ function updatePlainPasteIndicator(armed: boolean): void {
       chipHost,
       canCheckForUpdates() ? { idleCheck: () => checkForUpdatesNow({ quiet: true }) } : undefined,
     );
+    // Once a week (Wednesday), a pending update also gets a dialog.
+    if (canCheckForUpdates()) initUpdateNudge(chipHost, {
+      paused: () => settings.get('updateChecksPausedUntil') > Date.now(),
+      sessionLive: () => collabLiveSessionCount() > 0,
+      confirm: confirmDialog,
+    });
   }
 }
 

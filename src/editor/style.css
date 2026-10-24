@@ -2297,6 +2297,40 @@ body:not(.pmd-multi-doc) #app {
 .pmd-home-update[hidden] {
   display: none;
 }
+/* A pending update (xtgg): a solid accent pill with an arrow that pulses,
+   so it reads as something to do rather than a status label. */
+#update-chip[data-state="ready"],
+#update-chip[data-state="available"],
+.pmd-home-update[data-state="ready"],
+.pmd-home-update[data-state="available"] {
+  color: #fff;
+  background: var(--pmd-c-accent);
+  font-weight: 600;
+  animation: pmd-update-pulse 2s ease-in-out infinite;
+}
+#update-chip[data-state="ready"]::before,
+#update-chip[data-state="available"]::before,
+.pmd-home-update[data-state="ready"]::before,
+.pmd-home-update[data-state="available"]::before {
+  content: '\2191\00a0';
+}
+#update-chip[data-state="ready"]:hover,
+#update-chip[data-state="available"]:hover,
+.pmd-home-update[data-state="ready"]:hover,
+.pmd-home-update[data-state="available"]:hover {
+  filter: brightness(1.12);
+  animation: none;
+}
+@keyframes pmd-update-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pmd-c-accent) 55%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--pmd-c-accent) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #update-chip,
+  .pmd-home-update {
+    animation: none !important;
+  }
+}
 /* Idle status-bar chip: a quiet "Check for updates" text control, not the
    accent pill an available / ready update gets. */
 /* Idle status-bar chip: a quieter outlined button than the accent pill an
