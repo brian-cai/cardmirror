@@ -1150,6 +1150,11 @@ export interface Settings {
    *  follows it. Off by default. Never counted toward word counts /
    *  read time: the counter excludes shaded text by design. */
   readModeShowBackground: boolean;
+  /** When true (default), copying from a view in read mode copies what
+   *  read mode shows — highlighted body, cite text, headings — not the
+   *  whole card underneath (read-mode-copy.ts; same rules as Convert
+   *  Cards to Read Mode). Off, a read-mode copy is a normal copy. */
+  readModeCopyVisible: boolean;
   /** Word-style Repeat: when true, Mod-Y with nothing left to redo
    *  re-runs the last editing action at the current selection (the
    *  last burst of typing, a formatting command, Backspace/Delete, a
@@ -2151,6 +2156,7 @@ const DEFAULTS: Settings = {
   readModeKeepEntireCite: false,
   readModeShowUndertags: false,
   readModeShowBackground: false,
+  readModeCopyVisible: true,
   repeatWithModY: false,
   markUnreadAfterMarker: false,
   defaultZoomPct: 100,
@@ -2837,6 +2843,16 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     category: 'general',
     section: 'Editor behavior',
     aliases: ['background read mode', 'shading read mode', 'show background', 'show shading', 'read mode background', 'rehighlight read mode'],
+  },
+  {
+    key: 'readModeCopyVisible',
+    label: 'Read mode: copy only what is shown',
+    description:
+      'When on, copying from a document in read mode copies the text read mode shows — highlighted body, cite text, headings — instead of the whole card underneath. Follows the other read-mode settings (keep entire cite, show undertags, show background color). Off, a copy in read mode is a normal copy. On by default.',
+    kind: 'toggle',
+    category: 'general',
+    section: 'Editor behavior',
+    aliases: ['read mode copy', 'copy visible', 'copy highlighted only', 'copy read mode', 'clipboard read mode'],
   },
   {
     key: 'repeatWithModY',
@@ -5612,6 +5628,7 @@ function sanitize(s: Settings): Settings {
     readModeKeepEntireCite: !!s.readModeKeepEntireCite,
     readModeShowUndertags: !!s.readModeShowUndertags,
     readModeShowBackground: !!s.readModeShowBackground,
+    readModeCopyVisible: s.readModeCopyVisible !== false,
     repeatWithModY: !!s.repeatWithModY,
     markUnreadAfterMarker: !!s.markUnreadAfterMarker,
     // A legacy persisted `zoomPct` is deliberately ignored — live body

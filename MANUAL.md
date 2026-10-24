@@ -1236,6 +1236,13 @@ Second, you can perform **click-and drag** actions - move headers around in
 the document, add received cards to your document, or grab cards from the
 Dropzone.
 
+Copying from a document in read mode copies what you see: the
+highlighted body, the cite text, and the headings — not the whole card
+underneath. It follows the other read-mode settings (keep entire cite,
+show undertags, show background color), so the clipboard matches the
+screen. If you'd rather a copy in read mode take the full card, turn off
+**Read mode: copy only what is shown** (Settings → General).
+
 Press the eye again to exit. In the
 [multi-doc workspace](#7-the-multi-doc-workspace), read mode is
 per-pane, so one slot can be a reading surface while another stays

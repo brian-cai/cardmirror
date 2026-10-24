@@ -295,6 +295,7 @@ import { customDashPlugin } from './custom-dash-plugin.js';
 import { autoCapitalizePlugin } from './auto-capitalize-plugin.js';
 import { customAutocorrectPlugin } from './custom-autocorrect-plugin.js';
 import { footnotePopoverPlugin } from './footnote-popover.js';
+import { readModeCopyPlugin } from './read-mode-copy.js';
 import { wordSelectionKeymap } from './word-selection-keymap.js';
 import { morphModePlugin, toggleMorphMode } from './morph-mode.js';
 import { highlightFrequencyPlugin } from './highlight-frequency-plugin.js';
@@ -6258,6 +6259,10 @@ export function buildEditorPlugins(targetUid?: string | null): Plugin[] {
   // firing) takes precedence; the link lands on the next chance.
   plugins.push(autolinkPlugin());
   plugins.push(footnotePopoverPlugin());
+  // A copy from a read-mode view carries only what read mode shows
+  // (`readModeCopyVisible`, default on). Runs after the live-view
+  // flattening transformCopied above; PM runs every such hook.
+  plugins.push(readModeCopyPlugin());
   // Editor spellcheck — viewport-scoped custom checker, gated internally
   // on the `editorSpellcheck` setting (does nothing when off).
   plugins.push(viewportSpellcheckPlugin());
