@@ -29,6 +29,7 @@ import {
 } from './self-transclusion-commands.js';
 import { registerOpenContextMenu, clearOpenContextMenu } from './context-menu-registry.js';
 import { dragController, type DragItem, type DragSurface } from './drag-controller.js';
+import { alphabetizeSlots, type SectionSlot } from './alphabetize-headings.js';
 import { isTransclusionNode, zoneIdentity } from './transclusion.js';
 import { isSelfRef, resolveSelfProjection, typesHoldingSelfRef } from './self-transclusion.js';
 import { transclusionDivergenceKey } from './transclusion-divergence-plugin.js';
@@ -2871,6 +2872,18 @@ export class NavigationPanel {
         label: `Delete ${what} and contents`,
         action: () => this.deleteHeadingAndContents(entry),
       },
+      // Only meaningful for a multi-selection: sorts the selected sections
+      // into the slots they occupy (see `alphabetizeSelection`).
+      ...(n > 1
+        ? ([
+            { kind: 'separator' },
+            {
+              kind: 'item',
+              label: `Alphabetize ${what}`,
+              action: () => void this.alphabetizeSelection(),
+            },
+          ] as ContextMenuItem[])
+        : []),
       // Creators — deliberately NOT multi-select aware: a live view or
       // linked copy mirrors ONE section, so these always act on the
       // clicked row alone, whatever the selection is.
@@ -3059,6 +3072,29 @@ export class NavigationPanel {
   /** Delete the heading subtree(s) — all targets in ONE transaction
    *  (one undo step), applied back-to-front so earlier positions never
    *  need remapping. Undo via Cmd+Z. */
+  /**
+   * Alphabetize the multi-selected headings: their sections are sorted by
+   * heading text and written back into the slots the selection occupies
+   * (alphabetize-headings.ts) — unselected headings never move, and a
+   * discontinuous selection stays discontinuous. Needs two or more real
+   * (non-windowed) selected headings; the selection survives, now in its
+   * new order. Returns whether anything changed.
+   */
+  alphabetizeSelection(): boolean {
+    if (!this.view || this.selectedIds.size < 2) return false;
+    const doc = this.view.state.doc;
+    const slots: SectionSlot[] = [];
+    for (const e of collectHeadings(doc)) {
+      if (e.id == null || e.windowed || !this.selectedIds.has(e.id)) continue;
+      const range = computeHeadingRange(doc, e);
+      if (range) slots.push({ from: range.from, to: range.to, text: e.text });
+    }
+    const tr = this.view.state.tr;
+    if (!alphabetizeSlots(tr, slots)) return false;
+    this.view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+
   private deleteHeadingAndContents(entry: HeadingEntry): void {
     if (!this.view) return;
     const ranges = this.headingRanges(this.contextTargets(entry));

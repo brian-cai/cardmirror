@@ -2423,6 +2423,7 @@ const ribbonContext: RibbonContext = {
     activeNavPanelResolver()?.setSearchMode(true);
   },
   setNavDepth: (level) => activeNavPanelResolver()?.setMaxLevel(level),
+  alphabetizeSelectedHeadings: () => activeNavPanelResolver()?.alphabetizeSelection() ?? false,
   // ─── No-default-binding hooks ────────────────────────────────
   // Each routes through the same button's existing click handler
   // (via `.click()`) — the keybinding then follows the exact same

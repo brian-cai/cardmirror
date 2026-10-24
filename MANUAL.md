@@ -369,6 +369,17 @@ outline and hit restart to flip them all to "continue", so arguments
 separated by blocks number consecutively straight through (press again to
 restore the per-block restarts). 
 
+A multi-selection can also be **alphabetized**: right-click one of the
+selected headings and choose **Alphabetize N headings** (or bind
+*Navigation Pane: Alphabetize Selected Headings* to a key). Each
+selected heading moves with its whole section — a block with its cards,
+a card with its body — sorted by heading text (case-insensitive, with
+"Card 2" before "Card 10"), and the sorted sections land in the slots
+the selection occupied: headings you didn't select stay exactly where
+they were, so a scattered selection sorts in place rather than bunching
+together. Slots are positional, so a selection spanning two blocks can
+carry a card from one block into the other. One undo step.
+
 While numbering is on, a block whose count **continues** from the block
 above shows a small grey **↓** at the right edge of its heading. No glyph
 means the default: the count restarts at that block. 
