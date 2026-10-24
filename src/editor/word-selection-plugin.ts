@@ -34,8 +34,8 @@
  * ladder: a click adds the word, a double-click the word, a
  * triple-click the whole paragraph; a drag adds the dragged range,
  * snapped to whole words after a double-click and to whole
- * paragraphs after a triple-click (`discontinuousRangeFor`). 
- * Ctrl/Cmd click on a word that is already selected removes the 
+ * paragraphs after a triple-click (`discontinuousRangeFor`).
+ * Ctrl/Cmd click on a word that is already selected removes the
  * range that word is in (`selectedRangeIndexForUnit`).
  *
  * The plugin tracks a module-level `currentAnchor` across

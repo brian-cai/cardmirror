@@ -865,6 +865,9 @@ Mouse selection mirrors Word too:
   Ctrl/Cmd-click adds a word, Ctrl/Cmd-triple-click adds a whole
   paragraph, and Ctrl/Cmd-drag adds exactly what you drag over (snapped to
   whole words after a double-click, whole paragraphs after a triple-click).
+  Ctrl/Cmd-click a word that is already selected to drop the stretch it
+  belongs to — handy for fixing a mis-click without starting over.
+  Dropping the last stretch leaves the cursor where you clicked.
 
 ### Files in Dropbox and other shared folders
 
