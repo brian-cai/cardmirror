@@ -1227,7 +1227,13 @@ button {
    full scrollable extent regardless of where inner content's box
    ends. */
 :root[data-theme="dark"]:not([data-theme-doc="dark"]) body:not(.pmd-multi-doc) #app,
-:root[data-theme="dark"]:not([data-theme-doc="dark"]) .pmd-pane-body {
+:root[data-theme="dark"]:not([data-theme-doc="dark"]) .pmd-pane-body,
+/* …and the document previews (Receive / shelf card preview, Recover,
+   version history), whose scroller is `.pmd-recover-preview-scroll`
+   around a content-sized `.pmd-pane-editor` host: without this the
+   editor's paper stops where the cards end and the rest of the pane
+   shows the dark chrome. */
+:root[data-theme="dark"]:not([data-theme-doc="dark"]) .pmd-recover-preview-scroll {
   background: var(--pmd-c-doc-paper);
 }
 
