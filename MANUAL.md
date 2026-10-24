@@ -597,14 +597,13 @@ the markers stay full size. Press **Mod-8** again to keep cycling smaller.
   as above.
 - **Copy Previous Cite (Alt-F8)** pulls the cite from the previous card
   into the current one — handy when cutting a long article.
-- **Extract Card** (unbound; run it from Search Everything or give it a
-  key) copies the selected body text into a new card directly below the
-  one you're in, under a copy of that card's tag and cite — for the
-  passage you spot mid-read that deserves a card of its own. The source
-  card and your selection stay exactly as they were and nothing scrolls;
-  a toast confirms. Works in analytic units too. The selection has to be
-  body text inside one card; with no selection, or in read mode, it does
-  nothing.
+- **Extract Card (Alt-Shift-F8)** copies the selected body text into a
+  new card directly below the one you're in, under a copy of that card's
+  tag and cite — for the passage you spot mid-read that deserves a card
+  of its own. The source card and your selection stay exactly as they
+  were and nothing scrolls; a toast confirms. Works in analytic units
+  too. The selection has to be body text inside one card; with no
+  selection, or in read mode, it does nothing.
 - **Copy All Cards With Matching Cite** (unbound; run it from Search
   Everything or give it a key) copies every card in the document that
   shares the cite at the cursor — in document order, numbering removed —

@@ -154,10 +154,10 @@ describe('extractCard command', () => {
     expect(dispatched).toBe(1);
   });
 
-  it('is registered, labeled and unbound', () => {
+  it('is registered, labeled and bound to Alt-Shift-F8', () => {
     expect(RIBBON_COMMAND_IDS).toContain('extractCard');
     expect(RIBBON_COMMAND_LABELS['extractCard']).toBe('Extract Card');
-    expect(DEFAULT_RIBBON_KEYS['extractCard']).toBe('');
+    expect(DEFAULT_RIBBON_KEYS['extractCard']).toBe('Alt-Shift-F8');
     const d = doc(source());
     const from = posOf(d, 'Second');
     expect(getRibbonCommand('extractCard')(stateWith(d, from, from + 6), () => {})).toBe(true);
