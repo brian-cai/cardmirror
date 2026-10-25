@@ -15540,6 +15540,9 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
 }
 .pmd-send-actions:not(.pmd-send-actions-live) .pmd-send-actions-grid {
   display: flex;
+  /* Same zero basis as the Add contact button beside it, so the two split
+     the row evenly instead of the grid taking its content width first. */
+  flex: 1 1 0;
 }
 .pmd-send-actions-grid > .pmd-send-action {
   min-width: 0;
