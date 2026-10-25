@@ -1265,7 +1265,7 @@ The status bar shows live read-time estimates — how long the visible
 **Settings → General → "Readers for read-time estimates"**: each reader
 is a name plus a words-per-minute rate, and you can list as many as you
 like. Not sure of your rate? The **Measure your wpm ↗** link under the
-readers (and in the Word Count dialog) opens
+readers opens
 [extinction.gg/wpm](https://extinction.gg/wpm): read a passage aloud and
 it gives you the number. Each reader can also carry an optional **second rate for tags,
 analytics, and cites** — most people deliver those faster than

@@ -1,8 +1,7 @@
 /**
  * Link to Extinction.GG's speaking-speed check (xtgg): read a passage aloud
  * and get your words per minute, the number the reader rows ask for. Shown
- * under the readers editor (desktop and mobile Settings) and in the Word
- * Count dialog.
+ * under the readers editor in Settings (desktop and mobile).
  */
 import { getElectronHost } from './host/index.js';
 
