@@ -423,6 +423,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('host:external-open', listener);
   },
 
+  /** Main forwards a validated relay setup link (xtgg-relay://join) for
+   *  the renderer to confirm. Subscribing also tells main this window is
+   *  ready, so a link queued at launch is delivered now. */
+  onRelayJoin(handler: (payload: { relayUrl: string; token: string }) => void): () => void {
+    const listener = (_evt: unknown, payload: { relayUrl: string; token: string }): void =>
+      handler(payload);
+    ipcRenderer.on('host:relay-join', listener);
+    ipcRenderer.send('host:relay-join-ready');
+    return () => ipcRenderer.removeListener('host:relay-join', listener);
+  },
+
   /** Spawn a new BrowserWindow, optionally pre-loaded with a doc. */
   spawnWindow: (payload: {
     filename: string;

@@ -5,6 +5,19 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## Unreleased
+
+### Added
+
+- **One-click relay setup links** (desktop). Opening an
+  `xtgg-relay://join` link — for example from a setup page your coach
+  sends — brings up CardMirror and asks "Connect CardMirror to this
+  relay?", showing the relay address and the start of the token. Click
+  Connect and collaboration is turned on with that custom relay URL and
+  token filled in under Settings → Collaboration, no restart needed. If
+  you already use a different custom relay, the dialog says it will be
+  replaced. Links that aren't a well-formed https relay are ignored.
+
 ## 1.15.0 — 2026-10-07
 
 ### Added

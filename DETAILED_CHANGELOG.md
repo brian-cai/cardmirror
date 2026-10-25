@@ -5,6 +5,42 @@ behavior, rationale, and (where useful) the implementation context
 behind a change. For a shorter, jargon-free summary of what's new
 in each release, see `CHANGELOG.md`.
 
+## Unreleased
+
+### Added: One-click relay setup links
+
+New URL scheme `xtgg-relay://join?url=<relay>&token=<token>`, desktop
+only. Registered by the installers (`build.protocols` in
+apps/desktop/package.json: Info.plist `CFBundleURLTypes`, the NSIS
+registry entry, the Linux `.desktop` MimeType) and again at runtime with
+`app.setAsDefaultProtocolClient` (Linux and dev runs; Lite skips it).
+Delivery: macOS `open-url`, registered at module load so a cold launch's
+link (fired before whenReady) is caught; Windows / Linux argv at launch
+and in `second-instance`. `pickFileFromArgv` skips scheme links so a
+token can never be opened as a file.
+
+`parseRelayJoinLink` (apps/desktop/src/relay-join-link.ts, pure) is
+strict: scheme `xtgg-relay:`, host `join`, no path / credentials / port,
+exactly one `url` and one `token`; `url` must be https with a host, no
+credentials, query or fragment (it is a base URL the clients append
+routes to), at most 2048 chars, stored as origin + path with trailing
+slashes trimmed; `token` 1–512 printable ASCII, no whitespace. Anything
+else is dropped with a `[relay-join] ignored link:` log line.
+
+A valid link queues in main (`pendingRelayJoin`, latest wins) until a
+renderer reports ready: the preload's `onRelayJoin` subscription sends
+`host:relay-join-ready`, and main forwards `host:relay-join` to the
+focused ready window (else any). With no window open (macOS) one is
+created. The renderer (src/editor/pairing/relay-join.ts) shows
+`showConfirm` with the relay URL, the token masked to its first 8
+characters, a replace note when a different custom URL or token is set,
+and a note when collaboration is off; an identical, enabled config just
+toasts. On Connect it sets `pairingRelayUrl`, `pairingRelayToken`, then
+`pairingEnabled` — the same keys as the Settings → Collaboration rows.
+pairing-wiring's settings subscriber pushes the new relay to main and
+the rooms client resolves URL + token per request, so it takes effect
+without a restart.
+
 ## 1.15.0 — 2026-10-07
 
 ### Added: Highlight underlined text only
