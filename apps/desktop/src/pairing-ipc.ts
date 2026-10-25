@@ -951,6 +951,11 @@ export function registerPairingIpc(): void {
         prev.relayToken !== config.relayToken;
       configured = true;
       if (deliveryChanged) applyDelivery();
+      // The relay records the install name from the mailbox requests, and a
+      // live stream makes none until it reconnects (hours, often): a name set
+      // mid-session would stay unknown to the relay until then. One catch-up
+      // poll carries it now.
+      else if (JSON.stringify(prev.relayExtHeaders) !== JSON.stringify(config.relayExtHeaders)) void pollOnce();
       return { ownCode };
     },
   );
