@@ -80,6 +80,7 @@ import {
 import { buildKeybindingsEditor } from './keybindings-editor.js';
 import { TRANSLATION_LANGUAGES } from './translate.js';
 import { getHost, getElectronHost, isWindowsHost } from './host/index.js';
+import { buildWpmTestLink } from './wpm-link.js';
 import { pushOverlay, popOverlay } from './overlay-stack.js';
 import {
   installModalKeys,
@@ -3540,6 +3541,7 @@ function buildReadersEditor(): HTMLElement {
   addBtn.className = 'pmd-readers-add';
   addBtn.textContent = '+ Add reader';
   wrap.appendChild(addBtn);
+  wrap.appendChild(buildWpmTestLink());
 
   function commit(readers: ReaderConfig[]): void {
     settings.set('readers', readers);

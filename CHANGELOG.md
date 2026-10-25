@@ -5,6 +5,18 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.44 — 2026-10-25
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Word counts
+
+- **Measure your speed.** Settings → "Readers for read-time
+  estimates" and the Word Count dialog now link to
+  extinction.gg/wpm: read a passage aloud and it tells you your
+  words per minute, the number each reader row asks for.
+
 ## 1.15.43 — 2026-10-25
 
 BCai's (@brian-cai) build of CardMirror, updating from

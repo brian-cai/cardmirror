@@ -16,6 +16,7 @@
  */
 
 import { confirmDialog } from './text-prompt.js';
+import { buildWpmTestLink } from './wpm-link.js';
 import {
   settings,
   SETTING_METADATA,
@@ -464,6 +465,7 @@ function buildReadersEditor(): HTMLElement {
       render();
     });
     wrap.appendChild(add);
+    wrap.appendChild(buildWpmTestLink());
   };
   render();
   return wrap;

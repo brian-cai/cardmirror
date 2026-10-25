@@ -1264,7 +1264,10 @@ The status bar shows live read-time estimates — how long the visible
 (read-aloud) content would take to deliver. Configure your readers in
 **Settings → General → "Readers for read-time estimates"**: each reader
 is a name plus a words-per-minute rate, and you can list as many as you
-like. Each reader can also carry an optional **second rate for tags,
+like. Not sure of your rate? The **Measure your wpm ↗** link under the
+readers (and in the Word Count dialog) opens
+[extinction.gg/wpm](https://extinction.gg/wpm): read a passage aloud and
+it gives you the number. Each reader can also carry an optional **second rate for tags,
 analytics, and cites** — most people deliver those faster than
 highlighted card bodies. Leave it blank ("same") and the main rate
 covers everything; set it, and every readout splits the math (the Word

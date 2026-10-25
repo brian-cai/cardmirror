@@ -17,6 +17,7 @@ import {
   captureFocusForDialog,
 } from './text-prompt.js';
 import { isBackdropClick } from './backdrop-click.js';
+import { buildWpmTestLink } from './wpm-link.js';
 
 class WordCountModal {
   private overlay: HTMLDivElement;
@@ -119,6 +120,7 @@ class WordCountModal {
       empty.className = 'pmd-settings-empty';
       empty.textContent = 'No readers configured. Add some in Settings.';
       body.appendChild(empty);
+      body.appendChild(buildWpmTestLink());
       return;
     }
 
@@ -153,6 +155,7 @@ class WordCountModal {
     }
     table.appendChild(tbody);
     body.appendChild(table);
+    body.appendChild(buildWpmTestLink());
   }
 }
 

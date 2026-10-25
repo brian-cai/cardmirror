@@ -7355,6 +7355,20 @@ html.pmd-nav-flat .pmd-nav-type-analytic:hover .pmd-nav-label {
   background: var(--pmd-c-hover);
 }
 
+/* "Measure your wpm" link under the readers (xtgg). */
+.pmd-wpm-test {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--pmd-c-text-muted);
+}
+.pmd-wpm-test a {
+  color: var(--pmd-c-accent);
+  text-decoration: none;
+}
+.pmd-wpm-test a:hover {
+  text-decoration: underline;
+}
+
 /* Word Count modal */
 .pmd-wc-scope {
   margin: 0 0 0.75rem 0;
