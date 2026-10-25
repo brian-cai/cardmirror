@@ -154,8 +154,11 @@ export class SendPillController {
   private viewCodeEl: HTMLButtonElement | null = null;
   private viewLinkEl: HTMLButtonElement | null = null;
   /** The whole bottom area; `pmd-send-actions-live` while the 2×2 copy
-   *  grid is showing (the side column stacks only then). */
+   *  grid is showing — only then does Add contact move into the side
+   *  column (icon-only, under the gear). Otherwise the row is the
+   *  original three: Add contact · Start session · gear. */
   private actionsEl: HTMLElement | null = null;
+  private sideEl: HTMLElement | null = null;
   /** Drag-only recent-senders sub-list + its rows (subset of targets). */
   private recentSection: HTMLDivElement | null = null;
   private recentRows = new Set<HTMLElement>();
@@ -539,6 +542,7 @@ export class SendPillController {
     grid.className = 'pmd-send-actions-grid';
     const side = document.createElement('div');
     side.className = 'pmd-send-actions-side';
+    this.sideEl = side;
     const copyTo = (text: string | null, okMsg: string, failMsg: string): void => {
       if (text === null) return;
       void navigator.clipboard?.writeText(text).then(
@@ -641,11 +645,19 @@ export class SendPillController {
     this.copyLinkEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveInviteLink() === null);
     this.viewCodeEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveViewCode() === null);
     this.viewLinkEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveViewLink() === null);
-    // No session: one row — Start session, then the gear and Add contact
-    // beside it. Stacking the side column only makes sense against the
-    // two-row copy grid (field find 2026-10-24: Start session stretched to
-    // the stacked column's height).
+    // With a live session the copy grid takes the room, so Add contact
+    // shrinks to its glyph under the gear. Without one the row is exactly
+    // what it was before spectators: Add contact · Start session · gear
+    // (field finds 2026-10-24: the stacked column first stretched Start
+    // session, then halved it).
     this.actionsEl?.classList.toggle('pmd-send-actions-live', live);
+    if (this.actionsEl && this.sideEl && this.addContactEl) {
+      if (live) {
+        if (this.addContactEl.parentElement !== this.sideEl) this.sideEl.appendChild(this.addContactEl);
+      } else if (this.addContactEl.parentElement !== this.actionsEl || this.actionsEl.firstChild !== this.addContactEl) {
+        this.actionsEl.insertBefore(this.addContactEl, this.actionsEl.firstChild);
+      }
+    }
   }
 
   /** One action-row entry: icon + label. Click behavior is live only in

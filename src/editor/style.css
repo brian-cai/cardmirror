@@ -15443,6 +15443,16 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   margin-top: 4px;
   padding-top: 4px;
   border-top: 1px solid var(--pmd-c-border-soft);
+  /* Pinned to the popup's bottom edge while the list above scrolls: the
+     popup is the scroll container (`.pmd-pill-popup`), so sticky holds the
+     row in view; the negative bottom + padding cover the popup's own
+     0.25rem inset so nothing peeks through underneath. */
+  position: sticky;
+  bottom: -0.25rem;
+  margin-bottom: -0.25rem;
+  padding-bottom: 0.25rem;
+  background: var(--pmd-c-bg);
+  z-index: 1;
 }
 /* display:flex would defeat the hidden attribute (collab gate closed) —
    on the row, and on its buttons (Clear with nothing received, Join with
@@ -15521,10 +15531,15 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   flex-direction: row;
   gap: 4px;
 }
-/* The side column stacks only beside the two-row copy grid (live session);
-   without a session the bottom is one row: Start session · gear · contact. */
+/* The side column stacks only beside the two-row copy grid (live session).
+   Without a session the grid holds Start session alone, laid out as a flex
+   row so it fills, and the bottom reads as it always did: Add contact ·
+   Start session · gear. */
 .pmd-send-actions-live .pmd-send-actions-side {
   flex-direction: column;
+}
+.pmd-send-actions:not(.pmd-send-actions-live) .pmd-send-actions-grid {
+  display: flex;
 }
 .pmd-send-actions-grid > .pmd-send-action {
   min-width: 0;
@@ -15532,13 +15547,13 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
 .pmd-send-pill:not(.pmd-send-invite-mode) .pmd-send-action-link {
   display: none;
 }
-/* Click-open: Add contact is the glyph alone (its tooltip says the rest),
-   a square like the gear above it. */
-.pmd-send-invite-mode .pmd-send-action-contact {
+/* Live session, click-open: Add contact is the glyph alone (its tooltip
+   says the rest), a square like the gear above it. */
+.pmd-send-invite-mode .pmd-send-actions-live .pmd-send-action-contact {
   width: 30px;
   padding: 5px 0;
 }
-.pmd-send-invite-mode .pmd-send-action-contact > span:last-child {
+.pmd-send-invite-mode .pmd-send-actions-live .pmd-send-action-contact > span:last-child {
   display: none;
 }
 /* Drag mode: back to the two-zone row — "Send by code" (Add contact) on the

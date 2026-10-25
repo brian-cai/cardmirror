@@ -88,14 +88,15 @@ describe('send pill actions row + hidden recipients', () => {
   it('the actions row renders; Start session hides while the collab gate is closed', () => {
     const { root } = mountPill();
     const actions = root.querySelectorAll('.pmd-send-action:not(.pmd-pill-settings)');
-    // Grid: Start session, Copy edit link, Copy view code, Copy view link
-    // (the copies hidden until a session is live); side: Add contact.
+    // No session: the original row — Add contact first, then Start session
+    // (the three copy buttons exist but are hidden until a session is live).
     expect(actions.length).toBe(5);
-    expect(actions[0]!.textContent).toContain('Start session');
-    expect(actions[4]!.textContent).toContain('Add contact');
-    expect(root.querySelector('.pmd-send-actions-side .pmd-send-action-contact')).toBeTruthy();
+    expect(actions[0]!.textContent).toContain('Add contact');
+    expect(actions[1]!.textContent).toContain('Start session');
+    expect(root.querySelector('.pmd-send-actions > .pmd-send-action-contact')).toBeTruthy();
+    expect(root.querySelector('.pmd-send-actions-side .pmd-send-action-contact')).toBeNull();
     // No collab starter registered (gate closed) → hidden by class.
-    expect(actions[0]!.classList.contains('pmd-send-action-collab-hidden')).toBe(true);
+    expect(actions[1]!.classList.contains('pmd-send-action-collab-hidden')).toBe(true);
   });
 
   it('view actions appear with a live session: view code copies the code, view link needs the pass', () => {
@@ -129,10 +130,14 @@ describe('send pill actions row + hidden recipients', () => {
     const gridLabels = [...root.querySelectorAll('.pmd-send-actions-grid .pmd-send-action')].map((b) => b.textContent);
     expect(gridLabels).toEqual(['Copy edit code', 'Copy edit link', 'Copy view code', 'Copy view link']);
     expect(root.querySelector('.pmd-send-actions')!.classList.contains('pmd-send-actions-live')).toBe(true);
+    // Live: Add contact sits in the side column under the gear.
+    expect(root.querySelector('.pmd-send-actions-side .pmd-send-action-contact')).toBeTruthy();
     setCollabShareCodeGetter(() => null);
     (root.querySelector('.pmd-send-bar') as HTMLElement).click(); // collapse
     (root.querySelector('.pmd-send-bar') as HTMLElement).click(); // reopen without a session
     expect(root.querySelector('.pmd-send-actions')!.classList.contains('pmd-send-actions-live')).toBe(false);
+    // …and moves back to lead the row.
+    expect(root.querySelector('.pmd-send-actions')!.firstElementChild!.classList.contains('pmd-send-action-contact')).toBe(true);
   });
 
   it('each contact row offers invite-to-collaborate and invite-to-spectate', () => {
@@ -193,7 +198,7 @@ describe('send pill actions row + hidden recipients', () => {
 
     const { root } = mountPill();
     (root.querySelector('.pmd-send-bar') as HTMLElement).click();
-    const btn = root.querySelectorAll('.pmd-send-action')[0] as HTMLElement;
+    const btn = [...root.querySelectorAll('.pmd-send-action')].find((b) => b.textContent?.includes('Copy edit code')) as HTMLElement;
     expect(btn.classList.contains('pmd-send-action-collab-hidden')).toBe(false);
     expect(btn.textContent).toContain('Copy edit code');
     btn.click();
