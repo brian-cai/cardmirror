@@ -5,6 +5,20 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.40 — 2026-10-25
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **CardMirror asks for your name.** If this computer has no display
+  name, CardMirror asks for one once a day. It goes on cards you send,
+  on your cursor when co-editing, and on your team's relay, so your
+  coach can tell your computer apart from the others. "Not now" asks
+  again tomorrow; tick "Don't ask again" to stop. It never asks while
+  the tournament pause is on or during a live co-editing session.
+
 ## 1.15.39 — 2026-10-24
 
 BCai's (@brian-cai) build of CardMirror, updating from
