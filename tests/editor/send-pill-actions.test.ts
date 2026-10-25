@@ -125,9 +125,14 @@ describe('send pill actions row + hidden recipients', () => {
     expect(find('Copy view link').classList.contains('pmd-send-action-collab-hidden')).toBe(false);
     find('Copy view link').click();
     expect(writeText).toHaveBeenLastCalledWith('https://cardmirror.app/#join=cmview1.abc&pass=v');
-    // Grid order: edit row then view row.
+    // Grid order: edit row then view row; the side column stacks only now.
     const gridLabels = [...root.querySelectorAll('.pmd-send-actions-grid .pmd-send-action')].map((b) => b.textContent);
     expect(gridLabels).toEqual(['Copy edit code', 'Copy edit link', 'Copy view code', 'Copy view link']);
+    expect(root.querySelector('.pmd-send-actions')!.classList.contains('pmd-send-actions-live')).toBe(true);
+    setCollabShareCodeGetter(() => null);
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click(); // collapse
+    (root.querySelector('.pmd-send-bar') as HTMLElement).click(); // reopen without a session
+    expect(root.querySelector('.pmd-send-actions')!.classList.contains('pmd-send-actions-live')).toBe(false);
   });
 
   it('each contact row offers invite-to-collaborate and invite-to-spectate', () => {

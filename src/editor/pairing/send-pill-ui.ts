@@ -153,6 +153,9 @@ export class SendPillController {
    *  visibility rules; the link additionally needs the room's view pass. */
   private viewCodeEl: HTMLButtonElement | null = null;
   private viewLinkEl: HTMLButtonElement | null = null;
+  /** The whole bottom area; `pmd-send-actions-live` while the 2×2 copy
+   *  grid is showing (the side column stacks only then). */
+  private actionsEl: HTMLElement | null = null;
   /** Drag-only recent-senders sub-list + its rows (subset of targets). */
   private recentSection: HTMLDivElement | null = null;
   private recentRows = new Set<HTMLElement>();
@@ -531,6 +534,7 @@ export class SendPillController {
     // old shape.
     const actions = document.createElement('div');
     actions.className = 'pmd-send-actions';
+    this.actionsEl = actions;
     const grid = document.createElement('div');
     grid.className = 'pmd-send-actions-grid';
     const side = document.createElement('div');
@@ -637,6 +641,11 @@ export class SendPillController {
     this.copyLinkEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveInviteLink() === null);
     this.viewCodeEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveViewCode() === null);
     this.viewLinkEl?.classList.toggle('pmd-send-action-collab-hidden', collabActiveViewLink() === null);
+    // No session: one row — Start session, then the gear and Add contact
+    // beside it. Stacking the side column only makes sense against the
+    // two-row copy grid (field find 2026-10-24: Start session stretched to
+    // the stacked column's height).
+    this.actionsEl?.classList.toggle('pmd-send-actions-live', live);
   }
 
   /** One action-row entry: icon + label. Click behavior is live only in

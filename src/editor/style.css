@@ -15518,8 +15518,13 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
 .pmd-send-actions-side {
   flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 4px;
+}
+/* The side column stacks only beside the two-row copy grid (live session);
+   without a session the bottom is one row: Start session · gear · contact. */
+.pmd-send-actions-live .pmd-send-actions-side {
+  flex-direction: column;
 }
 .pmd-send-actions-grid > .pmd-send-action {
   min-width: 0;
