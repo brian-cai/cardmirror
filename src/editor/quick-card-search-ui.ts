@@ -979,18 +979,22 @@ function rootResult(root: string): PaletteResult {
   };
 }
 
-function browseResult(row: FileBrowseRow, root: string): PaletteResult {
+function browseResult(row: FileBrowseRow, root: string, allRoots = false): PaletteResult {
   // A folder search reaches any depth: the meta line says where the file
-  // sits below the folder being browsed ('' for a direct child).
-  if (row.kind === 'file') return { ...fileResult(row), meta: pathParts(row.subPath).join(' / ') };
+  // sits below the folder being browsed ('' for a direct child). On the
+  // roots-level search the row's own root leads the meta, so results from
+  // several roots stay tellable apart.
+  const rowRoot = row.root ?? root;
+  const lead = allRoots ? [pathBase(rowRoot)] : [];
+  if (row.kind === 'file') return { ...fileResult(row), meta: [...lead, ...pathParts(row.subPath)].join(' / ') };
   // A matching folder deeper down says where it sits too.
   return {
     source: 'folder',
     name: row.name,
-    meta: pathParts(row.subPath ?? '').join(' / '),
+    meta: [...lead, ...pathParts(row.subPath ?? '')].join(' / '),
     matchedName: true,
     snippet: null,
-    browseLocation: { root, relativeDirectory: row.relativeDirectory },
+    browseLocation: { root: rowRoot, relativeDirectory: row.relativeDirectory },
   };
 }
 
@@ -1773,7 +1777,7 @@ class QuickCardSearchUI {
     }
   }
 
-  private browseParamsKey(location: FileBrowseLocation, query: string, limit: number): string {
+  private browseParamsKey(location: FileBrowseLocation | null, query: string, limit: number): string {
     return JSON.stringify([
       location,
       query,
@@ -1793,7 +1797,7 @@ class QuickCardSearchUI {
    *  window already holds them. Mirrors `ensureFileQuery`: the arrival re-
    *  runs the search, and a result for a location or query the user has
    *  since left is dropped. */
-  private ensureBrowse(location: FileBrowseLocation, query: string): 'ready' | 'loading' {
+  private ensureBrowse(location: FileBrowseLocation | null, query: string): 'ready' | 'loading' {
     const limit = Math.max(this.visibleCount, RESULT_PAGE_SIZE);
     const key = this.browseParamsKey(location, query, limit);
     if (this.browseQueryKey === key) return 'ready';
@@ -1803,8 +1807,10 @@ class QuickCardSearchUI {
     const token = this.asyncToken;
     const still = (): boolean =>
       !!this.root && token === this.asyncToken && this.browseActive
-      && this.browseLocation?.root === location.root
-      && this.browseLocation.relativeDirectory === location.relativeDirectory
+      && (location === null
+        ? this.browseLocation === null
+        : this.browseLocation?.root === location.root
+          && this.browseLocation.relativeDirectory === location.relativeDirectory)
       && this.browseQuery === query;
     void (async () => {
       try {
@@ -1865,13 +1871,28 @@ class QuickCardSearchUI {
       return;
     }
     if (!this.browseLocation) {
-      // The roots level: filter by folder name (full path as the secondary field).
+      // The roots level. No query: the roots themselves. A query: roots
+      // whose NAME matches, then everything the service finds across every
+      // root — folders at any depth, then files — each tagged with its root
+      // (2026-10-24: a query here used to filter root names only, so a
+      // folder inside a root was unreachable without stepping in first).
       const tokens = tokenizeQuery(this.browseQuery);
-      this.results = roots
+      const rootRows = roots
         .filter((r) => tokens.length === 0 || matchesAllTokens(pathBase(r).toLowerCase(), r.toLowerCase(), tokens))
         .map(rootResult);
-      this.browseTotal = this.results.length;
-      this.emptyText = tokens.length ? 'No file-search folder matches.' : 'No file-search folders configured.';
+      if (tokens.length === 0) {
+        this.results = rootRows;
+        this.browseTotal = rootRows.length;
+        this.emptyText = 'No file-search folders configured.';
+        this.finishBrowse();
+        return;
+      }
+      const state = this.ensureBrowse(null, this.browseQuery);
+      this.results = [...rootRows, ...this.browseRows.map((r) => browseResult(r, roots[0]!, true))];
+      this.browseTotal = rootRows.length + this.browseTotal;
+      this.emptyText = state === 'loading' && this.browseQueryKey === null
+        ? 'Searching your file-search folders…'
+        : 'Nothing in your file-search folders matches.';
       this.finishBrowse();
       return;
     }

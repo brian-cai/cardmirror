@@ -1067,7 +1067,9 @@ so you can take an insert back without closing the palette.
 
 **Browsing folders (`/`, desktop only).** When you know *where* a document
 lives but not what it is called, type `/` and a space: the palette lists
-the folders you have set up for file search. **Enter** or **Tab** steps
+the folders you have set up for file search. Type there and the search
+runs across all of them at once — folders at any depth whose name
+matches, then documents — each result led by the folder it came from. **Enter** or **Tab** steps
 into a folder, **Esc** steps back up (and closes the palette from the top
 level), and the header above the results shows where you are. Only folders
 that hold documents the file search can see are shown. Type after the prefix

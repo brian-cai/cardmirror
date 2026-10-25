@@ -147,3 +147,25 @@ export function locateInRoots(
   const at = best.rel.lastIndexOf(sep);
   return { root: best.root, relativeDirectory: at < 0 ? '' : best.rel.slice(0, at) };
 }
+
+/**
+ * The ROOTS-level search: `deriveBrowse` over every root with the root as
+ * the directory, rows tagged with their root, folders (all roots) before
+ * files (all roots), roots in the configured order. An empty query yields
+ * nothing — the palette lists the roots itself for the navigation view.
+ */
+export function deriveBrowseAcrossRoots(
+  roots: readonly string[],
+  entriesFor: (root: string) => readonly FileEntry[],
+  input: Omit<BrowseInput, 'entries' | 'relDir'>,
+): FileBrowseResult {
+  if (tokenizeQuery(input.query).length === 0) return { rows: [], total: 0, valid: true };
+  const folderRows: FileBrowseRow[] = [];
+  const fileRows: FileBrowseRow[] = [];
+  for (const root of roots) {
+    const r = deriveBrowse({ ...input, entries: entriesFor(root), relDir: '', limit: Number.MAX_SAFE_INTEGER });
+    for (const row of r.rows) (row.kind === 'folder' ? folderRows : fileRows).push({ ...row, root });
+  }
+  const rows = [...folderRows, ...fileRows];
+  return { rows: rows.slice(0, Math.max(0, input.limit)), total: rows.length, valid: true };
+}
