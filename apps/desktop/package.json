@@ -74,6 +74,14 @@
         "role": "Editor"
       }
     ],
+    "protocols": [
+      {
+        "name": "CardMirror Relay Link",
+        "schemes": [
+          "xtgg-relay"
+        ]
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": [

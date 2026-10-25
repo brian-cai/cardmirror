@@ -70,6 +70,7 @@ import { openSelectSpeechDocModal } from './select-speech-doc-ui.js';
 import { dropzoneStore, deriveDropzoneLabel } from './dropzone-store.js';
 import { DropzoneController } from './dropzone-ui.js';
 import { mountPairingPills, initPairingWiring, refreshPairingConfig } from './pairing/pairing-wiring.js';
+import { initRelayJoin } from './pairing/relay-join.js';
 import {
   setReceivedInsertNavHook, insertMostRecentReceived, RECEIVE_NEEDS_DOC_MESSAGE } from './pairing/inbox-insert.js';
 import { previewMostRecentReceived } from './pairing/receive-pill-ui.js';
@@ -10585,6 +10586,9 @@ if (!BOOT_MOBILE) {
     () => (homeScreen.isVisible() ? null : getActiveView()),
   );
   initPairingWiring();
+  // Relay setup links (xtgg-relay://join) forwarded by main: confirm,
+  // then fill in Settings → Collaboration. Desktop only.
+  initRelayJoin();
   // The receive pill lives in the HOME SCREEN'S own dock while home is
   // visible — collab invites join a NEW doc, so seeing/accepting them
   // must not require one open, and the pill's home position should be

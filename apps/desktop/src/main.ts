@@ -42,6 +42,13 @@ import { registerDocCacheIpc } from './doc-cache-ipc.js';
 import { registerPairingIpc, relayUrl } from './pairing-ipc.js';
 import { LITE_BUILD } from './lite-build.js';
 import {
+  RELAY_JOIN_SCHEME,
+  isRelayJoinArg,
+  parseRelayJoinLink,
+  pickRelayJoinFromArgv,
+  type RelayJoinLink,
+} from './relay-join-link.js';
+import {
   readAccessibilityTreeEnabled,
   writeAccessibilityTreeEnabled,
 } from './accessibility-pref.js';
@@ -359,10 +366,66 @@ let pendingLaunchFile: string | null = null;
 function pickFileFromArgv(argv: readonly string[]): string | null {
   for (const a of argv) {
     if (typeof a !== 'string') continue;
+    // A relay setup link is a URL, never a file — even one whose token
+    // happens to end in ".docx".
+    if (isRelayJoinArg(a)) continue;
     const lower = a.toLowerCase();
     if (lower.endsWith('.cmir') || lower.endsWith('.docx')) return a;
   }
   return null;
+}
+
+/** A relay setup link (`xtgg-relay://join?…`) waiting for a renderer to
+ *  confirm it. Links can arrive before any window exists (macOS cold
+ *  launch fires `open-url` before whenReady; Windows / Linux pass it in
+ *  argv) or before its renderer has booted, so main holds the latest one
+ *  here until a window reports `host:relay-join-ready`. */
+let pendingRelayJoin: RelayJoinLink | null = null;
+
+/** Window ids whose renderer has wired its relay-join listener. */
+const relayJoinReadyWindows = new Set<number>();
+
+/** Hand the pending relay link to a ready renderer — the focused one if
+ *  it's ready, else any. Stays queued when none is ready yet. */
+function flushRelayJoin(): void {
+  if (!pendingRelayJoin) return;
+  const focused = BrowserWindow.getFocusedWindow();
+  let target: BrowserWindow | null =
+    focused && !focused.isDestroyed() && relayJoinReadyWindows.has(focused.id) ? focused : null;
+  if (!target) {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed() && relayJoinReadyWindows.has(w.id)) {
+        target = w;
+        break;
+      }
+    }
+  }
+  if (!target) return;
+  target.webContents.send('host:relay-join', pendingRelayJoin);
+  pendingRelayJoin = null;
+  if (target.isMinimized()) target.restore();
+  target.focus();
+}
+
+/** Entry point for every relay setup link the OS hands us. Invalid links
+ *  are dropped with a log line; valid ones queue for the renderer's
+ *  confirm dialog. Lite has no collaboration, so it ignores them. */
+function handleRelayJoinUrl(raw: string): void {
+  if (LITE_BUILD) {
+    console.log('[relay-join] ignored link: Lite build has no collaboration');
+    return;
+  }
+  const parsed = parseRelayJoinLink(raw);
+  if (!parsed.ok) {
+    console.warn(`[relay-join] ignored link: ${parsed.reason}`);
+    return;
+  }
+  pendingRelayJoin = parsed.link;
+  // App running with no windows (macOS after closing the last one):
+  // open one so there is a renderer to confirm in. Before whenReady
+  // the launch path creates the first window itself.
+  if (app.isReady() && BrowserWindow.getAllWindows().length === 0) createWindow();
+  flushRelayJoin();
 }
 
 /** Window ids whose renderer is in multi-pane (3-slot workspace)
@@ -822,6 +885,7 @@ function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
     sleepState.delete(win.id);
     skipCloseConfirm.delete(win.id);
     multiPaneWindows.delete(win.id);
+    relayJoinReadyWindows.delete(win.id);
     // A lone floating timer must not outlive the last document
     // window (it would block `window-all-closed` from ever firing
     // on Windows / Linux).
@@ -2360,6 +2424,15 @@ ipcMain.handle('host:register-multipane', async (event, isMultiPane: boolean) =>
   if (!win) return;
   if (isMultiPane) multiPaneWindows.add(win.id);
   else multiPaneWindows.delete(win.id);
+});
+
+// The renderer's relay-join listener is wired: deliver a link that
+// arrived before this window could take it.
+ipcMain.on('host:relay-join-ready', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  relayJoinReadyWindows.add(win.id);
+  flushRelayJoin();
 });
 
 ipcMain.handle('host:is-first-window', async (event) => {
@@ -4475,6 +4548,10 @@ if (!gotLock) {
   // command line; mine the file path out of it and open it in a
   // new window of the existing app.
   app.on('second-instance', (_event, argv) => {
+    // Windows / Linux deliver a clicked xtgg-relay:// link this way
+    // when the app is already running.
+    const relayLink = pickRelayJoinFromArgv(argv);
+    if (relayLink) handleRelayJoinUrl(relayLink);
     const filePath = pickFileFromArgv(argv);
     if (filePath) void openExternalFile(filePath);
     // Pull the user's attention back to a window so they see the
@@ -4497,6 +4574,14 @@ app.on('open-file', (event, filePath) => {
   } else {
     pendingLaunchFile = filePath;
   }
+});
+
+// macOS delivers xtgg-relay:// links here — including on a cold launch,
+// where it fires before whenReady; handleRelayJoinUrl queues the link
+// until a renderer is ready to confirm it.
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleRelayJoinUrl(url);
 });
 
 void app.whenReady().then(() => {
@@ -4539,6 +4624,21 @@ void app.whenReady().then(() => {
     void openExternalFile(launchFile);
   } else {
     createWindow();
+  }
+  // Relay setup links. The installers register the scheme (package.json
+  // `protocols`); this re-claims it at runtime, which is what registers
+  // it on Linux and in dev runs. A Windows / Linux cold launch carries
+  // the link in argv; it queues until the new window's renderer is up.
+  if (!LITE_BUILD) {
+    if (process.defaultApp && process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient(RELAY_JOIN_SCHEME, process.execPath, [
+        path.resolve(process.argv[1]!),
+      ]);
+    } else {
+      app.setAsDefaultProtocolClient(RELAY_JOIN_SCHEME);
+    }
+    const launchRelayLink = pickRelayJoinFromArgv(process.argv);
+    if (launchRelayLink) handleRelayJoinUrl(launchRelayLink);
   }
   startAutoUpdate();
   // Fast Debate Paste integration — 127.0.0.1-only HTTP server

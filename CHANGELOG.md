@@ -5,6 +5,22 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.43 — 2026-10-25
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Join your team's relay in one click.** Your coach can send an
+  invite link (from the relay's manage page). Open it, click "Open in
+  CardMirror", and CardMirror asks "Connect CardMirror to this relay?",
+  showing the relay address and the start of the token. Click Connect
+  and collaboration is on, with the relay URL and token filled in under
+  Settings → Collaboration; no restart needed. If you already use a
+  different relay, it says it will replace it. Links that aren't a
+  well-formed https relay are ignored.
+
 ## 1.15.42 — 2026-10-25
 
 BCai's (@brian-cai) build of CardMirror, updating from

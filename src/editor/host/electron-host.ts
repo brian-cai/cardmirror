@@ -340,6 +340,10 @@ interface ElectronAPI {
   /** Main forwards an OS-opened file (absolute path) to this window
    *  when it's an existing multi-pane workspace. Returns unsubscribe. */
   onExternalOpen(handler: (payload: { path: string }) => void): () => void;
+  /** Main forwards a validated relay setup link (xtgg-relay://join) for
+   *  this window to confirm; subscribing reports the window ready.
+   *  Optional so an older preload without the channel is tolerated. */
+  onRelayJoin?(handler: (payload: { relayUrl: string; token: string }) => void): () => void;
   journalAndCloseOtherWindows(): Promise<void>;
   closeSelf(): Promise<void>;
   /** Report that a close-request ended without closing (Cancel or a
@@ -1147,6 +1151,10 @@ export class ElectronHost implements Host {
   onExternalOpen(handler: (payload: { path: string }) => void): () => void {
     const fn = api().onExternalOpen;
     return typeof fn === 'function' ? fn(handler) : () => {};
+  }
+
+  onRelayJoin(handler: (payload: { relayUrl: string; token: string }) => void): () => void {
+    return api().onRelayJoin?.(handler) ?? (() => {});
   }
 
   /** Mode-switch helper. Asks main to broadcast a please-close
