@@ -69,6 +69,7 @@ On any request, alongside the base protocol's `X-CardMirror-Version`:
 |---|---|
 | `X-Relay-Client` | `<client id>/<version>`, e.g. `example-build/1.15.22`. At most 64 bytes, `[A-Za-z0-9._-]` and one `/`. |
 | `X-Relay-Install-Name` | A name for this install chosen or approved by the user, percent-encoded UTF-8, at most 64 bytes after decoding (e.g. `Sam%27s%20MacBook`). |
+| `X-Relay-Install-Name-Prompt` | Optional, only without an install name: how the user answered the client's ask for one, `later` or `never`. A relay records it with the install until a name arrives and shows it to the people managing the access; other values are ignored. Relays that don't know it ignore it, and clients that never ask never send it. |
 
 - Both are optional. A relay must treat requests without them exactly as before, and must
   never refuse a request because of them (invalid values are ignored, not rejected).

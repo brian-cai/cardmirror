@@ -28,6 +28,8 @@ import { ReceivePillController } from './receive-pill-ui.js';
 import { installContactsAutoExport } from './contacts-auto-export.js';
 import { installTeamFileSync } from './team-file-sync.js';
 import { customRelayExtHeaders } from '../collab/relay-info.js';
+import { nameNudgeAnswer } from '../name-nudge.js';
+import { RELAY_EXT_CLIENT_HEADER, RELAY_EXT_INSTALL_NAME_HEADER, RELAY_EXT_NAME_PROMPT_HEADER } from '../relay-protocol.js';
 import { startRelayProfiles } from '../collab/relay-profiles-ui.js';
 
 /** Build + mount the Send and Receive pills into the tray (after the
@@ -63,6 +65,16 @@ function applyConfig(): void {
     // Relay info v1: {} unless a custom relay is set.
     relayExtHeaders: customRelayExtHeaders(),
   };
+  // Desktop only: with no name to show, how the user answered the daily
+  // name reminder, so whoever manages the relay access sees "declined"
+  // rather than a blank. Only the main process's mailbox requests carry it
+  // (no CORS preflight there), and only to a custom relay, which ignores
+  // headers it doesn't know.
+  const answer = nameNudgeAnswer();
+  if (answer && cfg.relayExtHeaders[RELAY_EXT_CLIENT_HEADER] && !cfg.relayExtHeaders[RELAY_EXT_INSTALL_NAME_HEADER]
+    && settings.get('relayShowInstallName')) {
+    cfg.relayExtHeaders = { ...cfg.relayExtHeaders, [RELAY_EXT_NAME_PROMPT_HEADER]: answer };
+  }
   const mirrorOwnCode = ({ ownCode }: { ownCode: string }): void => {
     // Setting it re-fires the subscriber, but the value is now unchanged so
     // configure is a no-op next time — no loop.
@@ -98,6 +110,12 @@ export async function regenerateOwnCode(): Promise<void> {
     const { ownCode } = await m.webPairingRegenerateKey();
     if (ownCode) settings.set('pairingOwnCode', ownCode);
   }
+}
+
+/** Re-send the config to the poller (e.g. after the name reminder was
+ *  answered, which is not a settings change). */
+export function refreshPairingConfig(): void {
+  applyConfig();
 }
 
 let lastMismatchToast = 0;

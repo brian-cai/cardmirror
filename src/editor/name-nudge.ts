@@ -16,6 +16,16 @@ import { localDayKey } from './update-nudge.js';
 
 const LAST_DAY_KEY = 'cm.nameNudge.lastDay';
 const NEVER_KEY = 'cm.nameNudge.never';
+const ANSWER_KEY = 'cm.nameNudge.answer';
+
+/** How the user last answered the reminder while they still have no name:
+ *  'later' (Not now), 'never' (Don't ask again), or null (never asked, or
+ *  they gave a name). Sent to the team's relay so whoever manages it can
+ *  tell "declined" from "never asked". */
+export function nameNudgeAnswer(): 'later' | 'never' | null {
+  if (read(NEVER_KEY) === '1') return 'never';
+  return read(ANSWER_KEY) === 'later' ? 'later' : null;
+}
 
 export interface NameNudgeInputs {
   now: Date;
@@ -78,6 +88,8 @@ export function initNameNudge(deps: {
     cancelLabel: string;
     checkbox: { label: string; onChange: (checked: boolean) => void };
   }) => Promise<string | null>;
+  /** After an answer: lets the relay hear about it. */
+  onAnswered?: () => void;
   now?: () => Date;
 }): () => void {
   const now = deps.now ?? (() => new Date());
@@ -112,7 +124,13 @@ export function initNameNudge(deps: {
       .then((typed) => {
         if (never) write(NEVER_KEY, '1');
         const name = typed?.trim() ?? '';
-        if (name && !deps.name().trim()) deps.setName(name.slice(0, 80));
+        if (name) {
+          write(ANSWER_KEY, '');
+          if (!deps.name().trim()) deps.setName(name.slice(0, 80));
+        } else {
+          write(ANSWER_KEY, 'later');
+          deps.onAnswered?.();
+        }
       })
       .catch((err) => console.warn('Name reminder failed:', err))
       .finally(() => {

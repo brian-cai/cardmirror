@@ -6,7 +6,7 @@
  * another dialog.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initNameNudge, shouldAskName } from '../../src/editor/name-nudge.js';
+import { initNameNudge, nameNudgeAnswer, shouldAskName } from '../../src/editor/name-nudge.js';
 import { localDayKey } from '../../src/editor/update-nudge.js';
 
 const MON = new Date(2026, 9, 26, 10, 0);
@@ -55,6 +55,7 @@ describe('initNameNudge', () => {
 
   function setup(answer: string | null, tick = false) {
     let name = '';
+    const answered = vi.fn();
     const prompt = vi.fn(async (opts: { checkbox: { onChange: (c: boolean) => void } }) => {
       if (tick) opts.checkbox.onChange(true);
       return answer;
@@ -66,9 +67,10 @@ describe('initNameNudge', () => {
       sessionLive: () => false,
       overlayOpen: () => false,
       prompt,
+      onAnswered: answered,
       now: () => MON,
     });
-    return { prompt, stop, name: () => name };
+    return { prompt, stop, answered, name: () => name };
   }
 
   it('saves the typed name, and asks once per day', async () => {
@@ -76,6 +78,7 @@ describe('initNameNudge', () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(s.prompt).toHaveBeenCalledTimes(1);
     expect(s.name()).toBe('Ana Lopez');
+    expect(nameNudgeAnswer()).toBeNull();
     window.dispatchEvent(new Event('focus'));
     expect(s.prompt).toHaveBeenCalledTimes(1);
     s.stop();
@@ -87,11 +90,14 @@ describe('initNameNudge', () => {
     s.stop();
     expect(localStorage.getItem('cm.nameNudge.never')).toBeNull();
     expect(localStorage.getItem('cm.nameNudge.lastDay')).toBe(localDayKey(MON));
+    expect(nameNudgeAnswer()).toBe('later');
+    expect(s.answered).toHaveBeenCalledTimes(1);
 
     localStorage.clear();
     const t = setup(null, true);
     await vi.advanceTimersByTimeAsync(5000);
     t.stop();
     expect(localStorage.getItem('cm.nameNudge.never')).toBe('1');
+    expect(nameNudgeAnswer()).toBe('never');
   });
 });

@@ -63,7 +63,7 @@ const RELAY_CLIENT_VERSION_HEADER = 'X-CardMirror-Version';
 const RELAY_CLIENT_ROUTING_HEADER = 'X-CardMirror-Routing';
 /** Relay info v1 (reference-docs/relay-info-v1.md): the only extra
  *  headers the renderer may hand us to send. */
-const RELAY_EXT_HEADER_NAMES = ['X-Relay-Client', 'X-Relay-Install-Name'];
+const RELAY_EXT_HEADER_NAMES = ['X-Relay-Client', 'X-Relay-Install-Name', 'X-Relay-Install-Name-Prompt'];
 
 /** Relay endpoint defaults. Resolution order (see relayUrl()/relayToken()):
  *  user settings (self-hosted relay) → env override → baked default. Env

@@ -90,6 +90,10 @@ export const RELAY_EXT_CLIENT_HEADER = 'X-Relay-Client';
  *  the relay credential (relay info v1). Percent-encoded UTF-8. */
 export const RELAY_EXT_INSTALL_NAME_HEADER = 'X-Relay-Install-Name';
 
+/** With no install name: how the user answered the ask for one, 'later'
+ *  or 'never' (xtgg). Sent only on the desktop mailbox requests. */
+export const RELAY_EXT_NAME_PROMPT_HEADER = 'X-Relay-Install-Name-Prompt';
+
 /** Both headers are capped at 64 bytes by the spec (the install name
  *  measured after decoding). */
 export const RELAY_EXT_HEADER_MAX_BYTES = 64;

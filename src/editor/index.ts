@@ -69,7 +69,7 @@ import { suppressGuiSelectAll } from './editable-target.js';
 import { openSelectSpeechDocModal } from './select-speech-doc-ui.js';
 import { dropzoneStore, deriveDropzoneLabel } from './dropzone-store.js';
 import { DropzoneController } from './dropzone-ui.js';
-import { mountPairingPills, initPairingWiring } from './pairing/pairing-wiring.js';
+import { mountPairingPills, initPairingWiring, refreshPairingConfig } from './pairing/pairing-wiring.js';
 import {
   setReceivedInsertNavHook, insertMostRecentReceived, RECEIVE_NEEDS_DOC_MESSAGE } from './pairing/inbox-insert.js';
 import { previewMostRecentReceived } from './pairing/receive-pill-ui.js';
@@ -1033,6 +1033,7 @@ initNameNudge({
   sessionLive: () => collabLiveSessionCount() > 0,
   overlayOpen: isAnyOverlayOpen,
   prompt: promptForText,
+  onAnswered: refreshPairingConfig,
 });
 
 // Timer pop-out reconciliation — the timer always LAUNCHES popped
