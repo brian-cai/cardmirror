@@ -5,6 +5,20 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.42 — 2026-10-25
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Your coach can see you were asked.** If you answer the name
+  reminder with "Not now" or "Don't ask again", your team's relay
+  shows that next to your computer instead of a blank, so whoever
+  manages it knows you were asked. Nothing is sent once you have a
+  name, or if "Show my name to the people who manage this relay
+  access" is off.
+
 ## 1.15.41 — 2026-10-25
 
 BCai's (@brian-cai) build of CardMirror, updating from
