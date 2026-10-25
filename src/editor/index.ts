@@ -28,6 +28,7 @@ import type { LocalComment } from './learn-store.js';
 import { NavigationPanel, showNavContextMenu } from './nav-panel.js';
 import { initUpdateChip } from './update-chip.js';
 import { initUpdateNudge } from './update-nudge.js';
+import { initNameNudge } from './name-nudge.js';
 import { mountTimerUI } from './timer-ui.js';
 import { initTimerAudio } from './timer-audio.js';
 import {
@@ -1024,6 +1025,15 @@ function updatePlainPasteIndicator(armed: boolean): void {
     });
   }
 }
+// Once a day, a computer with no display name is asked for one.
+initNameNudge({
+  name: () => settings.get('pairingDisplayName'),
+  setName: (name) => settings.set('pairingDisplayName', name),
+  paused: () => settings.get('updateChecksPausedUntil') > Date.now(),
+  sessionLive: () => collabLiveSessionCount() > 0,
+  overlayOpen: isAnyOverlayOpen,
+  prompt: promptForText,
+});
 
 // Timer pop-out reconciliation — the timer always LAUNCHES popped
 // in. The persisted poppedOut flag is cleared iff no pop-out window
