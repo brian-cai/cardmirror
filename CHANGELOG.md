@@ -5,6 +5,18 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.41 — 2026-10-25
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Your name reaches your relay right away.** Setting or changing your
+  display name now tells your team's relay straight away, instead of
+  the next time CardMirror reconnects, so your coach sees it on the
+  relay's list of computers.
+
 ## 1.15.40 — 2026-10-25
 
 BCai's (@brian-cai) build of CardMirror, updating from
