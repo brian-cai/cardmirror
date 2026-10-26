@@ -148,6 +148,24 @@ describe('the Connect dialog', () => {
     const bare = connectDialogText({ host: 'new.example', operator: '', team: '' }, ctx);
     expect(bare.title).toBe('Connect CardMirror to your team’s relay?');
     expect(bare.message).toContain('Relay: new.example');
+    // Connect also lists you on the team's list: said, with your name.
+    expect(bare.message).toContain('lists you on your team’s list under the name below');
+    expect(connectDialogText({ host: 'new.example', operator: '', team: '' }, { ...ctx, name: 'Ana Lopez' }).message).toContain(
+      'lists you on your team’s list as “Ana Lopez” with your send code',
+    );
+  });
+
+  it('a link from another app opens unsolicited; a pasted one (Join box, sharing setup) does not', async () => {
+    initRelayJoin();
+    host.handler!(NEW);
+    await vi.waitFor(() => expect(confirm.opts).not.toBeNull());
+    expect(confirm.opts!['unsolicited']).toBe(true);
+    await vi.waitFor(() => expect(settings.get('pairingRelayUrl')).toBe(NEW.relayUrl));
+    confirm.opts = null;
+    settings.setMany({ pairingRelayUrl: OLD.url, pairingRelayToken: OLD.token });
+    host.parse.mockResolvedValue({ ok: true, link: NEW });
+    await joinRelayFromText(`xtgg-relay://join?url=${encodeURIComponent(NEW.relayUrl)}&token=${NEW.token}`);
+    expect(confirm.opts!['unsolicited']).toBe(false);
   });
 
   it('describeRelay reads the operator and the team name from the relay', async () => {
@@ -199,5 +217,26 @@ describe('bad and pasted links', () => {
     expect(await joinRelayFromText('xtgg-relay://join?url=http%3A%2F%2Fx&token=t')).toBe(true);
     expect(toasts).toContain(BAD_INVITE_LINK);
     expect(await joinRelayFromText('cmshare2.abc.def')).toBe(false);
+  });
+});
+
+describe('an invite link with a rotated token (1.15.46 review)', () => {
+  const KEY = 'K'.repeat(43);
+  it('same per-team address, new token → the team key stays', async () => {
+    const team = 'https://relay.example/r/lincoln';
+    settings.setMany({ pairingRelayUrl: team, pairingRelayToken: 'old-team-token', teamSessionsKey: KEY });
+    initRelayJoin();
+    host.handler!({ relayUrl: team, token: 'new-team-token' });
+    await vi.waitFor(() => expect(settings.get('pairingRelayToken')).toBe('new-team-token'));
+    expect(settings.get('teamSessionsKey')).toBe(KEY);
+  });
+
+  it('a shared address (a team per token) or another relay → no key carried over', () => {
+    settings.setMany({ pairingRelayUrl: OLD.url, pairingRelayToken: OLD.token, teamSessionsKey: KEY });
+    adoptRelay(OLD.url, 'another-teams-token');
+    expect(settings.get('teamSessionsKey')).toBe('');
+    settings.setMany({ pairingRelayUrl: 'https://relay.example/r/lincoln', pairingRelayToken: 't1', teamSessionsKey: KEY });
+    adoptRelay('https://relay.example/r/other', 't1');
+    expect(settings.get('teamSessionsKey')).toBe('');
   });
 });

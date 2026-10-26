@@ -86,10 +86,11 @@ export async function describeRelay(
   return out;
 }
 
-/** The Connect dialog's text. Exported for tests. */
+/** The Connect dialog's text. `name`: the display name you'd be listed
+ *  under ('' = the dialog asks for one). Exported for tests. */
 export function connectDialogText(
   d: RelayDescription,
-  ctx: { currentUrl: string; currentToken: string; enabled: boolean; relayUrl: string; token: string },
+  ctx: { currentUrl: string; currentToken: string; enabled: boolean; relayUrl: string; token: string; name?: string },
 ): { title: string; message: string } {
   const title = d.team ? `Join ${d.team} in CardMirror?` : 'Connect CardMirror to your team’s relay?';
   const lines = [`Relay: ${d.operator ? `${d.operator} (${d.host})` : d.host}`];
@@ -103,6 +104,10 @@ export function connectDialogText(
     ctx.enabled
       ? 'Connect adds your teammates so you can send cards and co-edit.'
       : 'Connect turns on card sharing and co-editing and adds your teammates.',
+    // Connect also joins the team's list (importTeamAfterConnect): say so,
+    // as the old separate name prompt did.
+    `It also lists you on your team’s list ${ctx.name?.trim() ? `as “${ctx.name.trim()}”` : 'under the name below'} with ` +
+      'your send code, so teammates who connect get you as a contact.',
   );
   return { title, message: lines.join('\n') };
 }
@@ -111,7 +116,9 @@ export function connectDialogText(
  *  two dialogs. */
 let confirming = false;
 
-async function handleRelayJoin(link: { relayUrl: string; token: string }): Promise<void> {
+/** `unsolicited`: the link came from another app (the OS handed it over,
+ *  maybe mid-typing), not a paste into CardMirror. */
+async function handleRelayJoin(link: { relayUrl: string; token: string }, opts: { unsolicited: boolean }): Promise<void> {
   if (confirming) {
     console.log('[relay-join] ignored link: a relay confirm is already open');
     return;
@@ -129,15 +136,16 @@ async function handleRelayJoin(link: { relayUrl: string; token: string }): Promi
   const needName = !settings.get('pairingDisplayName').trim();
   try {
     const d = await describeRelay(link).catch((): RelayDescription => ({ host: hostOf(link.relayUrl), operator: '', team: '' }));
-    const t = connectDialogText(d, { currentUrl, currentToken, enabled, ...link });
+    const t = connectDialogText(d, { currentUrl, currentToken, enabled, ...link, name: settings.get('pairingDisplayName') });
     ok = await showConfirm({
       title: t.title,
       message: t.message,
       confirmLabel: 'Connect',
       cancelLabel: 'Cancel',
-      // The link came from another app, maybe mid-typing: Cancel holds
-      // the focus and the first second of keys is ignored.
-      unsolicited: true,
+      // A link from another app, maybe mid-typing: Cancel holds the focus
+      // and the first second of keys is ignored. A paste is the user's
+      // own action (the Join box, the sharing setup) and asks normally.
+      unsolicited: opts.unsolicited,
       ...(needName
         ? {
             field: {
@@ -191,7 +199,7 @@ export async function joinRelayFromText(text: string): Promise<boolean> {
     showToast(BAD_INVITE_LINK);
     return true;
   }
-  await handleRelayJoin(parsed.link);
+  await handleRelayJoin(parsed.link, { unsolicited: false });
   return true;
 }
 
@@ -209,6 +217,6 @@ export function initRelayJoin(): void {
       showToast(LITE_INVITE_LINK);
       return;
     }
-    void handleRelayJoin(payload);
+    void handleRelayJoin(payload, { unsolicited: true });
   });
 }

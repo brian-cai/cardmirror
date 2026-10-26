@@ -263,20 +263,25 @@ export async function switchRelay(target: string, hooks: SwitchHooks, now = Date
   return 'switched';
 }
 
-/** Point Settings at `url` + `token` from a team file ("Use team relay"),
- *  as a switch rather than an edit: the outgoing relay keeps its key, and
- *  the new relay starts with the key it already had saved, or none, so the
- *  file's key (applied by the caller right after) lands on the new relay
- *  instead of being filed under the old one. */
+/** Point Settings at `url` + `token` from a team file ("Use team relay")
+ *  or an invite link, as a switch rather than an edit: the outgoing relay
+ *  keeps its key, and the new relay starts with the key it already had
+ *  saved, or none, so the file's key (applied by the caller right after)
+ *  lands on the new relay instead of being filed under the old one. A new
+ *  token at the same per-team address (a rotation) keeps the current key,
+ *  as relayEdited does. */
 export function adoptRelay(url: string, token: string, now = Date.now()): void {
-  if (relayMatchKey(settings.get('pairingRelayUrl'), settings.get('pairingRelayToken')) === relayMatchKey(url, token)) return;
+  const prev = { url: settings.get('pairingRelayUrl'), token: settings.get('pairingRelayToken') };
+  if (relayMatchKey(prev.url, prev.token) === relayMatchKey(url, token)) return;
+  const rotated = !!normUrl(prev.url) && sameTeam(prev, { url, token });
+  const currentKey = settings.get('teamSessionsKey');
   switching = true;
   try {
     stashOutgoingKey(now);
     const into = findProfile(settings.get('relayProfiles'), url, token);
     // One change: setting the token first used to notify with {old URL,
     // new token}, and main sent the new relay's token to the old relay.
-    settings.setMany({ teamSessionsKey: into?.teamKey ?? '', pairingRelayToken: token, pairingRelayUrl: url });
+    settings.setMany({ teamSessionsKey: into?.teamKey ?? (rotated ? currentKey : ''), pairingRelayToken: token, pairingRelayUrl: url });
     if (into) save(settings.get('relayProfiles').map((p) => (p.id === into.id ? { ...p, lastUsed: now } : p)));
   } finally {
     switching = false;
