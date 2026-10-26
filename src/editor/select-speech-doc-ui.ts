@@ -40,8 +40,14 @@ let restoreFocusOnClose: (() => void) | null = null;
 
 let removeModalKeys: (() => void) | null = null;
 
+/** Resolvers waiting for the open modal to close (`pickSpeechDoc`). */
+let closeWaiters: (() => void)[] = [];
+
 function closeModal(): void {
   if (!openOverlay) return;
+  const waiters = closeWaiters;
+  closeWaiters = [];
+  queueMicrotask(() => waiters.forEach((w) => w()));
   if (overlayToken) popOverlay(overlayToken);
   overlayToken = null;
   openOverlay.remove();
@@ -105,7 +111,7 @@ function renderRow(host: NonNullable<ReturnType<typeof getElectronHost>>, row: D
  *  clicking a row sets that doc as the speech doc (or unsets if
  *  the row was already speech), and the modal closes. Esc / click
  *  outside also closes. */
-export async function openSelectSpeechDocModal(): Promise<void> {
+export async function openSelectSpeechDocModal(opts: PickSpeechDocOptions = {}): Promise<void> {
   if (openOverlay) {
     closeModal();
     return;
@@ -116,7 +122,7 @@ export async function openSelectSpeechDocModal(): Promise<void> {
     return;
   }
 
-  const rows = await host.listDocs();
+  const rows = (await host.listDocs()).filter((r) => r.uid !== opts.excludeUid);
 
   restoreFocusOnClose = captureFocusForDialog();
   const overlay = document.createElement('div');
@@ -146,6 +152,7 @@ export async function openSelectSpeechDocModal(): Promise<void> {
   const intro = document.createElement('p');
   intro.className = 'pmd-select-speech-intro';
   intro.textContent =
+    opts.intro ??
     'Pick a doc to receive content sent via the speech commands. Click the current speech doc to unset it.';
   dialog.appendChild(intro);
 
@@ -204,4 +211,23 @@ export async function openSelectSpeechDocModal(): Promise<void> {
     return false;
   });
   armDialogFocus(dialog, 'dialog', 'Select Speech Document');
+}
+
+export interface PickSpeechDocOptions {
+  /** A doc left out of the list — the one a pending send comes FROM. */
+  excludeUid?: string | null;
+  /** Replaces the modal's intro line. */
+  intro?: string;
+}
+
+/** Open the modal for a pending send (` with no speech doc) and resolve
+ *  once it closes, whichever way. The caller then checks the designation. */
+export async function pickSpeechDoc(opts: PickSpeechDocOptions = {}): Promise<void> {
+  if (openOverlay) closeModal();
+  await openSelectSpeechDocModal({
+    intro: 'Pick the document to use as your speech doc. The card you sent goes into it.',
+    ...opts,
+  });
+  if (!openOverlay) return;
+  await new Promise<void>((resolve) => closeWaiters.push(resolve));
 }

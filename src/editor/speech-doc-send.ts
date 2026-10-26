@@ -25,8 +25,10 @@ import { normalizeSelectionForSend } from './send-normalize.js';
 import { getSimilarSelectionState } from './similar-selection-plugin.js';
 import { getSpeechDocResolver } from './speech-doc-registry.js';
 import { getElectronHost } from './host/index.js';
-import { alertDialog } from './text-prompt.js';
+import { alertDialog, promptForChoice } from './text-prompt.js';
 import { showToast } from './toast.js';
+import { toggleReadingMarkerCommand } from './reading-marker.js';
+import { pickSpeechDoc } from './select-speech-doc-ui.js';
 import { sectionEndFromHeading } from './headings.js';
 import { checkedSliceFromJSON } from '../schema/slice-check.js';
 
@@ -462,36 +464,142 @@ export function insertSpeechSlice(
   }, 0);
 }
 
+/** What the shell calling `sendToSpeech` can do when there is no speech
+ *  doc yet, so ` offers a way forward instead of a dead end. */
+export interface NoSpeechDocActions {
+  /** Create a speech doc (the shell's New Speech Document flow, which asks
+   *  for its name). Resolves true once one is being made, false when the
+   *  user cancelled. Absent where this shell can't make one (the web's
+   *  single-doc mode can't open a window). */
+  createSpeechDoc?: () => Promise<boolean>;
+  /** Run the same send again from the same source, once a speech doc exists. */
+  resend: () => void;
+}
+
+/** How long a just-created speech doc may take to register before the
+ *  pending send gives up (a new window has to boot and open its file). */
+export const SPEECH_DOC_WAIT_MS = 30_000;
+
+/** Resolves true as soon as a speech doc other than `excludeUid` is
+ *  designated, false after `timeoutMs`. Exported for testing. */
+export function waitForSpeechDoc(
+  excludeUid: string | null,
+  timeoutMs = SPEECH_DOC_WAIT_MS,
+): Promise<boolean> {
+  const resolver = getSpeechDocResolver();
+  const ready = (): boolean => {
+    const uid = resolver.getSpeechUid();
+    return !!uid && uid !== excludeUid;
+  };
+  if (ready()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let unsubscribe = (): void => {};
+    const timer = setTimeout(() => {
+      unsubscribe();
+      resolve(false);
+    }, timeoutMs);
+    unsubscribe = resolver.subscribe(() => {
+      if (!ready()) return;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(true);
+    });
+  });
+}
+
+/** ` with no speech doc: offer to create one (then send what ` would have
+ *  sent) or to pick a document already open, instead of naming two
+ *  commands that have no key. Exported for testing. */
+export async function offerSpeechDocForSend(
+  sourceView: EditorView,
+  actions: NoSpeechDocActions,
+): Promise<void> {
+  const sourceUid = getSpeechDocResolver().uidForView(sourceView);
+  const electron = getElectronHost();
+  // Picking an open doc needs somewhere else to send to: marking the doc
+  // you are sending FROM leaves the card nowhere to go (the field report
+  // of a student who had marked the file he was cutting from, 2026-10-15),
+  // so this doc is never offered as its own destination.
+  let canPick = false;
+  if (electron) {
+    try {
+      canPick = (await electron.listDocs()).some((d) => d.uid !== sourceUid);
+    } catch {
+      canPick = false;
+    }
+  }
+  const choices: { value: 'create' | 'pick'; label: string; primary?: boolean }[] = [];
+  if (actions.createSpeechDoc) {
+    choices.push({ value: 'create', label: 'Create speech doc and send', primary: true });
+  }
+  if (canPick) choices.push({ value: 'pick', label: 'Choose an open document…' });
+  if (choices.length === 0) {
+    // Web single-doc: no second window to create, nothing else open here.
+    await alertDialog(
+      'No speech document yet. Open your speech document in another browser tab and press “Mark active doc as speech” (Speech group) there; then ` sends here.',
+    );
+    return;
+  }
+  const choice = await promptForChoice({
+    message: 'No speech document yet',
+    detail: actions.createSpeechDoc
+      ? canPick
+        ? 'Create one and this card goes straight into it, or use a document you already have open.'
+        : 'Create one and this card goes straight into it.'
+      : 'Choose a document you already have open to send this card into.',
+    choices,
+  });
+  if (!choice) return;
+  if (choice === 'create') {
+    if (!(await actions.createSpeechDoc!())) return;
+  } else {
+    await pickSpeechDoc({ excludeUid: sourceUid });
+  }
+  // A new window has to boot before its doc registers; a picked doc's
+  // designation arrives over IPC a beat after the picker closes.
+  const ready = await waitForSpeechDoc(sourceUid, choice === 'create' ? SPEECH_DOC_WAIT_MS : 3_000);
+  if (!ready) {
+    if (choice === 'create') showToast('The speech doc is still opening. Press ` again to send the card.');
+    return;
+  }
+  if (sourceView.isDestroyed) return;
+  actions.resend();
+}
+
 /** Main entry point. Reads the speech-doc resolver, computes the
  *  slice, and routes — either dispatching locally if the speech doc
  *  lives in this renderer, or serializing + IPCing via the host
- *  bridge if the speech doc lives in another window. */
+ *  bridge if the speech doc lives in another window. `noSpeechDoc`
+ *  is what the calling shell can do when there is no speech doc yet;
+ *  without it the send still offers to pick an open document. */
 export function sendToSpeech(
   sourceView: EditorView,
   atEnd: boolean,
   afterInsert?: AfterInsertHook,
+  noSpeechDoc?: NoSpeechDocActions,
 ): void {
   const resolver = getSpeechDocResolver();
   const speechUid = resolver.getSpeechUid();
   if (!speechUid) {
-    // In-DOM dialog, NEVER window.alert: on Windows/Linux the native alert
+    // In-DOM dialogs, NEVER window.alert: on Windows/Linux the native alert
     // doesn't hand keyboard focus back to the renderer — selection worked
     // but typing was dead until a reload, and the old `sourceView.focus()`
     // bandaid only helped on macOS (field bug, 2026-07-11).
-    void alertDialog(
-      'No speech document yet. Use "New speech document" to create one or "Mark active doc as speech" to designate an existing pane.',
+    void offerSpeechDocForSend(
+      sourceView,
+      noSpeechDoc ?? { resend: () => sendToSpeech(sourceView, atEnd, afterInsert) },
     );
     return;
   }
   const localView = resolver.viewForUid(speechUid);
   if (localView && sourceView === localView) {
-    // Sending FROM the speech doc itself has nowhere to go (Verbatim
-    // inserts a `~ Marked HH:MM ~` marker there; not implemented). Say so:
-    // a silent no-op read as "the tilde key is broken" to a student who
-    // had marked the file he was cutting from (field report, 2026-10-15).
-    showToast(
-      'This is your speech doc. Press ` in another document to send its card here.',
-    );
+    // Sending FROM the speech doc itself has nowhere to go, so ` does what
+    // Verbatim's does there: drops a red "Marked h:mm" at the cursor to
+    // find your place (the reading-position marker; again on a marker
+    // removes it). A silent no-op read as "the tilde key is broken"
+    // (field report, 2026-10-15).
+    toggleReadingMarkerCommand(sourceView.state, sourceView.dispatch, sourceView);
+    sourceView.focus();
     return;
   }
   const slice = takeSendSlice(sourceView);

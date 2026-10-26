@@ -3406,7 +3406,7 @@ class MultiPaneShell {
    *  via a simple `prompt()` plus the standard slot picker. The
    *  fresh doc auto-registers as the speech doc — that's the
    *  whole point of `NewSpeech` (vs the generic `New doc`). */
-  async createNewSpeechDocument(): Promise<void> {
+  async createNewSpeechDocument(): Promise<boolean> {
     // Electron disables window.prompt(); route through the in-
     // renderer modal so the desktop edition works too.
     const speechName = await promptForText({
@@ -3414,14 +3414,14 @@ class MultiPaneShell {
       placeholder: '1NC',
       okLabel: 'Create',
     });
-    if (!speechName) return;
+    if (!speechName) return false;
     const trimmed = speechName;
     // Optionally skip the picker: the speech-side slot is where Arrange
     // Windows would put this doc anyway.
     const target = settings.get('newSpeechDocInSpeechSlot')
       ? slotPlanForSpeech(settings.get('arrangeSpeechSide')).speechSlot
       : await this.promptForSlot(`Speech ${trimmed}`);
-    if (!target) return;
+    if (!target) return false;
     const format = settings.get('defaultSpeechDocFormat');
     const filename = formatSpeechFilename(trimmed, format);
     const includePocket = settings.get('includeSpeechDocPocket');
@@ -3464,6 +3464,7 @@ class MultiPaneShell {
     // button's aria-pressed + the slot's chip).
     getSpeechDocResolver().setSpeech(record.view);
     this.refreshSpeechChips();
+    return true;
   }
 
   /** Toggle the focused pane's speech-doc designation. If the
@@ -3574,8 +3575,7 @@ class MultiPaneShell {
    *  doc. `atEnd` controls the insertion point — true → after the
    *  doc-end, false → at the speech doc's current cursor. Verbatim:
    *  `Paperless.SendToSpeech PasteAtEnd:=true|false`. */
-  sendToSpeech(atEnd: boolean): void {
-    const sourceRec = this.focusedSlot?.visible;
+  sendToSpeech(atEnd: boolean, sourceRec: DocRecord | null = this.focusedSlot?.visible ?? null): void {
     if (!sourceRec) return;
     const resolver = getSpeechDocResolver();
     const speechUid = resolver.getSpeechUid();
@@ -3601,6 +3601,13 @@ class MultiPaneShell {
       if (!located) return;
       this.focusSlot(located.slot);
       flushHeavyUpdateNow(located.record);
+    }, {
+      // No speech doc yet: create one (into a slot, as New Speech
+      // Document does) and send the same card from the same pane.
+      createSpeechDoc: () => this.createNewSpeechDocument(),
+      resend: () => {
+        if (this.findRecordForView(sourceRec.view)) this.sendToSpeech(atEnd, sourceRec);
+      },
     });
   }
 

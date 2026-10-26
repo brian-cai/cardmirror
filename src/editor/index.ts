@@ -651,7 +651,12 @@ function toggleMarkSingleDocAsSpeech(): void {
  *  decides whether to insert locally (speech doc is in THIS renderer)
  *  or route via main (speech doc is in another window). */
 function runSingleDocSendToSpeech(sourceView: EditorView, atEnd: boolean): void {
-  runSendToSpeech(sourceView, atEnd);
+  runSendToSpeech(sourceView, atEnd, undefined, {
+    // The web can't open the speech doc's window — the dialog then offers
+    // only what it can.
+    createSpeechDoc: getHost().canSpawnWindow ? runNewSpeechDocumentSingleDoc : undefined,
+    resend: () => runSingleDocSendToSpeech(sourceView, atEnd),
+  });
 }
 
 /** Send-to-dropzone for any view: mirrors send-to-speech's
@@ -822,7 +827,7 @@ async function copyCardsWithMatchingCiteIn(sourceView: EditorView): Promise<void
  *  real handle (subsequent ⌘S writes silently in place); when
  *  unset, the new window opens unsaved and the user picks a save
  *  location later via Save As. */
-async function runNewSpeechDocumentSingleDoc(): Promise<void> {
+async function runNewSpeechDocumentSingleDoc(): Promise<boolean> {
   const host = getHost();
   if (!host.canSpawnWindow) {
     void alertDialog(
@@ -831,7 +836,7 @@ async function runNewSpeechDocumentSingleDoc(): Promise<void> {
         'and use “Mark active doc as speech”.',
     );
     getActiveView()?.focus(); // reclaim focus the alert stole (Windows/Linux)
-    return;
+    return false;
   }
   // Electron disables window.prompt(); use an in-renderer modal
   // instead. Trims the result for us and returns null on cancel.
@@ -840,8 +845,8 @@ async function runNewSpeechDocumentSingleDoc(): Promise<void> {
     placeholder: '1NC',
     okLabel: 'Create',
   });
-  if (speechName == null) return;
-  if (!speechName) return;
+  if (speechName == null) return false;
+  if (!speechName) return false;
   const trimmed = speechName;
 
   const format = settings.get('defaultSpeechDocFormat');
@@ -864,7 +869,7 @@ async function runNewSpeechDocumentSingleDoc(): Promise<void> {
     void alertDialog(
       `Couldn't create speech document: ${err instanceof Error ? err.message : err}`,
     );
-    return;
+    return false;
   }
 
   // Optional auto-save into the configured speech-doc folder.
@@ -918,11 +923,13 @@ async function runNewSpeechDocumentSingleDoc(): Promise<void> {
       uid,
       markAsSpeech: true,
     });
+    return true;
   } catch (err) {
     console.error('Failed to spawn new speech window:', err);
     void alertDialog(
       `Failed to open new speech window: ${err instanceof Error ? err.message : err}`,
     );
+    return false;
   }
 }
 

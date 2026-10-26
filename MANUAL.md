@@ -1457,7 +1457,14 @@ Assemble a speech document by sending cards into it:
 2. **Send cards.** From a source file, press **`` ` ``** (backtick) to
    send the current card or selection to the speech doc at your cursor,
    or **Alt-`` ` ``** to append it at the end. You can also drag a card or
-   heading across panes.
+   heading across panes. No speech doc yet? **`` ` ``** asks: **Create speech
+   doc and send** (Enter) makes one, as New Speech Document does, and the
+   card goes straight into it; **Choose an open document…** (desktop, when
+   another document is open) makes one you have open the speech doc and
+   sends there. Pressing **`` ` ``** inside the speech doc itself drops a red
+   "Marked 7:32" [reading-position marker](#read-mode) at the cursor, the
+   way Verbatim marks your place there; press it again on the marker to
+   remove it.
 3. **Read.** Switch the speech doc to read mode; everything that isn't
    read aloud (loose paragraphs, undertags, un-highlighted text) drops
    away, leaving what you'll deliver.
