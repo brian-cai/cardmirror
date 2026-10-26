@@ -238,8 +238,9 @@ export async function tryLoadCardCutterEngine(): Promise<boolean> {
   }
   // Packaged builds ship the no-op stub, so the import above registers
   // nothing. When the feature is switched on, load the user-installed
-  // engine bundle from disk (userData/plugins, an explicit settings
-  // path, or the CARDCUTTER_ENGINE env). The bundle self-registers.
+  // engine bundle from disk (userData/plugins, a path picked in the
+  // settings dialog, or the CARDCUTTER_ENGINE env in dev builds; main
+  // refuses anything else). The bundle self-registers.
   if (!engine && settings.get('cardCutterEnabled')) {
     const host = getElectronHost();
     if (host?.cardCutterLoad) {

@@ -1119,8 +1119,9 @@ interface PairingInboxItemIpc {
 
   /** Card-cutter local plugin (experimental). `pick` opens the native
    *  file dialog and returns the chosen path. `load` asks main for the
-   *  engine bundle's source (from the given path, the CARDCUTTER_ENGINE
-   *  env, or the default userData/plugins location) and runs it in the
+   *  engine bundle's source (the default userData/plugins file, a file
+   *  picked in `pick`, or the CARDCUTTER_ENGINE env in dev builds; main
+   *  refuses any other path, see code-scope.ts) and runs it in the
    *  renderer's MAIN world, where it self-registers via
    *  window.__registerCardCutter. Never bundled in the release. */
   cardCutterPickFile: (): Promise<string | null> =>

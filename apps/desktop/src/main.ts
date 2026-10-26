@@ -129,6 +129,7 @@ import {
   grantLegacyRecents,
   isReadAllowed,
 } from './read-scope.js';
+import { grantCodeFile, readCodeFile } from './code-scope.js';
 import { promises as fs } from 'node:fs';
 import { createHash } from 'node:crypto';
 import {
@@ -1243,17 +1244,23 @@ ipcMain.handle('host:cardcutter-pick-file', async (event) => {
     filters: [{ name: 'JavaScript', extensions: ['js', 'mjs', 'cjs'] }],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
+  // The engine path is a lasting setting, so the pick is remembered.
+  await grantCodeFile(result.filePaths[0]!, { persist: true });
   return result.filePaths[0]!;
 });
 ipcMain.handle('host:cardcutter-read', async (_event, explicit: string | null) => {
+  // The renderer's path is only a request: main reads the default engine
+  // file, a file the user picked in the dialog above, or (development
+  // builds only) the CARDCUTTER_ENGINE env file — never any other path
+  // (code-scope.ts). An imported settings file once pointed this at a UNC
+  // path and ran what it read.
+  const devEnv = (!app.isPackaged && process.env['CARDCUTTER_ENGINE']) || '';
   const target =
-    (explicit && explicit.trim()) || process.env.CARDCUTTER_ENGINE || cardCutterDefaultPath();
-  try {
-    const source = await fs.readFile(target, 'utf8');
-    return { source, path: target };
-  } catch (err) {
-    return { error: (err as Error).message, path: target };
-  }
+    (typeof explicit === 'string' && explicit.trim()) || devEnv || cardCutterDefaultPath();
+  const res = await readCodeFile(target, {
+    extraFiles: [cardCutterDefaultPath(), ...(devEnv ? [devEnv] : [])],
+  });
+  return { ...res, path: target };
 });
 
 // ── Plugin manager (GitHub install; Obsidian model). Installed plugins
@@ -1286,13 +1293,12 @@ ipcMain.handle('host:plugin-read', async (_e, id: string) => {
   return source === null ? { error: 'not found' } : { source };
 });
 ipcMain.handle('host:plugin-read-file', async (_e, filePath: string) => {
-  // Dev path — load an arbitrary local bundle the user picked.
-  if (typeof filePath !== 'string' || !filePath) return { error: 'bad path' };
-  try {
-    return { source: await fs.readFile(filePath, 'utf8') };
-  } catch (err) {
-    return { error: (err as Error).message };
-  }
+  // Dev path — load a local bundle the user picked (host:plugin-pick-file
+  // grants it for the session) or one under userData/plugins. Never any
+  // other path (code-scope.ts).
+  return readCodeFile(String(filePath ?? ''), {
+    dirs: [path.join(app.getPath('userData'), 'plugins')],
+  });
 });
 ipcMain.handle('host:plugin-uninstall', async (_e, id: string) => uninstallPlugin(String(id)));
 ipcMain.handle('host:plugin-check-update', async (_e, id: string, repoRef: string) =>
@@ -1306,6 +1312,7 @@ ipcMain.handle('host:plugin-pick-file', async (event) => {
     filters: [{ name: 'JavaScript', extensions: ['js', 'mjs', 'cjs'] }],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
+  await grantCodeFile(result.filePaths[0]!);
   return result.filePaths[0]!;
 });
 
