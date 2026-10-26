@@ -8,6 +8,8 @@ on:
   # The release workflow calls this as its gate: nothing publishes unless
   # the full CI passes on the tagged commit.
   workflow_call:
+  # Run on any branch by hand (Actions tab or `gh workflow run CI --ref <branch>`).
+  workflow_dispatch:
 
 # Least privilege: CI only reads the repo.
 permissions:
@@ -89,5 +91,9 @@ jobs:
           # ~4 GB V8 heap on a CI runner (they build megabyte-scale docs and
           # many Loro peers). Give the vitest fork workers more headroom.
           NODE_OPTIONS: --max-old-space-size=6144
+        # Below the job's limit, so a hang fails this step with its log kept
+        # (a job cut off at its own limit is cancelled and keeps no log), and
+        # the hanging-process reporter names what never finished.
+        timeout-minutes: 13
         # An empty test-scope (linux/mac) runs the full suite.
-        run: npm test -- ${{ matrix.test-scope }}
+        run: npm test -- ${{ matrix.test-scope }} --reporter=default --reporter=hanging-process
