@@ -7378,6 +7378,38 @@ export function buildRibbonKeymap(
   return out;
 }
 
+/** Defaults added after installs may already have used the key for
+ *  something else (marker: localStorage, outside the settings blob, as
+ *  settings.ts's one-shot migrations). */
+const NEW_DEFAULT_KEYS: ReadonlyArray<{ id: RibbonCommandId; marker: string }> = [
+  // 1.15.46: Send to Starred Recipient on Mod-Shift-P.
+  { id: 'sendToStarred', marker: 'cm-key-default-sendToStarred-migrated' },
+];
+
+/** One-shot, per new default key: when a user override already binds the
+ *  same (folded) key to another command, the new default is dropped (an
+ *  empty override: unbound, rebindable in the keybindings editor) so the
+ *  user's binding keeps working — buildRibbonKeymap's last-wins would
+ *  otherwise pick one by command order. Nothing changes without a clash,
+ *  and a later rebind is the keybindings editor's business. */
+export function migrateNewDefaultKeys(): void {
+  for (const { id, marker } of NEW_DEFAULT_KEYS) {
+    try {
+      if (localStorage.getItem(marker) !== null) continue;
+      localStorage.setItem(marker, '1');
+    } catch {
+      return; // storage unavailable — leave the bindings alone
+    }
+    const overrides = settings.get('ribbonKeyOverrides');
+    if (overrides[id] != null) continue; // the user set this one already
+    const mine = new Set(keysArray(DEFAULT_RIBBON_KEYS[id]).filter((k) => !!k).map(foldKeyString));
+    const clash = Object.entries(overrides).some(
+      ([other, spec]) => other !== id && spec != null && keysArray(spec).some((k) => !!k && mine.has(foldKeyString(k))),
+    );
+    if (clash) settings.set('ribbonKeyOverrides', { ...overrides, [id]: '' });
+  }
+}
+
 /**
  * Build a Command for a given ribbon command ID. Used by the ribbon
  * toolbar buttons so they stay keyed by stable IDs alongside the

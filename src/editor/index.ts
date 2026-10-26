@@ -356,6 +356,7 @@ import {
   setFontSize,
   adjustFontSize,
   compileShrinkProtections,
+  migrateNewDefaultKeys,
   RIBBON_COMMAND_LABELS,
   RIBBON_COMMAND_IDS,
   type StructuralRibbonCommandId,
@@ -11179,6 +11180,9 @@ async function initSingleDocBoot(): Promise<void> {
     // High School timer became the default (2026-10-03): move installs
     // still on the untouched College default over once.
     migrateHighSchoolTimerDefault();
+    // Send to Starred got Mod-Shift-P (1.15.46): an install whose own
+    // override already uses it keeps its binding; the new default yields.
+    migrateNewDefaultKeys();
     // Update checks became opt-OUT (2026-07-27): flip an older
     // install's stored `false` default exactly once, with a one-time
     // notice pointing at the toggle. Runs before the launch check so
