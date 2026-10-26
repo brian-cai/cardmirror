@@ -12,6 +12,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const toasts = vi.hoisted(() => [] as string[]);
 const prompt = vi.hoisted(() => ({ answer: null as string | null, asked: [] as Array<{ message: string; initial?: string }> }));
+/** promptForChoice answers: each call shifts one (null = Not now). */
+const choice = vi.hoisted(() => ({ answers: [] as Array<() => string | null>, shown: [] as string[] }));
 
 vi.mock('../../src/editor/toast.js', () => ({ showToast: (m: string) => toasts.push(m) }));
 vi.mock('../../src/editor/text-prompt.js', async (importOriginal) => {
@@ -21,6 +23,10 @@ vi.mock('../../src/editor/text-prompt.js', async (importOriginal) => {
     promptForText: async (opts: { message: string; initial?: string }) => {
       prompt.asked.push(opts);
       return prompt.answer;
+    },
+    promptForChoice: async (opts: { detail?: string }) => {
+      choice.shown.push(opts.detail ?? '');
+      return choice.answers.shift()?.() ?? null;
     },
   };
 });
@@ -60,6 +66,8 @@ import {
   acceptTeamReview,
   declineTeamReview,
   pendingTeamReview,
+  queueTeamReview,
+  reviewTeamChanges,
   __resetTeamReviewForTests,
 } from '../../src/editor/pairing/team-review.js';
 import { settings } from '../../src/editor/settings.js';
@@ -168,6 +176,8 @@ beforeEach(() => {
   toasts.length = 0;
   prompt.asked.length = 0;
   prompt.answer = null;
+  choice.answers.length = 0;
+  choice.shown.length = 0;
   clock = 1_000_000;
   settings.set('pairingRelayUrl', BASE);
   settings.set('pairingRelayToken', TOKEN);
@@ -789,6 +799,110 @@ describe('groups and relay tags follow the list only when it changes', () => {
     relay.edit({ name: 'Lincoln' });
     await refreshTeamDirectory(relay.ctx, { now: later() });
     expect(settings.get('pairingPartners').find((p) => p.code === ANA)!.relays).toEqual(['builtin', tag]);
+  });
+});
+
+describe('held changes survive a restart (1.15.46 review)', () => {
+  const source = `dir:${directoryKey(BASE, TOKEN)}`;
+  const restart = () => {
+    __resetTeamDirectoryForTests();
+    __resetTeamReviewForTests();
+    __resetNoticesForTests();
+  };
+  const topUps = () => pendingTeamReview(source)?.held.topUps.map((t) => [t.label, t.members.map((m) => m.code)]) ?? null;
+
+  it('a member the list held for a group you have is offered again after a restart (same revision)', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay();
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    settings.set('pairingGroups', settings.get('pairingGroups').map((g) => ({ ...g, memberCodes: [ANA] })));
+    relay.edit({ groups: [{ label: 'Varsity', members: [ANA, BEN] }] });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(topUps()).toEqual([['Varsity', [BEN]]]);
+    restart();
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(topUps()).toEqual([['Varsity', [BEN]]]);
+    expect(__noticesForTests().some((n) => n.key === `team-review:${source}`)).toBe(true);
+    // Once answered it stays answered across restarts.
+    declineTeamReview(source);
+    restart();
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(pendingTeamReview(source)).toBeNull();
+  });
+
+  it('a member you took out of a group while the list stood still is not offered back', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay();
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    settings.set('pairingGroups', settings.get('pairingGroups').map((g) => ({ ...g, memberCodes: [ANA] })));
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(pendingTeamReview(source)).toBeNull();
+    restart();
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(pendingTeamReview(source)).toBeNull();
+  });
+
+  it('a person named like one of your contacts is offered on every refresh, also after a restart', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    settings.set('pairingPartners', [{ code: CAL, name: 'Ben Wu' }]);
+    const relay = fakeRelay();
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    expect(pendingTeamReview(source)!.held.clashes.map((m) => m.code)).toEqual([BEN]);
+    // Let the list settle (our entry, the team key), so the restart sees the same revision.
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(directoryState(key).mergedRevision).toBe(19);
+    restart();
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(pendingTeamReview(source)!.held.clashes.map((m) => m.code)).toEqual([BEN]);
+    expect(settings.get('pairingPartners').map((p) => p.code)).not.toContain(BEN);
+  });
+});
+
+describe('the Review dialog acts only on what it showed (1.15.46 review)', () => {
+  const held = (codes: string[]) => ({
+    topUps: [{ groupId: 'g1', label: 'Varsity', members: codes.map((code) => ({ code, name: code.slice(5, 8) })) }],
+    clashes: [],
+  });
+  beforeEach(() => {
+    settings.set('pairingPartners', [{ code: ANA, name: 'Ana' }]);
+    settings.set('pairingGroups', [{ id: 'g1', label: 'Varsity', memberCodes: [ANA] }]);
+  });
+
+  it('a sync that replaced the review while the dialog was open → Add applies nothing and the new one is shown', async () => {
+    queueTeamReview({ source: 'file', teamName: 'T', held: held([BEN]), sessions: [] });
+    choice.answers.push(() => {
+      queueTeamReview({ source: 'file', teamName: 'T', held: held([BEN, CAL]), sessions: [] });
+      return 'add';
+    });
+    choice.answers.push(() => null);
+    await reviewTeamChanges('file');
+    expect(choice.shown).toHaveLength(2);
+    expect(choice.shown[1]).toContain('CAL');
+    expect(settings.get('pairingGroups')[0]!.memberCodes).toEqual([ANA]);
+    expect(pendingTeamReview('file')).not.toBeNull();
+  });
+
+  it('Don’t add likewise declines only what was shown', async () => {
+    queueTeamReview({ source: 'file', teamName: 'T', held: held([BEN]), sessions: [] });
+    choice.answers.push(() => {
+      queueTeamReview({ source: 'file', teamName: 'T', held: held([BEN, CAL]), sessions: [] });
+      return 'decline';
+    });
+    choice.answers.push(() => 'add');
+    await reviewTeamChanges('file');
+    expect(settings.get('pairingGroups')[0]!.memberCodes).toEqual([ANA, BEN, CAL]);
+  });
+
+  it('unchanged review → Add applies it', async () => {
+    queueTeamReview({ source: 'file', teamName: 'T', held: held([BEN]), sessions: [] });
+    choice.answers.push(() => 'add');
+    await reviewTeamChanges('file');
+    expect(choice.shown).toHaveLength(1);
+    expect(settings.get('pairingGroups')[0]!.memberCodes).toEqual([ANA, BEN]);
+    expect(await acceptTeamReview('file', { source: 'file', teamName: 'T', held: held([CAL]), sessions: [] })).toBe(false);
   });
 });
 

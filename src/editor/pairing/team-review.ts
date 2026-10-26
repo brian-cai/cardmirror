@@ -136,10 +136,20 @@ export function pendingTeamReview(source: string): TeamReview | null {
   return pending.get(source) ?? null;
 }
 
-/** Yes: apply the pending review for `source`. Resolves true when there
- *  was one. */
-export async function acceptTeamReview(source: string): Promise<boolean> {
+/** The pending review for `source` — when `shown` is given, only if it
+ *  still asks exactly what was shown (a background sync may have replaced
+ *  it while the dialog was open). */
+function pendingAsShown(source: string, shown?: TeamReview): TeamReview | null {
   const r = pending.get(source);
+  if (!r) return null;
+  if (shown && signature(r) !== signature(shown)) return null;
+  return r;
+}
+
+/** Yes: apply the pending review for `source` (only if it is still
+ *  `shown`, when given). Resolves true when there was one. */
+export async function acceptTeamReview(source: string, shown?: TeamReview): Promise<boolean> {
+  const r = pendingAsShown(source, shown);
   if (!r) return false;
   pending.delete(source);
   clearNotice(noticeKey(source));
@@ -156,10 +166,12 @@ export async function acceptTeamReview(source: string): Promise<boolean> {
   return true;
 }
 
-/** "Don't add": remember every item so later syncs don't ask again. */
-export function declineTeamReview(source: string): void {
-  const r = pending.get(source);
-  if (!r) return;
+/** "Don't add": remember every item so later syncs don't ask again (only
+ *  if the pending review is still `shown`, when given). Returns true when
+ *  there was one. */
+export function declineTeamReview(source: string, shown?: TeamReview): boolean {
+  const r = pendingAsShown(source, shown);
+  if (!r) return false;
   pending.delete(source);
   clearNotice(noticeKey(source));
   const declined = readDeclined();
@@ -167,9 +179,12 @@ export function declineTeamReview(source: string): void {
   for (const m of r.held.clashes) declined.add(clashKey(source, m.code));
   writeDeclined(declined);
   r.onDecline?.();
+  return true;
 }
 
-/** The Review… button: the one place this asks, with a dialog. */
+/** The Review… button: the one place this asks, with a dialog. Add and
+ *  Don't add act only on what the dialog showed: when a sync changed
+ *  the review meanwhile, the new one is shown instead. */
 export async function reviewTeamChanges(source: string): Promise<void> {
   const r = pending.get(source);
   if (!r) return;
@@ -185,12 +200,16 @@ export async function reviewTeamChanges(source: string): Promise<void> {
     ],
     cancelLabel: 'Not now',
   });
-  if (choice === 'add') {
-    if (await acceptTeamReview(source)) showToast(`Added from team “${r.teamName}”.`);
-  } else if (choice === 'decline') {
-    declineTeamReview(source);
+  if (choice === 'add' || choice === 'decline') {
+    const done = choice === 'add' ? await acceptTeamReview(source, r) : declineTeamReview(source, r);
+    if (done) {
+      if (choice === 'add') showToast(`Added from team “${r.teamName}”.`);
+    } else if (pending.get(source)) {
+      await reviewTeamChanges(source);
+    }
   } else if (pending.get(source)) {
-    snoozed.set(source, signature(pending.get(source)!));
+    // "Not now" covers what was shown; a newer review keeps its own notice.
+    snoozed.set(source, signature(r));
   }
 }
 

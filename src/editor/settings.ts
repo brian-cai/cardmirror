@@ -5176,6 +5176,10 @@ export interface TeamDirectoryRelayState {
    *  of yours that happens to share a name is left alone. Absent = not
    *  recorded yet (an import from an older build). */
   groupIds?: string[];
+  /** What the last list change held for a yes (team-review.ts), as
+   *  "<group label, lower case>\n<code>", so a restart offers it again
+   *  without offering members you took out of a group since. */
+  heldItems?: string[];
 }
 
 /** A saved custom relay (collab/relay-profiles.ts). */
@@ -5238,6 +5242,9 @@ function sanitizeTeamDirectoryRelays(v: unknown): TeamDirectoryRelayState[] {
       ...(typeof r['mergedRevision'] === 'number' ? { mergedRevision: rev(r['mergedRevision']) } : {}),
       ...(Array.isArray(r['groupIds'])
         ? { groupIds: (r['groupIds'] as unknown[]).filter((x): x is string => typeof x === 'string' && x.length <= 100).slice(0, 200) }
+        : {}),
+      ...(Array.isArray(r['heldItems'])
+        ? { heldItems: (r['heldItems'] as unknown[]).filter((x): x is string => typeof x === 'string' && x.length <= 300).slice(0, 500) }
         : {}),
     });
   }

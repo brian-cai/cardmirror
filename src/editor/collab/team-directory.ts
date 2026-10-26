@@ -382,11 +382,17 @@ const inflight = new Map<string, Promise<TeamDirectory | null>>();
 
 export type ApplyResult = { addedPeople: number; addedGroups: number };
 
+/** A held group member as stored in TeamDirectoryRelayState.heldItems. */
+const heldItem = (label: string, code: string): string => `${label.toLowerCase()}\n${code}`;
+
 /** Offer what the list held back (members for a group you already have,
  *  a new person named like one of your contacts) — team-review.ts; a yes
  *  tags the people as on this relay and records any group it made as
- *  the list's. */
+ *  the list's. The held group members are saved with the relay's state
+ *  (the review itself lives in memory), so a restart offers them again. */
 function queueDirectoryReview(dir: TeamDirectory, key: string, held: HeldChanges, tag: string): void {
+  const items = held.topUps.flatMap((t) => t.members.map((m) => heldItem(t.label, m.code)));
+  patchState(key, { heldItems: items });
   queueTeamReview({
     source: `dir:${key}`,
     teamName: dir.name.trim() || 'your relay\u2019s team',
@@ -394,9 +400,39 @@ function queueDirectoryReview(dir: TeamDirectory, key: string, held: HeldChanges
     sessions: [],
     onAccept: (created, before) => {
       settings.set('pairingPartners', tagImported(settings.get('pairingPartners'), before, dir.people.map((p) => p.code), tag));
-      if (created.length > 0) patchState(key, { groupIds: [...(directoryState(key).groupIds ?? []), ...created] });
+      const state = directoryState(key);
+      patchState(key, {
+        heldItems: [],
+        ...(created.length > 0 ? { groupIds: [...(state.groupIds ?? []), ...created] } : {}),
+      });
     },
+    onDecline: () => patchState(key, { heldItems: [] }),
   });
+}
+
+/** What the list holds for a yes while its revision hasn't moved: the
+ *  whole list merged again (nothing applied) — every look-alike-named
+ *  person, and only the group members the last change held (a member
+ *  you took out of a group since isn't offered back). */
+function heldSinceLastChange(
+  dir: TeamDirectory,
+  key: string,
+  partners: readonly PairingPartner[],
+  groups: readonly PairingGroup[],
+): HeldChanges {
+  const state = directoryState(key);
+  const was = new Set(state.heldItems ?? []);
+  const { held } = mergeTeamDirectory({
+    directory: dir,
+    ownCode: settings.get('pairingOwnCode'),
+    partners,
+    groups,
+    groupIds: state.groupIds,
+  });
+  const topUps = held.topUps
+    .map((t) => ({ ...t, members: t.members.filter((m) => was.has(heldItem(t.label, m.code))) }))
+    .filter((t) => t.members.length > 0);
+  return { topUps, clashes: held.clashes };
 }
 
 /** Merge silently (an imported directory): new people every time (the
@@ -404,7 +440,9 @@ function queueDirectoryReview(dir: TeamDirectory, key: string, held: HeldChanges
  *  changed (members for a group you have are offered, not added),
  *  so a member you took out of a group or a relay you unticked for a
  *  contact stays that way until the team's list moves. Toasts "Added N
- *  teammates from your relay" when N > 0. */
+ *  teammates from your relay" when N > 0. What it holds for a yes is
+ *  offered on every refresh, not only when the list changed (the review
+ *  doesn't survive a restart; "Don't add" and "not now" keep it quiet). */
 function applyImported(dir: TeamDirectory, tag: string, key: string): ApplyResult {
   const before = settings.get('pairingPartners');
   const state = directoryState(key);
@@ -427,7 +465,7 @@ function applyImported(dir: TeamDirectory, tag: string, key: string): ApplyResul
   if (merged.addedPeople > 0 && !tournamentModeOn()) {
     showToast(`Added ${merged.addedPeople} teammate${merged.addedPeople === 1 ? '' : 's'} from your relay.`);
   }
-  if (changed) queueDirectoryReview(dir, key, merged.held, tag);
+  queueDirectoryReview(dir, key, changed ? merged.held : heldSinceLastChange(dir, key, tagged, merged.groups), tag);
   return { addedPeople: merged.addedPeople, addedGroups: merged.addedGroups };
 }
 
