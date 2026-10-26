@@ -8,6 +8,7 @@ import {
   setTournamentMode,
   tournamentModeEndText,
   tournamentModeOn,
+  tournamentModeUntil,
   TOURNAMENT_MODE_SILENCES,
 } from './tournament-mode.js';
 import { confirmDialog } from './text-prompt.js';
@@ -30,7 +31,11 @@ export async function toggleTournamentMode(): Promise<void> {
   showToast(`Tournament mode is on until ${tournamentModeEndText()}.`);
 }
 
-/** Render the chip: a quiet "Tournament mode" when off, lit when on. */
+/** Per chip: the re-render at the moment tournament mode runs out. */
+const expiryTimers = new WeakMap<HTMLButtonElement, ReturnType<typeof setTimeout>>();
+
+/** Render the chip: a quiet "Tournament mode" when off, lit when on (and
+ *  re-rendered the moment the week runs out). */
 export function renderTournamentChip(el: HTMLButtonElement, now = Date.now()): void {
   const on = tournamentModeOn(now);
   el.hidden = false;
@@ -40,6 +45,14 @@ export function renderTournamentChip(el: HTMLButtonElement, now = Date.now()): v
   el.title = on
     ? `Tournament mode is on until ${tournamentModeEndText()}. Click to turn it off.`
     : 'Turn on tournament mode: a week with no update checks, reminders, relay notices or join-request sounds.';
+  const t = expiryTimers.get(el);
+  if (t) clearTimeout(t);
+  expiryTimers.delete(el);
+  if (on) {
+    // As syncTournamentModeAttr: just past the end, capped at setTimeout's max.
+    const wait = Math.min(tournamentModeUntil() - now + 50, 2 ** 31 - 1);
+    expiryTimers.set(el, setTimeout(() => renderTournamentChip(el), wait));
+  }
 }
 
 /** Wire the status-bar chip. Idempotent per element. */
@@ -54,6 +67,8 @@ export function initTournamentChip(el: HTMLButtonElement): void {
     prev = st.updateChecksPausedUntil;
     renderTournamentChip(el);
   });
-  // The week running out flips it with no settings change.
+  // The week running out flips it with no settings change: renderTournamentChip
+  // schedules that; this hourly pass is the backstop for a timer a sleeping
+  // laptop held back.
   setInterval(() => renderTournamentChip(el), 60 * 60 * 1000);
 }

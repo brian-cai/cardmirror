@@ -23,6 +23,7 @@ import {
   tournamentModeUntil,
   TOURNAMENT_MODE_MS,
 } from '../../src/editor/tournament-mode.js';
+import { initTournamentChip } from '../../src/editor/tournament-mode-ui.js';
 import { timerQuiet, TIMER_QUIET_MS } from '../../src/editor/quiet-hours.js';
 import { barWanted, outageText } from '../../src/editor/collab/relay-reachability.js';
 import { syncRelayNotice, __resetRelayInfoUiForTests } from '../../src/editor/collab/relay-info-ui.js';
@@ -66,6 +67,22 @@ describe('the switch', () => {
     setTournamentMode(false);
     syncTournamentModeAttr();
     expect(document.documentElement.hasAttribute('data-tournament-mode')).toBe(false);
+  });
+});
+
+describe('the status-bar chip', () => {
+  afterEach(() => vi.useRealTimers());
+  it('goes back to off at the exact moment the week runs out, not up to an hour later', () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    settings.set('updateChecksPausedUntil', now + 90_000);
+    const el = document.createElement('button');
+    initTournamentChip(el);
+    expect(el.dataset['state']).toBe('on');
+    vi.advanceTimersByTime(89_000);
+    expect(el.dataset['state']).toBe('on');
+    vi.advanceTimersByTime(1_100);
+    expect(el.dataset['state']).toBe('off');
   });
 });
 
