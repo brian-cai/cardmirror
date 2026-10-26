@@ -962,18 +962,13 @@ class SettingsModal {
       if (!choice) return;
       includeSecrets = choice === 'with';
     }
-    const electronHost = getElectronHost();
-    const updateSource = electronHost
-      ? await electronHost.getUpdateSource().catch(() => null)
-      : null;
+    // No update source: a file must never be able to point another install
+    // at someone else's releases (set it in About this install instead).
     const payload = JSON.stringify(
       {
         version: 2,
         settings: settings.exportObject({ includeSecrets }),
         userDictionary: exportUserDictionary(),
-        // Only an explicit override — a file from an official install
-        // shouldn't pin another install to the official stream.
-        ...(updateSource?.overridden ? { updateSource: updateSource.active } : {}),
       },
       null,
       2,
@@ -1044,16 +1039,10 @@ class SettingsModal {
     );
     settings.replaceAll(merged, { importSecrets });
     importUserDictionary(wrapper?.userDictionary);
-    // A settings file can name an update source, but it never switches on
-    // its own: setUpdateSource shows the native fingerprint dialog (main
-    // process), and only the user's explicit confirmation pins it.
-    if (updateSource && electronHost) {
-      const current = await electronHost.getUpdateSource().catch(() => null);
-      if (current && current.active.toLowerCase() !== updateSource.toLowerCase()) {
-        const result = await electronHost.setUpdateSource(updateSource).catch(() => null);
-        if (result && !result.ok && !result.cancelled) showToast(result.error);
-      }
-    }
+    // An update source in a file (older exports carry one) is never applied:
+    // whoever controls the source ships this install's code. Say so instead.
+    const namesOtherSource = updateSource !== '' && !!electronHost
+      && (await electronHost.getUpdateSource().catch(() => null))?.active.toLowerCase() !== updateSource.toLowerCase();
     this.render(); // rebuild the dialog so every control reflects the import
     const notes: string[] = [];
     if (skippedFolders.length > 0) {
@@ -1062,6 +1051,7 @@ class SettingsModal {
       );
     }
     if (skippedRelay) notes.push('Relay settings in this file were not applied; use an invite link.');
+    if (namesOtherSource) notes.push('This file names a different update source; it was not applied. Change it yourself under About this install only if you trust it.');
     if (skippedProtected) {
       notes.push('Card cutter, plugin and app-permission settings in this file were not applied.');
     }
