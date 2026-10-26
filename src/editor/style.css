@@ -2429,9 +2429,26 @@ html[data-tournament-mode] .pmd-home-update {
 }
 
 /* The word count + read time is the readout people glance at; chips to
-   its right shrink (and ellipsize) before it does. */
-#word-count-display {
+   its right shrink (and ellipsize) before it does. The notice chip is a
+   short count, clipped to a sliver if it shrinks. */
+#word-count-display,
+#notice-chip {
   flex-shrink: 0;
+}
+/* A half-width window beside the nav pane leaves the bar under ~460px:
+   the zoom buttons go (Mod-= / Mod-- still zoom) and the gaps tighten,
+   rather than run off the window's edge. */
+#status-bar {
+  container-type: inline-size;
+}
+@container (max-width: 460px) {
+  #status-bar .zoom-controls {
+    display: none;
+  }
+  /* Half the 1rem gap (a container can't restyle itself in its own query). */
+  #status-bar > * + * {
+    margin-left: -0.5rem;
+  }
 }
 
 #word-count-text {
