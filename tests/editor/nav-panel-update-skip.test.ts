@@ -55,4 +55,34 @@ describe('NavigationPanel.update skip', () => {
     panel.destroy();
     view.destroy();
   });
+
+  it('applyMaxLevelToNewHeadings with no new heading does not render', () => {
+    const { view, panel, rows } = setup();
+    const before = rows();
+    view.dispatch(view.state.tr.insertText('!', 7)); // heading text edit, no new id
+    panel.applyMaxLevelToNewHeadings();
+    expect(rows()[0]).toBe(before[0]); // untouched until the debounced update
+    expect(rows()[0]!.querySelector('.pmd-nav-label')?.textContent).toBe('First');
+    panel.update(view.state.doc);
+    expect(rows()[0]!.querySelector('.pmd-nav-label')?.textContent).toBe('First!');
+    panel.destroy();
+    view.destroy();
+  });
+
+  it('applyMaxLevelToNewHeadings renders a new heading at once', () => {
+    const { view, panel, rows } = setup();
+    const card = schema.nodes['card']!.create(null, [
+      schema.nodes['tag']!.create({ id: newHeadingId() }, schema.text('Third')),
+      schema.nodes['card_body']!.create(null, schema.text('body')),
+    ]);
+    view.dispatch(view.state.tr.insert(view.state.doc.content.size, card));
+    panel.applyMaxLevelToNewHeadings();
+    expect(rows().map((r) => r.querySelector('.pmd-nav-label')?.textContent)).toEqual(['First', 'Second', 'Third']);
+    // A second call sees nothing new: no rebuild.
+    const kept = rows();
+    panel.applyMaxLevelToNewHeadings();
+    expect(rows()[2]).toBe(kept[2]);
+    panel.destroy();
+    view.destroy();
+  });
 });

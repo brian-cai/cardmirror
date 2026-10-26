@@ -954,6 +954,11 @@ export class NavigationPanel {
    * `lastSeenIds`, so an intervening render (a flushed debounce, a
    * settings repaint) makes the new headings look already-seen and
    * this becomes a silent no-op.
+   *
+   * Runs on every synced transaction, so with no new heading it returns
+   * without rendering (the debounced update() picks up any other change),
+   * and otherwise renders through update()'s unchanged-aware path — a full
+   * rebuild per partner keystroke was ~22 ms on a 9,600-heading file.
    */
   applyMaxLevelToNewHeadings(): void {
     const view = this.view;
@@ -962,10 +967,12 @@ export class NavigationPanel {
     this.currentDoc = doc;
     const maxLevel = this.maxLevel;
     const entries = collectHeadings(doc);
+    let anyNew = false;
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i]!;
       if (entry.id == null) continue;
       if (this.lastSeenIds.has(entry.id)) continue; // not new
+      anyNew = true;
       const next = entries[i + 1];
       const hasChildren = next != null && next.level > entry.level;
       if (!hasChildren) continue;
@@ -973,7 +980,8 @@ export class NavigationPanel {
         this.collapsed.add(entry.id);
       }
     }
-    this.render(doc);
+    if (!anyNew) return;
+    this.update(doc);
   }
 
   /** Positions (in `doc`) of the live zones the divergence plugin has flagged.
