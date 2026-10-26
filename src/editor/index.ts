@@ -10552,7 +10552,11 @@ void quickCardsStore.init();
 // Pre-warm the search palette's file cache during idle, before it's ever
 // opened, so the first search's `.docx` parse is already cached and never
 // janks a keystroke. No-op off Electron / without a file-search root.
-prewarmQuickCardFiles();
+// Not in a window woken from window sleep (its spawn payload carries
+// `restoreView`), and only once the window has focus.
+// (getInitialDoc answers long before the 2 s idle wait ends.)
+let bootIsSleepWake = false;
+prewarmQuickCardFiles({ skip: () => bootIsSleepWake });
 
 // Single cross-window dropzone pill, anchored to the editor's
 // bottom-left corner (NOT the nav pane — dragging onto a nav-bottom
@@ -11059,6 +11063,7 @@ async function initSingleDocBoot(): Promise<void> {
   } catch (err) {
     console.warn('getInitialDoc failed:', err);
   }
+  if (payload?.restoreView) bootIsSleepWake = true;
   if (payload) {
     if (payload.joinShareCode) {
       await mountJoinedSession(payload.joinShareCode);

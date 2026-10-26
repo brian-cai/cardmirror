@@ -8,13 +8,14 @@
  * multi-hundred-ms stall, landing exactly in the window where an
  * external window resize needs the renderer to relayout (the stale
  * stretched-frame symptom). The parse pipeline is DOM-free (fflate +
- * fast-xml-parser + ProseMirror model), so it runs here wholesale; the
- * doc travels back as ProseMirror JSON (a PMNode can't cross a worker
- * boundary) and the caller materializes it only when actually needed —
- * warming stores the JSON, a real dive pays one fromJSON.
+ * fast-xml-parser + ProseMirror model), so it runs here wholesale. Only
+ * what the search needs travels back (objects + outline); the doc itself,
+ * as ProseMirror JSON (a PMNode can't cross a worker boundary), only when
+ * a dive asks for it (`wantDoc`) — warming every pinned file used to ship
+ * each whole doc back to every window.
  *
- * Protocol: { id, bytes, format, kinds } →
- *   { id, ok: true, docJson, objects, outline } | { id, ok: false, error }
+ * Protocol: { id, bytes, format, kinds, wantDoc? } →
+ *   { id, ok: true, objects, outline, docJson? } | { id, ok: false, error }
  */
 
 import { parseNative } from '../native/index.js';
@@ -26,6 +27,7 @@ interface ParseRequest {
   bytes: Uint8Array;
   format: 'cmir' | 'docx';
   kinds: FileObjectKind[];
+  wantDoc?: boolean;
 }
 
 const post = (message: unknown): void =>
@@ -39,7 +41,11 @@ self.onmessage = (e: MessageEvent): void => {
       const doc =
         req.format === 'docx' ? await fromDocx(req.bytes) : parseNative(req.bytes).doc;
       const { objects, outline } = extractFile(doc, new Set(req.kinds));
-      post({ id: req.id, ok: true, docJson: doc.toJSON(), objects, outline });
+      post(
+        req.wantDoc
+          ? { id: req.id, ok: true, docJson: doc.toJSON(), objects, outline }
+          : { id: req.id, ok: true, objects, outline },
+      );
     } catch (err) {
       post({ id: req.id, ok: false, error: err instanceof Error ? err.message : String(err) });
     }

@@ -250,7 +250,7 @@ describe('no copy or capture path is left on the bare serializer', () => {
     ['index.ts', 'serializeRangesForClipboard(sourceView'],
     ['similar-selection-plugin.ts', 'serializeRangesForClipboard(view, ps.matches)'],
     ['cut-in-place.ts', 'serializeRangesForClipboard(view, ranges)'],
-    ['quick-card-search-ui.ts', 'flattenSelfRefsInSlice(\n          this.inFile.doc.slice('],
+    ['quick-card-search-ui.ts', 'flattenSelfRefsInSlice(\n          fileDoc.slice('],
     ['pairing/send-pill-ui.ts', 'flattenSelfRefsInSlice(srcView.state.doc.slice(item.from, item.to), srcView.state.doc, newHeadingId)'],
   ])('%s', (file, marker) => {
     expect(src(file)).toContain(marker);

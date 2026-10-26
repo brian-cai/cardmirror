@@ -113,25 +113,43 @@ import { scheduleIdle } from './idle-scheduler.js';
 interface WarmEntry {
   mtimeMs: number;
   enabledSig: string;
-  /** Exactly one of `doc`/`docJson` is set: the worker warm path stores
-   *  ProseMirror JSON (a PMNode can't cross the worker boundary) and a
-   *  real dive materializes it once via `warmDocOf`; a dive-time parse
-   *  stores the live doc directly. */
+  /** The live doc once a dive has needed it; null from the worker warm
+   *  pass, which keeps only what the search needs (objects + outline).
+   *  Shipping the whole doc back as JSON cost every window ~0.5 s of
+   *  main-thread unpack and ~100 MB held per masterfile, for a doc only
+   *  an actual insert reads — a dive parses it then (diveDocOf). */
   doc: PMNode | null;
-  docJson: unknown | null;
   objects: FileObject[];
   outline: OutlineEntry[];
 }
 const warmCache = new Map<string, WarmEntry>();
 
-/** The entry's live doc, materializing (and caching) from JSON on first
- *  need — the only fromJSON cost, paid on an actual dive. */
-function warmDocOf(entry: WarmEntry): PMNode {
-  if (!entry.doc) {
-    entry.doc = schema.nodeFromJSON(entry.docJson);
-    entry.docJson = null;
+/** The doc for a dive into a warm entry that has none: the same bytes
+ *  parsed again, off-thread (a Word file through the open path, so the
+ *  open cache serves a file converted before). Parsing is deterministic
+ *  in structure, so the warm objects' ranges hold for it. Kept on the
+ *  entry while its mtime still matches. */
+async function diveDocOf(path: string, entry: WarmEntry): Promise<PMNode> {
+  const electron = getElectronHost();
+  const file = await electron?.readFileAtPath(path);
+  if (!file) throw new Error('read failed');
+  let doc: PMNode;
+  let objects: FileObject[];
+  if (file.format === 'docx') {
+    doc = (await (await import('./docx-open.js')).openDocxOffThread(file.bytes)).doc;
+    objects = extractFile(doc, enabledSet()).objects;
+  } else {
+    const parsed = await parseAndExtract(file.bytes, file.format, /* wantLiveDoc */ true);
+    doc = parsed.doc!;
+    objects = parsed.objects;
   }
-  return entry.doc;
+  // Changed on disk since it was warmed: the listed ranges are stale.
+  if (JSON.stringify(objects) !== JSON.stringify(entry.objects)) {
+    if (warmCache.get(path) === entry) warmCache.delete(path);
+    throw new Error('changed on disk');
+  }
+  if (warmCache.get(path) === entry) entry.doc = doc;
+  return doc;
 }
 import {
   DEFAULT_RIBBON_KEYS,
@@ -253,7 +271,7 @@ let parseWorkerNextId = 1;
 const parseWorkerPending = new Map<
   number,
   {
-    resolve: (r: { docJson: unknown; objects: FileObject[]; outline: OutlineEntry[] }) => void;
+    resolve: (r: { docJson?: unknown; objects: FileObject[]; outline: OutlineEntry[] }) => void;
     reject: (e: Error) => void;
   }
 >();
@@ -267,7 +285,7 @@ function getParseWorker(): Worker | null {
     });
     parseWorker.onmessage = (e: MessageEvent): void => {
       const msg = e.data as
-        | { id: number; ok: true; docJson: unknown; objects: FileObject[]; outline: OutlineEntry[] }
+        | { id: number; ok: true; docJson?: unknown; objects: FileObject[]; outline: OutlineEntry[] }
         | { id: number; ok: false; error: string };
       const pending = parseWorkerPending.get(msg.id);
       if (!pending) return;
@@ -289,15 +307,15 @@ function getParseWorker(): Worker | null {
 
 interface ParsedFile {
   /** Live doc when the caller asked for one (or the inline fallback
-   *  ran); otherwise null with `docJson` set for lazy materialization. */
+   *  ran); otherwise null — the worker sent only objects + outline. */
   doc: PMNode | null;
-  docJson: unknown | null;
   objects: FileObject[];
   outline: OutlineEntry[];
 }
 
-/** Parse + extract, off-thread when possible. `wantLiveDoc` pays the
- *  one fromJSON immediately (dive); warming skips it and stores JSON. */
+/** Parse + extract, off-thread when possible. `wantLiveDoc` (a dive) has
+ *  the worker send the doc too and pays its one fromJSON; warming asks
+ *  for objects + outline only. */
 async function parseAndExtract(
   bytes: Uint8Array,
   format: 'cmir' | 'docx',
@@ -307,17 +325,16 @@ async function parseAndExtract(
   if (worker) {
     try {
       const res = await new Promise<{
-        docJson: unknown;
+        docJson?: unknown;
         objects: FileObject[];
         outline: OutlineEntry[];
       }>((resolve, reject) => {
         const id = parseWorkerNextId++;
         parseWorkerPending.set(id, { resolve, reject });
-        worker.postMessage({ id, bytes, format, kinds: [...enabledSet()] });
+        worker.postMessage({ id, bytes, format, kinds: [...enabledSet()], wantDoc: wantLiveDoc });
       });
       return {
         doc: wantLiveDoc ? schema.nodeFromJSON(res.docJson) : null,
-        docJson: wantLiveDoc ? null : res.docJson,
         objects: res.objects,
         outline: res.outline,
       };
@@ -327,7 +344,7 @@ async function parseAndExtract(
   }
   const doc = await parseFileDoc(bytes, format);
   const { objects, outline } = extractFile(doc, enabledSet());
-  return { doc, docJson: null, objects, outline };
+  return { doc, objects, outline };
 }
 
 /** Parse the pinned/recent files that aren't warm yet (or are stale by
@@ -367,7 +384,6 @@ async function runWarmPass(
           mtimeMs: entry.mtimeMs,
           enabledSig: enabledSig(),
           doc: parsed.doc,
-          docJson: parsed.docJson,
           objects: parsed.objects,
           outline: parsed.outline,
         });
@@ -384,8 +400,14 @@ async function runWarmPass(
  *  opened, so the first search's file parse is already cached and
  *  never lands on a keystroke. No-op off Electron or with no search
  *  folders; best-effort (the palette warms on open as a fallback).
- *  Called once at boot. */
-export function prewarmQuickCardFiles(): void {
+ *  Called once at boot.
+ *
+ *  Only the window in use warms: a window without focus waits for its
+ *  first focus (every open window parsing every pin at once was a CPU
+ *  burst per window), and a window waking from window sleep (`skip`)
+ *  doesn't — it was resting because nobody used it; its palette still
+ *  warms on open. */
+export function prewarmQuickCardFiles(opts: { skip?: () => boolean } = {}): void {
   const electron = getElectronHost();
   if (!electron) return;
   const roots = settings.get('fileSearchRoots');
@@ -401,7 +423,8 @@ export function prewarmQuickCardFiles(): void {
     // The pin CONTENT parse is renderer CPU, so it waits for idle so it
     // never janks the launch frame. Exclusions apply (the service omits
     // excluded paths): an excluded pin must not warm.
-    scheduleIdle(() => {
+    const warm = (): void => {
+      if (opts.skip?.()) return;
       void (async () => {
         try {
           const entries = await client.entriesForPaths({
@@ -414,6 +437,11 @@ export function prewarmQuickCardFiles(): void {
           /* ignore */
         }
       })();
+    };
+    scheduleIdle(() => {
+      if (opts.skip?.()) return;
+      if (document.hasFocus()) warm();
+      else window.addEventListener('focus', () => scheduleIdle(warm, 2000), { once: true });
     }, 2000);
   });
 }
@@ -1144,7 +1172,10 @@ class QuickCardSearchUI {
   private inFile: {
     path: string;
     name: string;
-    doc: PMNode;
+    /** Null until `docPromise` settles (a dive on a worker-warmed entry);
+     *  search and browse need only `objects` / `outline`. */
+    doc: PMNode | null;
+    docPromise: Promise<PMNode>;
     objects: FileObject[];
     outline: OutlineEntry[];
     /** Indices into `outline` whose children are collapsed (hidden). */
@@ -2103,19 +2134,21 @@ class QuickCardSearchUI {
       : null;
     recordUsage(path);
 
-    // Warm hit — no read/parse; at most one fromJSON (warmDocOf) when
-    // the entry came from the worker warm path. Re-extract from the doc
-    // only if the searchable-object set changed since it was warmed.
+    // Warm hit — no read/parse before the mount. Re-extract from the doc
+    // only if the searchable-object set changed since it was warmed. An
+    // entry from the worker warm pass has no doc: mount on its objects
+    // at once and parse the doc alongside (an insert waits for it).
     const warm = warmCache.get(path);
-    if (warm && warm.mtimeMs === mtimeMs) {
-      const warmDoc = warmDocOf(warm);
-      if (warm.enabledSig !== enabledSig()) {
-        const re = extractFile(warmDoc, enabledSet());
+    if (warm && warm.mtimeMs === mtimeMs && (warm.doc || warm.enabledSig === enabledSig())) {
+      if (warm.doc && warm.enabledSig !== enabledSig()) {
+        const re = extractFile(warm.doc, enabledSet());
         warm.objects = re.objects;
         warm.outline = re.outline;
         warm.enabledSig = enabledSig();
       }
-      this.mountInFile(path, name, warmDoc, warm.objects, warm.outline, savedQuery, returnBrowse);
+      const docPromise = warm.doc ? Promise.resolve(warm.doc) : diveDocOf(path, warm);
+      docPromise.catch(() => {}); // reported when an insert awaits it
+      this.mountInFile(path, name, warm.doc, docPromise, warm.objects, warm.outline, savedQuery, returnBrowse);
       return;
     }
 
@@ -2144,10 +2177,10 @@ class QuickCardSearchUI {
     if (token !== this.asyncToken || !this.root) return;
     // Keep it warm if this file is pinned.
     if (mtimeMs && effectivePinPaths().has(path)) {
-      warmCache.set(path, { mtimeMs, enabledSig: enabledSig(), doc, docJson: null, objects, outline });
+      warmCache.set(path, { mtimeMs, enabledSig: enabledSig(), doc, objects, outline });
       pruneWarm(effectivePinPaths());
     }
-    this.mountInFile(path, name, doc, objects, outline, savedQuery, returnBrowse);
+    this.mountInFile(path, name, doc, Promise.resolve(doc), objects, outline, savedQuery, returnBrowse);
   }
 
   /** Enter in-file mode with an already-extracted file: seed the
@@ -2155,7 +2188,8 @@ class QuickCardSearchUI {
   private mountInFile(
     path: string,
     name: string,
-    doc: PMNode,
+    doc: PMNode | null,
+    docPromise: Promise<PMNode>,
     objects: FileObject[],
     outline: OutlineEntry[],
     savedQuery: string,
@@ -2168,7 +2202,7 @@ class QuickCardSearchUI {
     outline.forEach((e, i) => {
       if (e.level >= depth) collapsedIdx.add(i);
     });
-    this.inFile = { path, name, doc, objects, outline, collapsedIdx, savedQuery, returnBrowse };
+    this.inFile = { path, name, doc, docPromise, objects, outline, collapsedIdx, savedQuery, returnBrowse };
     this.input.value = '';
     this.input.placeholder = `Search in ${name}…`;
     this.runSearch();
@@ -2620,6 +2654,32 @@ class QuickCardSearchUI {
       if (path) this.openFilePath(path, name);
       return;
     }
+    // A within-file object needs the file's doc: on a dive into a
+    // worker-warmed file it may still be parsing — insert once it lands.
+    const inFile = this.inFile;
+    if (result.source === 'fileobject' && inFile && !inFile.doc) {
+      inFile.docPromise.then(
+        (doc) => {
+          inFile.doc = doc;
+          if (this.inFile === inFile) this.insertResult(result, atEnd, transclude);
+        },
+        (err) => {
+          if (this.inFile !== inFile) return;
+          showToast(
+            err instanceof Error && err.message === 'changed on disk'
+              ? `"${inFile.name}" changed on disk. Open it again.`
+              : `Couldn't read "${inFile.name}".`,
+          );
+        },
+      );
+      return;
+    }
+    this.insertResult(result, atEnd, transclude);
+  }
+
+  /** Insert a quick card / dropzone item / within-file object (whose
+   *  file doc is in hand). */
+  private insertResult(result: PaletteResult, atEnd: boolean, transclude: boolean): void {
     // Everything else (quickcard / dropzone / fileobject) inserts a slice.
     const view = this.view;
     if (!view || !view.editable) {
@@ -2646,9 +2706,10 @@ class QuickCardSearchUI {
         // A live view inside the section is a reference into THAT file:
         // materialize it here, while the file's doc is in hand (the insert
         // path can only unwrap linked copies).
+        const fileDoc = this.inFile.doc!;
         slice = flattenSelfRefsInSlice(
-          this.inFile.doc.slice(result.fileRange.from, result.fileRange.to),
-          this.inFile.doc,
+          fileDoc.slice(result.fileRange.from, result.fileRange.to),
+          fileDoc,
           newHeadingId,
         );
       } else {
@@ -2692,8 +2753,8 @@ class QuickCardSearchUI {
    *  portable source ref, and guards against direct self-embedding. */
   private async insertLiveZoneFromFileObject(result: PaletteResult): Promise<void> {
     const view = this.view;
-    if (!view || !this.inFile || !result.fileRange) return;
-    const inFile = this.inFile;
+    if (!view || !this.inFile?.doc || !result.fileRange) return;
+    const inFile = { ...this.inFile, doc: this.inFile.doc };
     // Capture everything the insert needs BEFORE any await: the `.docx` anchor
     // flow shows an async confirm dialog, and clicking it fires the palette's
     // outside-pointer close — which nulls this.docPath / this.inFile / this.root
