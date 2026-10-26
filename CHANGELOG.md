@@ -5,6 +5,75 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.46 — 2026-10-25
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### In rounds
+
+- **Tournament mode.** Turn it on from the status bar, the command
+  palette or Settings. For a week it turns off update checks, the
+  update and name reminders, the "relay isn't answering" bar, relay
+  notices, "Added teammates" messages and join-request sounds.
+- **Updates ask first.** Clicking "Update ready" asks before
+  restarting CardMirror, and the pill stops pulsing in tournament mode.
+- **Reminders don't grab your typing.** The update and name reminders
+  focus "Later"/"Not now", ignore keys for a second, wait while the
+  timer is running or ran in the last 30 minutes, and hold off while
+  any window has a live co-editing session.
+- **Send to Starred Recipient has a shortcut:** Mod-Shift-P, next to
+  Mod-P (insert what your partner sent).
+
+### Joining your team
+
+- **One-step invite links.** The invite dialog shows your team and
+  relay name, asks your name if you haven't set one, and adds your
+  teammates when you click Connect.
+- **Paste an invite link** into Join or the sharing setup if clicking
+  it didn't open CardMirror. A broken link now says so instead of doing
+  nothing.
+- **Clearer relay errors.** If your team's relay turns this computer
+  away, it says to ask your coach for a new invite link (with the
+  relay's contact). Network problems say "Couldn't reach the relay. Try
+  again in a minute." instead of an error code, and the relay bar says
+  when you're offline. It only shows during a session or after a send
+  fails.
+- **Join requests from the keyboard:** approve or deny them from the
+  command palette.
+
+### Safety
+
+- **Group changes need a yes.** A team file or a relay's team list
+  can't add people to a group you already have without asking: each new
+  member is listed by name and short code, and a newcomer named like
+  one of your contacts but with a different code is flagged. Sessions
+  from a synced team file join your recents only after you agree.
+- **Mailbox proofs name their relay.** On relays that support it, the
+  proof that your mailbox is yours is tied to that relay and the exact
+  data sent, so it can't be replayed on another relay.
+- **Switching relays never sends your old token to the new one.**
+- On your team's relay, computers that only co-edit now count toward
+  its install limit too.
+
+### Speed
+
+- Autosave and crash-recovery saves on very large files no longer
+  pause typing.
+- Saving a big Word file freezes the window far less before the save
+  starts.
+- File search no longer makes every open window parse your pinned
+  files at launch or after waking from sleep, and uses much less memory.
+- In a shared session, a teammate's edits no longer rebuild the whole
+  outline in large files.
+
+### Look and wording
+
+- All yes/no dialogs look the same; colors, contrast and status-bar
+  spacing are consistent in light and dark mode; the Send pill's dot
+  shows a count.
+- "Send code" for people and "session code" for sessions, everywhere.
+
 ## 1.15.45 — 2026-10-25
 
 BCai's (@brian-cai) build of CardMirror, updating from
