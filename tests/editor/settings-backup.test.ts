@@ -12,14 +12,39 @@ import {
 // in the node test env.
 
 describe('settings export', () => {
-  it('excludes the Anthropic API key but keeps everything else', () => {
+  it('excludes the Anthropic API key but keeps importable preferences', () => {
     const s = new SettingsStore();
     s.set('anthropicApiKey', 'sk-secret');
-    s.set('commentAuthor', 'Alice');
+    s.set('theme', 'dark');
     const out = s.exportObject();
     expect('anthropicApiKey' in out).toBe(false);
-    expect(out['commentAuthor']).toBe('Alice');
+    expect(out['theme']).toBe('dark');
     expect(out['ribbonKeyOverrides']).toBeDefined();
+  });
+
+  it('writes only the settings an import may set', () => {
+    const s = new SettingsStore();
+    s.set('cardCutterEnginePath', '/x/engine.js');
+    s.set('pairingRelayUrl', 'https://relay.example');
+    s.set('pairingOwnCode', 'm'.repeat(43));
+    for (const out of [s.exportObject(), s.exportObject({ includeSecrets: true })]) {
+      for (const key of [
+        'cardCutterEnabled',
+        'cardCutterEnginePath',
+        'pluginsEnabled',
+        'pluginCommunityInstalls',
+        'pairingRelayUrl',
+        'pairingRelayToken',
+        'relayProfiles',
+        'teamSessionsKey',
+        'externalAppConsents',
+        'externalInsertPolicy',
+        'pairingOwnCode',
+        'checkForUpdatesOnLaunch',
+      ]) {
+        expect(key in out, key).toBe(false);
+      }
+    }
   });
 
   it('excludes the Google Translate key and MyMemory email', () => {
@@ -30,8 +55,9 @@ describe('settings export', () => {
     const out = s.exportObject();
     expect('googleTranslateApiKey' in out).toBe(false);
     expect('myMemoryEmail' in out).toBe(false);
-    // Non-secret translation settings still export.
-    expect(out['translationProvider']).toBe('google');
+    // The provider travels only with the keys.
+    expect('translationProvider' in out).toBe(false);
+    expect(s.exportObject({ includeSecrets: true })['translationProvider']).toBe('google');
   });
 });
 
@@ -46,8 +72,8 @@ describe('settings export with secrets (opt-in)', () => {
     const out = s.exportObject({ includeSecrets: true });
     expect(out['anthropicApiKey']).toBe('sk-secret');
     expect('googleTranslateApiKey' in out).toBe(false);
-    // The relay token is an ordinary setting: always exported.
-    expect(s.exportObject()['pairingRelayToken']).toBe('relay-tok');
+    // The relay token never goes in a settings file (use an invite link).
+    expect('pairingRelayToken' in out).toBe(false);
     expect(SettingsStore.carriesSecrets(out)).toBe(true);
     expect(SettingsStore.carriesSecrets(s.exportObject())).toBe(false);
   });
@@ -55,7 +81,7 @@ describe('settings export with secrets (opt-in)', () => {
   it('imports credentials only with importSecrets, keeping ones the file lacks', () => {
     const a = new SettingsStore();
     a.set('anthropicApiKey', 'from-file');
-    a.set('commentAuthor', 'Coach');
+    a.set('theme', 'dark');
     const file = a.exportObject({ includeSecrets: true });
 
     const b = new SettingsStore();
@@ -63,7 +89,7 @@ describe('settings export with secrets (opt-in)', () => {
     b.set('openrouterApiKey', 'my-router');
     b.replaceAll(file);
     expect(b.get('anthropicApiKey')).toBe('mine');
-    expect(b.get('commentAuthor')).toBe('Coach');
+    expect(b.get('theme')).toBe('dark');
 
     b.replaceAll(file, { importSecrets: true });
     expect(b.get('anthropicApiKey')).toBe('from-file');
@@ -139,13 +165,13 @@ describe('settings import (replaceAll)', () => {
 
   it('round-trips an export back through import', () => {
     const a = new SettingsStore();
-    a.set('commentAuthor', 'Round');
+    a.set('theme', 'dark');
     a.set('keyboardMacros', [{ id: 'm1', key: 'Mod-Shift-j', text: 'hi' }]);
     a.set('anthropicApiKey', 'a-key');
     const b = new SettingsStore();
     b.set('anthropicApiKey', 'b-key');
     b.replaceAll(a.exportObject());
-    expect(b.get('commentAuthor')).toBe('Round');
+    expect(b.get('theme')).toBe('dark');
     expect(b.get('keyboardMacros')).toEqual([{ id: 'm1', key: 'Mod-Shift-j', text: 'hi' }]);
     expect(b.get('anthropicApiKey')).toBe('b-key'); // not carried by export
   });

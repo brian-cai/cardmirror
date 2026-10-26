@@ -3,7 +3,10 @@
  *
  * A settings file is often someone else's (a coach's, a teammate's), so
  * importing one must not replace things you've built up or things that
- * only make sense on this computer. Three kinds of settings:
+ * only make sense on this computer, and must never change what runs on
+ * this computer or where your data goes. Only the settings listed in
+ * IMPORTABLE_SETTING_KEYS (settings.ts) are taken from a file — an
+ * allowlist, so a new setting stays out until someone decides it's safe:
  *
  * - Preferences (theme, shortcuts, sizes, toggles…): the file's value wins.
  *   That's what importing settings is for. Settings the file doesn't
@@ -11,9 +14,13 @@
  * - Collections you build up (contacts, groups, file search folders,
  *   macros, custom ribbon buttons, autocorrects, readers…): merged. Your
  *   entries all stay, the file's new ones are added.
- * - Identity and this-computer-only state (your sharing code and name,
- *   app permissions, voice calibration): never taken from the file.
- *   Taking someone's sharing code would route their cards to you.
+ * - Everything else keeps its current value: identity and this-computer
+ *   state (your sharing code and name, app permissions, voice
+ *   calibration), and anything that loads code or decides where data goes
+ *   (the card cutter, plugins, relays and team keys, update checks). An
+ *   imported card-cutter engine path once ran the file's code. Relay
+ *   settings in a file are reported (`skippedRelay`) so the user can be
+ *   told to use an invite link instead.
  *
  * Folder paths are machine-specific: an imported folder is used only if
  * it exists on this computer (`exists`), otherwise it's left out (lists)
@@ -24,23 +31,22 @@
 import type { PairingGroup, PairingPartner, Settings } from './settings.js';
 import { mergeTeamFile, TEAM_FILE_KIND } from './pairing/team-file.js';
 import { normalizePairingCode } from './pairing/pairing-ids.js';
-import { MAX_RELAY_PROFILES, MAX_RIBBON_CUSTOM_BUTTONS } from './settings.js';
+import {
+  AI_PROVIDER_SETTING_KEYS,
+  IMPORTABLE_SETTING_KEYS,
+  MAX_RIBBON_CUSTOM_BUTTONS,
+} from './settings.js';
 import { relayMatchKey } from './relay-protocol.js';
 
-/** Never taken from an imported file. */
-const KEEP_CURRENT = [
-  'pairingOwnCode', // your address — taking someone's would receive their cards
-  'pairingDisplayName', // the name your cards are stamped with
-  'contactsAutoExportPath', // a path on THIS machine
-  'teamFileSyncPath', // a path on THIS machine
-  'teamSessionsKey', // comes only from a team file, and is never replaced
-  'relayInfoDismissedNotices', // notices THIS install already dismissed
-  'teamDirectoryRelays', // what THIS install imported from / dismissed on its relay
-  'relayBuiltinTeamKey', // a team key, which comes only from a team file or relay
-  'pairingConnectedUntil',
-  'pairingStarred', // points at one of your own contacts/groups
-  'externalAppConsents', // which apps may talk to THIS install
-  'voiceProfiles', // calibrated to your voice and microphone
+/** Settings a file may carry that are never applied, and that the import
+ *  summary mentions when the file would have changed them. */
+const PROTECTED_KEYS = [
+  'cardCutterEnabled',
+  'cardCutterEnginePath',
+  'pluginsEnabled',
+  'pluginCommunityInstalls',
+  'externalInsertPolicy',
+  'externalAppConsents',
 ] as const;
 
 /** Single-folder settings: the file's folder only if it exists here. */
@@ -66,6 +72,10 @@ export interface ImportMergeOptions {
   /** Whether a folder exists on this computer. Omitted (no way to check,
    *  e.g. the web edition) → imported folders are accepted as-is. */
   exists?: (path: string) => Promise<boolean>;
+  /** The user chose "Import with API keys": the provider choice that
+   *  goes with the keys (AI_PROVIDER_SETTING_KEYS) comes along. The keys
+   *  themselves are applied by `replaceAll`'s `importSecrets`. */
+  importSecrets?: boolean;
 }
 
 export interface ImportMergeResult {
@@ -73,6 +83,12 @@ export interface ImportMergeResult {
   merged: Record<string, unknown>;
   /** Imported folders left out because they aren't on this computer. */
   skippedFolders: string[];
+  /** The file names a relay (address, token or saved relays) that differs
+   *  from yours. Never applied; a relay comes from an invite link. */
+  skippedRelay: boolean;
+  /** The file would have changed card cutter, plugin or app-permission
+   *  settings. Never applied. */
+  skippedProtected: boolean;
 }
 
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -104,8 +120,17 @@ export async function mergeImportedSettings(
   opts: ImportMergeOptions = {},
 ): Promise<ImportMergeResult> {
   const cur = current as unknown as Record<string, unknown>;
-  // Start from what's here, so settings the file doesn't mention stay.
-  const merged: Record<string, unknown> = { ...cur, ...incoming };
+  // Start from what's here, so settings the file doesn't mention stay,
+  // and take only the allowlisted ones from the file.
+  const merged: Record<string, unknown> = { ...cur };
+  for (const key of IMPORTABLE_SETTING_KEYS) {
+    if (key in incoming) merged[key] = incoming[key];
+  }
+  if (opts.importSecrets) {
+    for (const key of AI_PROVIDER_SETTING_KEYS) {
+      if (key in incoming) merged[key] = incoming[key];
+    }
+  }
   const skippedFolders: string[] = [];
   const existsCache = new Map<string, Promise<boolean>>();
   const exists = (p: string): Promise<boolean> => {
@@ -117,8 +142,6 @@ export async function mergeImportedSettings(
     }
     return hit;
   };
-
-  for (const key of KEEP_CURRENT) merged[key] = cur[key];
 
   for (const key of FOLDER_KEYS) {
     const v = incoming[key];
@@ -174,35 +197,32 @@ export async function mergeImportedSettings(
     merged['pairingGroups'] = result.groups;
   }
 
-  // A sharing server in the file is taken only if it's complete; an empty
-  // one never blanks yours.
-  for (const key of ['pairingRelayUrl', 'pairingRelayToken'] as const) {
-    const v = incoming[key];
-    if (typeof v !== 'string' || !v.trim()) merged[key] = cur[key];
-  }
-
-  // Saved relays: yours all stay (with their team keys); the file's new
-  // ones are added like the single relay is — URL and token — but without
-  // a team key (keys come only from a team file or the relay, as with
-  // teamSessionsKey) and never as the active relay.
-  if ('relayProfiles' in incoming) {
-    const mine = arr(cur['relayProfiles']).filter(isObj);
-    const key = (p: Record<string, unknown>): string => relayMatchKey(String(p['url'] ?? ''), String(p['token'] ?? ''));
-    const seen = new Set(mine.map(key));
-    const ids = new Set(mine.map((p) => String(p['id'])));
-    const out = [...mine];
-    for (const raw of arr(incoming['relayProfiles'])) {
-      if (!isObj(raw) || typeof raw['url'] !== 'string' || !raw['url'].trim()) continue;
-      const k = key(raw);
-      if (seen.has(k)) continue;
-      seen.add(k);
-      let id = String(raw['id'] ?? '');
-      while (!id || ids.has(id)) id = `rp-${Math.random().toString(36).slice(2, 10)}`;
-      ids.add(id);
-      out.push({ ...raw, id, teamKey: '' });
-    }
-    merged['relayProfiles'] = out.slice(0, MAX_RELAY_PROFILES);
-  }
+  // Relays are never taken from a file (an http:// relay, or one that
+  // isn't yours, would see everything you share). Note whether the file
+  // named one you don't have, so the summary can say so.
+  const mineRelays = new Set(
+    [
+      relayMatchKey(String(cur['pairingRelayUrl'] ?? ''), String(cur['pairingRelayToken'] ?? '')),
+      ...arr(cur['relayProfiles'])
+        .filter(isObj)
+        .map((p) => relayMatchKey(String(p['url'] ?? ''), String(p['token'] ?? ''))),
+    ],
+  );
+  const fileRelays: [unknown, unknown][] = [
+    [incoming['pairingRelayUrl'], incoming['pairingRelayToken'] ?? cur['pairingRelayToken']],
+    ...arr(incoming['relayProfiles'])
+      .filter(isObj)
+      .map((p): [unknown, unknown] => [p['url'], p['token']]),
+  ];
+  const skippedRelay = fileRelays.some(
+    ([url, token]) =>
+      typeof url === 'string' &&
+      url.trim() !== '' &&
+      !mineRelays.has(relayMatchKey(url, typeof token === 'string' ? token : '')),
+  );
+  const skippedProtected = PROTECTED_KEYS.some(
+    (key) => key in incoming && JSON.stringify(incoming[key]) !== JSON.stringify(cur[key]),
+  );
 
   // Things you've made: keep all of yours, add the file's new ones.
   const lists: [string, (x: Record<string, unknown>) => string][] = [
@@ -217,9 +237,14 @@ export async function mergeImportedSettings(
     merged[key] = unionBy(arr(cur[key]) as Record<string, unknown>[], arr(incoming[key]), k);
   }
   if ('ribbonCustomButtons' in incoming) {
+    // A button that flips a setting may only flip one a file could set.
+    const allowed = arr(incoming['ribbonCustomButtons']).filter((b) => {
+      const m = isObj(b) ? /^(?:toggle|cycle):(.*)$/.exec(String(b['command'] ?? '')) : null;
+      return !m || IMPORTABLE_SETTING_KEYS.has(m[1]!);
+    });
     merged['ribbonCustomButtons'] = unionBy(
       arr(cur['ribbonCustomButtons']) as Record<string, unknown>[],
-      arr(incoming['ribbonCustomButtons']),
+      allowed,
       (b) => String(b['command']),
     ).slice(0, MAX_RIBBON_CUSTOM_BUTTONS);
   }
@@ -229,5 +254,5 @@ export async function mergeImportedSettings(
     if (isObj(incoming[key])) merged[key] = { ...(isObj(cur[key]) ? cur[key] : {}), ...incoming[key] };
   }
 
-  return { merged, skippedFolders };
+  return { merged, skippedFolders, skippedRelay, skippedProtected };
 }

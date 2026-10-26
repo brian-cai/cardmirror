@@ -1013,7 +1013,7 @@ class SettingsModal {
       const choice = await promptForChoice({
         message: 'Import settings?',
         detail:
-          'Your preferences are set to the file\u2019s. Your contacts, groups, folders, macros and custom buttons all stay \u2014 the file\u2019s new ones are added. The file also contains API keys \u2014 use them in place of yours, or keep your own.',
+          'Your preferences are set to the file\u2019s. Your contacts, groups, folders, macros and custom buttons all stay \u2014 the file\u2019s new ones are added. Relays, team keys, plugins, the card cutter and app permissions are never taken from a file. The file also contains API keys \u2014 use them (and its AI provider) in place of yours, or keep your own.',
         choices: [
           { value: 'with', label: 'Import with API keys', primary: true },
           { value: 'without', label: 'Import, keep my keys' },
@@ -1023,7 +1023,7 @@ class SettingsModal {
       importSecrets = choice === 'with';
     } else if (
       !(await confirmDialog(
-        'Import settings? Your preferences are set to the file\u2019s. Your contacts, groups, folders, macros and custom buttons all stay \u2014 the file\u2019s new ones are added. Your API keys and your send code are kept.',
+        'Import settings? Your preferences are set to the file\u2019s. Your contacts, groups, folders, macros and custom buttons all stay \u2014 the file\u2019s new ones are added. Your API keys, your send code and name, your relay, plugins, card cutter and app permissions are kept.',
         { okLabel: 'Import' },
       ))
     ) {
@@ -1032,10 +1032,15 @@ class SettingsModal {
     const electronHost = getElectronHost();
     // Merge, don't wipe: see settings-import.ts. Folders are checked
     // against this computer on desktop (the web edition can't look).
-    const { merged, skippedFolders } = await mergeImportedSettings(
+    const { merged, skippedFolders, skippedRelay, skippedProtected } = await mergeImportedSettings(
       settings.all(),
       obj as Record<string, unknown>,
-      electronHost ? { exists: async (p) => (await getHost().statFile(p).catch(() => null)) !== null } : {},
+      {
+        importSecrets,
+        ...(electronHost
+          ? { exists: async (p: string) => (await getHost().statFile(p).catch(() => null)) !== null }
+          : {}),
+      },
     );
     settings.replaceAll(merged, { importSecrets });
     importUserDictionary(wrapper?.userDictionary);
@@ -1050,11 +1055,17 @@ class SettingsModal {
       }
     }
     this.render(); // rebuild the dialog so every control reflects the import
-    showToast(
-      skippedFolders.length === 0
-        ? 'Settings imported.'
-        : `Settings imported. ${skippedFolders.length === 1 ? '1 folder' : `${skippedFolders.length} folders`} from the file ${skippedFolders.length === 1 ? 'isn\u2019t' : 'aren\u2019t'} on this computer, so your own folder settings were kept for ${skippedFolders.length === 1 ? 'it' : 'them'}.`,
-    );
+    const notes: string[] = [];
+    if (skippedFolders.length > 0) {
+      notes.push(
+        `${skippedFolders.length === 1 ? '1 folder' : `${skippedFolders.length} folders`} from the file ${skippedFolders.length === 1 ? 'isn\u2019t' : 'aren\u2019t'} on this computer, so your own folder settings were kept for ${skippedFolders.length === 1 ? 'it' : 'them'}.`,
+      );
+    }
+    if (skippedRelay) notes.push('Relay settings in this file were not applied; use an invite link.');
+    if (skippedProtected) {
+      notes.push('Card cutter, plugin and app-permission settings in this file were not applied.');
+    }
+    showToast(['Settings imported.', ...notes].join(' '));
   }
 
   /** Re-binding handle so tab buttons can change the active panel

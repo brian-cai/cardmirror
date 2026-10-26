@@ -76,6 +76,120 @@ const SECRET_SETTING_KEYS = new Set<string>([
   'myMemoryEmail',
 ]);
 
+/** The ONLY settings an imported settings file may set (settings-import.ts),
+ *  and so the only ones a settings export writes. An allowlist: a key added
+ *  to `Settings` stays out of import and export until it's listed here.
+ *  Settings files get passed around (a coach's, a teammate's), so this is a
+ *  list of preferences that are safe to take from someone else.
+ *
+ *  Deliberately absent, and never taken from a file:
+ *  - anything that loads or runs code, or unlocks doing so: the card cutter
+ *    (enable switch, engine path, its options) and plugins (master switch,
+ *    community installs). An imported engine path once ran the file's code.
+ *  - where your data goes: the relay URL, token, saved relays and team keys
+ *    (`teamSessionsKey`, `teamKeyOrigins`, `relayBuiltinTeamKey`), sharing
+ *    on/off, open team sessions, sending your install name, update checks,
+ *    and the local bridge's policy and per-app consents. Relays come from an
+ *    invite link or Settings → Collaboration, where they're confirmed.
+ *  - identity and this-computer-only state: your sharing code, display name,
+ *    comment author, starred target, team-file paths, voice calibration and
+ *    microphone, accessibility tree, onboarding/notice flags, last find query.
+ *  - the API keys (SECRET_SETTING_KEYS) and the provider choice that goes
+ *    with them (AI_PROVIDER_SETTING_KEYS): only when the user picks "Import
+ *    with API keys" — `replaceAll`'s `importSecrets`.
+ *  Per-window keys (TRANSIENT_SETTING_KEYS) are never imported either. */
+export const IMPORTABLE_SETTING_KEYS: ReadonlySet<string> = new Set<string>([
+  // Navigation pane
+  'navWidth', 'navMaxLevel', 'navSearchLevel', 'navSearchHideNonMatches', 'navSearchContent',
+  'navFollowCursor', 'dragInteractions', 'formatNavPaneByType', 'navAnalyticItalics',
+  'navTextScale', 'navScrollResize',
+  // Speech / send / read / marked docs (folders pass the exists-check)
+  'defaultSpeechDocFolder', 'defaultSpeechDocFormat', 'speechDocFilenameTemplate',
+  'defaultSaveFormat', 'prefixPresetSaveFilenames', 'sendDocPrefix', 'readDocPrefix',
+  'markedDocPrefix', 'sendDocDestination', 'sendDocFolder', 'readDocDestination', 'readDocFolder',
+  'markedCardsDestination', 'markedCardsFolder', 'sendDocFormat', 'readDocFormat',
+  'markedDocFormat', 'sendDocNumbering', 'markedDocNumbering', 'newSpeechDocInSpeechSlot',
+  'autoMarkSpeechSlotDoc', 'includeSpeechDocPocket',
+  // Appearance and accessibility
+  'overrideHighlightColor', 'overrideHighlightSlots', 'overrideShadingColor',
+  'overrideShadingSlots', 'showCursorColorNames', 'theme', 'themeAppliesToDocument', 'iconSet',
+  'showDocNameChip', 'showUndoRedoButtons', 'commentsColumnWidth', 'reduceMotion',
+  'readerReduceMotion', 'colorVisionFriendly', 'frameSharedSession', 'frameSharedColor',
+  'frameSpeechDoc', 'frameSpeechColor', 'annotationShapes', 'distinguishShading', 'unboldCites',
+  'disableCursorBlink', 'customColorOverrides', 'defaultZoomPct', 'chromeScalePct', 'gestureZoom',
+  'displaySizes', 'displayParagraphSpacing', 'displayTypography', 'underlineFollowsFontColor',
+  'styleAlignments', 'maxTextWidthPx', 'maxTextWidthAlign', 'displayColors', 'bodyFont', 'uiFont',
+  'lineHeight', 'lineHeightCite', 'lineHeightTag', 'lineHeightAnalytic', 'lineHeightHeading',
+  'lineHeightUndertag', 'ribbonTooltipMode', 'ribbonScale', 'showDropzonePill',
+  'showQuickCardButtons', 'formattingPanelMode', 'formattingPanelPreview', 'showCharacterStyles',
+  'commentsVisible', 'showCitePreview', 'flashcardDueDot',
+  // Timer
+  'timerProfile', 'timerProfiles', 'timerSpeechPresets', 'timerShowFourthPreset',
+  'timerPrepMinutes', 'timerFlashEnabled', 'timerSoundEnabled', 'timerSoundVolume',
+  'timerFlashSeconds', 'timerCompact', 'timerPrepLabel', 'timerPosition',
+  // Find
+  'findResultsExpanded', 'findRememberLastQuery', 'findCategoryOrder',
+  // Card numbering
+  'showCardNumbering', 'showNumberingButtons', 'cardNumberingFormat', 'cardNumberingSubFormat',
+  'cardNumberingSubCapitalized', 'cardNumberingSubBold', 'cardNumberingIndent',
+  'cardNumberingSubIndent', 'cardNumberingMatchHeadingColor',
+  // Typing and paste
+  'editorSpellcheck', 'smartQuotes', 'smartQuoteDatesAsApostrophes', 'autoLinkUrls',
+  'autoCapitalizeSentences', 'customAutocorrectEnabled', 'customAutocorrects', 'customDashEnabled',
+  'customDashStyle', 'customDashTrigger', 'copyPreviousCiteNearestOnly', 'enterAfterPocket',
+  'enterAfterHat', 'enterAfterBlock', 'enterAfterTag', 'enterAfterAnalytic', 'enterAfterUndertag',
+  'paragraphIntegrity', 'usePilcrows', 'extractUndertagInQuotes', 'headingMode', 'condenseOnPaste',
+  'smartPasteConversion', 'pasteCursor',
+  // Voice (not the calibration, microphone or model)
+  'voiceAutoSleepSeconds', 'voiceDashStyle', 'voiceDictateKey', 'voiceDictateToggle',
+  'voiceDictateSilenceSeconds', 'voiceCleanupEnabled',
+  // Read mode, readers, word count
+  'jumpToDocTopOnReadModeToggle', 'hideEmphasisBordersInReadMode', 'readModeParagraphIntegrity',
+  'readModeKeepEntireCite', 'readModeShowUndertags', 'readModeShowBackground', 'repeatWithModY',
+  'markUnreadAfterMarker', 'readers', 'liveSelectionWordCount', 'liveDocWordCount',
+  'liveContainerReadTime', 'liveRemainingReadTime', 'wordCountOrder', 'wordCountOrderReadMode',
+  // Windows and workspace
+  'lastWorkspaceEnabled', 'reopenOnLaunch', 'openMultipleFiles', 'arrangeSpeechSide',
+  'arrangeSpeechPct', 'windowSleepMinutes', 'docOpenCache', 'multiDocWorkspace', 'mobileLayout',
+  'multiDocLayoutMode', 'openReplacesUntitled', 'showHideSlotButton',
+  // File search (folders pass the exists-check)
+  'fileSearchRoots', 'fileSearchExclusions', 'fileSearchHighestFolders',
+  'fileSearchPreferredFolders', 'fileSearchDeprioritizedFolders', 'fileSearchFormats',
+  'fileSearchObjectTypes', 'fileSearchOutlineDepth', 'fileSearchTiebreak', 'pinAutoEnabled',
+  'quickCardActiveTags',
+  // Styles and formatting tools
+  'lastHighlightColor', 'lastShadingColor', 'lastFontColor', 'versionHistory',
+  'versionHistoryDocCapMb', 'versionHistoryTotalCapMb', 'formattingGapClass',
+  'autoBridgeFormattingGaps', 'clearFormattingOnNamedStyleToggleOff', 'clearRemovesHighlighting',
+  'standardizeHighlightException', 'highlightUnderlinedOnly', 'standardizeShadingException',
+  'defaultHighlightColor', 'defaultShadingColor', 'forReferenceUseGray50',
+  'createReferenceIncludeHeading', 'createReferenceDelimiter', 'createReferenceIncludeCite',
+  'createReferenceCustomHeading', 'createReferenceHeadingBold', 'createReferenceHeadingItalic',
+  'createReferenceHeadingEmphasized', 'createReferenceHeadingUnderlined', 'createReferenceShrinks',
+  'createReferenceShrinkPt', 'createReferenceHighlightMode', 'shrinkRestoresOmissionsToNormal',
+  'condenseWarningDelimiter', 'condenseWarningCustomPauseMarker',
+  'condenseWarningCustomResumeMarker', 'shrinkCustomProtections', 'acronymPatterns',
+  'cleanProtectedStyles',
+  // Keyboard and ribbon customization
+  'ribbonKeyOverrides', 'ribbonCustomButtons', 'keyboardMacros',
+  // AI and translation preferences (not keys or provider)
+  'aiMaxTokens', 'aiFeaturesEnabled', 'clodEnabled', 'clodActivitiesByTime', 'clodTimePeriods',
+  'aiPersonaName', 'aiPersonaPronouns', 'aiPersonaCustomPronouns', 'aiCitePrompt',
+  'translationTargetLang', 'translationSourceLang', 'prependTranslationMarker',
+  // Contacts and groups (merged like a team file) and sharing preferences
+  'pairingPartners', 'pairingGroups', 'pairingBlockedCodes', 'pairingPollSeconds',
+  'pairingReceiveFlash', 'collabShowCursors',
+] satisfies (keyof Settings)[]);
+
+/** Which AI / translation service your keys are used with. Taken from a
+ *  file, and written to an export, only together with the keys. */
+export const AI_PROVIDER_SETTING_KEYS: ReadonlySet<string> = new Set<string>([
+  'aiProvider',
+  'aiModelOverride',
+  'openrouterModel',
+  'translationProvider',
+] satisfies (keyof Settings)[]);
+
 /** Reader profile for read-time estimates: name + words-per-minute.
  *  `tagWpm` is the optional SECOND speed most readers actually have —
  *  the rate for tags, analytics, and cites (the structural read), with
@@ -1696,8 +1810,10 @@ export interface Settings {
    *  @cardmirror/card-cutter package, loaded dev-only. */
   cardCutterEnabled: boolean;
   /** Card-cutter: absolute path to the engine bundle to load (packaged
-   *  builds only). Empty = use CARDCUTTER_ENGINE env or the default
-   *  userData/plugins/cardcutter.global.js location. */
+   *  builds only). Empty = the default userData/plugins/cardcutter.global.js
+   *  (or, in dev builds, the CARDCUTTER_ENGINE env). Main loads only the
+   *  default file or one picked in its dialog (code-scope.ts). Never
+   *  imported from a settings file. */
   cardCutterEnginePath: string;
   /** Card-cutter: emphasis style. FIXED at 'voice' — the setting has no
    *  UI anymore (the other variants tested worse, and we only present
@@ -4451,7 +4567,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'cardCutterEnginePath',
     label: 'Engine file',
     description:
-      'Path to the card-cutter engine bundle this build loads (packaged installs only — the engine is never shipped with the app). Leave empty to use the CARDCUTTER_ENGINE environment variable, or the default plugins location in the app data folder. Reload after changing.',
+      'Path to the card-cutter engine bundle this build loads (packaged installs only — the engine is never shipped with the app). Leave empty to use the default plugins location in the app data folder (development builds also read the CARDCUTTER_ENGINE environment variable). Only the default file or one picked with Browse is loaded. Reload after changing.',
     kind: 'cardCutterEnginePath',
     category: 'comments-ai',
     electronOnly: true,
@@ -4991,17 +5107,23 @@ export class SettingsStore {
     return { ...this.values };
   }
 
-  /** Snapshot for export: every persisted setting EXCEPT transient
-   *  (per-window) keys and the secret credentials (API keys / the
-   *  MyMemory email). `includeSecrets` keeps the non-empty credentials,
-   *  for moving a whole setup to another computer — the user opts in at
-   *  export time. */
+  /** Snapshot for export: exactly the settings an import may set
+   *  (IMPORTABLE_SETTING_KEYS), so a file never carries a relay, a card
+   *  cutter path, plugin unlocks, consents or your identity — import
+   *  would refuse them anyway. `includeSecrets` adds the non-empty
+   *  credentials (API keys / the MyMemory email) and the provider choice
+   *  that goes with them, for moving a whole setup to another computer —
+   *  the user opts in at export time. */
   exportObject(opts?: { includeSecrets?: boolean }): Record<string, unknown> {
-    const out: Record<string, unknown> = { ...this.values };
-    for (const key of SECRET_SETTING_KEYS) {
-      if (!opts?.includeSecrets || !out[key]) delete out[key];
+    const values = this.values as unknown as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of IMPORTABLE_SETTING_KEYS) {
+      if (key in values) out[key] = values[key];
     }
-    for (const key of TRANSIENT_SETTING_KEYS) delete out[key];
+    if (opts?.includeSecrets) {
+      for (const key of AI_PROVIDER_SETTING_KEYS) out[key] = values[key];
+      for (const key of SECRET_SETTING_KEYS) if (values[key]) out[key] = values[key];
+    }
     return out;
   }
 

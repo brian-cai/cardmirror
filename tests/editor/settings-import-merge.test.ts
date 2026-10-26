@@ -1,7 +1,8 @@
 /**
  * Import settings merges instead of wiping: preferences come from the
- * file, collections are unioned, identity and this-computer-only state
- * stay, and folders that don't exist here are skipped.
+ * file, collections are unioned, identity, this-computer-only state and
+ * anything that loads code or picks a relay stay, and folders that don't
+ * exist here are skipped.
  */
 import { describe, it, expect } from 'vitest';
 import { mergeImportedSettings } from '../../src/editor/settings-import.js';
@@ -105,6 +106,87 @@ describe('mergeImportedSettings', () => {
     );
     expect(merged['pairingRelayUrl']).toBe('https://relay.example');
     expect(merged['pairingRelayToken']).toBe('tok');
+  });
+
+  it('never takes the card cutter, plugin unlocks or a relay from the file', async () => {
+    const current = mine({
+      cardCutterEnabled: false,
+      cardCutterEnginePath: '',
+      pluginsEnabled: false,
+      pluginCommunityInstalls: false,
+      pairingRelayUrl: 'https://relay.example',
+      pairingRelayToken: 'tok',
+    });
+    const { merged, skippedRelay, skippedProtected } = await mergeImportedSettings(
+      current,
+      {
+        theme: 'dark',
+        cardCutterEnabled: true,
+        cardCutterEnginePath: '\\\\attacker.example\\share\\engine.js',
+        pluginsEnabled: true,
+        pluginCommunityInstalls: true,
+        pairingRelayUrl: 'http://evil.example/relay',
+        pairingRelayToken: 'evil',
+        relayProfiles: [{ id: 'x', label: 'Evil', labelCustom: true, url: 'http://evil.example/relay', token: 'evil', teamKey: '', lastUsed: 1 }],
+        teamSessionsKey: 'k'.repeat(43),
+        teamKeyOrigins: [{ k: 'x', o: 'file' }],
+        externalInsertPolicy: 'open',
+        checkForUpdatesOnLaunch: false,
+        commentAuthor: 'Coach',
+      },
+      { exists },
+    );
+    expect(merged['theme']).toBe('dark');
+    for (const key of [
+      'cardCutterEnabled',
+      'cardCutterEnginePath',
+      'pluginsEnabled',
+      'pluginCommunityInstalls',
+      'pairingRelayUrl',
+      'pairingRelayToken',
+      'relayProfiles',
+      'teamSessionsKey',
+      'teamKeyOrigins',
+      'externalInsertPolicy',
+      'checkForUpdatesOnLaunch',
+      'commentAuthor',
+    ] as const) {
+      expect(merged[key], key).toEqual(current[key]);
+    }
+    expect(skippedRelay).toBe(true);
+    expect(skippedProtected).toBe(true);
+  });
+
+  it('a file naming your own relay, or none, is not reported as skipped', async () => {
+    const current = mine({ pairingRelayUrl: 'https://relay.example', pairingRelayToken: 'tok' });
+    const same = await mergeImportedSettings(current, { pairingRelayUrl: 'https://relay.example/', pairingRelayToken: 'tok', cardCutterEnabled: current.cardCutterEnabled }, { exists });
+    expect(same.skippedRelay).toBe(false);
+    expect(same.skippedProtected).toBe(false);
+    const none = await mergeImportedSettings(current, { theme: 'dark' }, { exists });
+    expect(none.skippedRelay).toBe(false);
+  });
+
+  it('takes the AI provider only with the API keys', async () => {
+    const current = mine({ aiProvider: 'anthropic' });
+    const without = await mergeImportedSettings(current, { aiProvider: 'openrouter' }, { exists });
+    expect(without.merged['aiProvider']).toBe('anthropic');
+    const withKeys = await mergeImportedSettings(current, { aiProvider: 'openrouter' }, { exists, importSecrets: true });
+    expect(withKeys.merged['aiProvider']).toBe('openrouter');
+  });
+
+  it('drops custom buttons that would flip a setting the file may not set', async () => {
+    const { merged } = await mergeImportedSettings(
+      mine({ ribbonCustomButtons: [] }),
+      {
+        ribbonCustomButtons: [
+          { command: 'toggle:pluginCommunityInstalls', icon: 'star' },
+          { command: 'toggle:cardCutterEnabled', icon: 'star' },
+          { command: 'toggle:smartQuotes', icon: 'star' },
+        ],
+      },
+      { exists },
+    );
+    expect((merged['ribbonCustomButtons'] as { command: string }[]).map((b) => b.command)).toEqual(['toggle:smartQuotes']);
   });
 
   it('survives replaceAll sanitizing', async () => {

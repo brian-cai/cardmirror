@@ -406,14 +406,15 @@ describe('quick switch menu and Saved relays list', () => {
 // ── settings import / export ──────────────────────────────────────────
 
 describe('settings import and export', () => {
-  it('exports saved relays with their tokens, like the single custom relay', () => {
+  it('export leaves saved relays and the relay token out of the file', () => {
     saved(HS, KEY_A);
-    const out = settings.exportObject();
-    expect(out['pairingRelayToken']).toBe(HS.token);
-    expect((out['relayProfiles'] as RelayProfile[])[0]!.token).toBe(HS.token);
+    const out = settings.exportObject({ includeSecrets: true });
+    expect('pairingRelayToken' in out).toBe(false);
+    expect('pairingRelayUrl' in out).toBe(false);
+    expect('relayProfiles' in out).toBe(false);
   });
 
-  it('import keeps yours (with keys), adds the file’s new ones without a team key, skips duplicates', async () => {
+  it('import keeps yours (with keys), adds none of the file’s, and reports them', async () => {
     const mine = saved(HS, KEY_A);
     settings.set('relayBuiltinTeamKey', KEY_C);
     const incoming = {
@@ -423,13 +424,10 @@ describe('settings import and export', () => {
       ],
       relayBuiltinTeamKey: KEY_B,
     };
-    const { merged } = await mergeImportedSettings(settings.exportObject() as unknown as Settings, incoming);
-    const list = merged['relayProfiles'] as RelayProfile[];
-    expect(list).toHaveLength(2);
-    expect(list[0]).toEqual(mine);
-    expect(list[1]).toMatchObject({ label: 'College', url: COLLEGE.url, token: COLLEGE.token, teamKey: '' });
-    expect(list[1]!.id).not.toBe(mine.id);
+    const { merged, skippedRelay } = await mergeImportedSettings(settings.all(), incoming);
+    expect(merged['relayProfiles']).toEqual([mine]);
     expect(merged['relayBuiltinTeamKey']).toBe(KEY_C);
+    expect(skippedRelay).toBe(true);
   });
 });
 
