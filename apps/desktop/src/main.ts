@@ -3495,6 +3495,17 @@ function buildMenu(): Menu {
         click: () => dispatchMenuCommand('chromeScaleDown'),
       },
       { type: 'separator' },
+      {
+        label: 'Read Mode',
+        accelerator: menuAccelerator('toggleReadMode'),
+        click: () => dispatchMenuCommand('toggleReadMode'),
+      },
+      {
+        label: 'Word Count…',
+        accelerator: menuAccelerator('wordCountSelection'),
+        click: () => dispatchMenuCommand('wordCountSelection'),
+      },
+      { type: 'separator' },
       { role: 'togglefullscreen' },
     ],
   };

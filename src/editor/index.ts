@@ -5836,6 +5836,7 @@ function makeStarterDoc(): PMNode {
     paraIndented('Select Speech Doc — a panel listing every open document; pick the speech doc from anywhere, or clear it'),
     paraIndented('` (backtick) — send the card or selection you\u2019re on to the speech doc at its cursor'),
     paraIndented('Alt-` — send it to the end of the speech doc instead'),
+    paraIndented('No speech doc yet? ` offers to create one and sends the card straight into it. Inside the speech doc, ` drops a red "Marked" note at the cursor to keep your place'),
     paraIndented('Arrange Windows — the speech doc on one side of the screen, everything else stacked on the other'),
     blank(),
     paraText(
@@ -5850,11 +5851,15 @@ function makeStarterDoc(): PMNode {
     // Section 7: Read mode
     n['hat']!.create({ id: newHeadingId() }, schema.text('7. Read mode')),
     paraText(
-      'Click 👁️ to read at the podium. Everything but Tags, Cites, Analytics, and highlighted text hides, and typing is locked out so a stray key can\'t edit the doc. Click 👁️ again or press Esc to exit.',
+      'Click 👁️ (or press Alt-Shift-R) to read at the podium. Everything but Tags, Cites, Analytics, and highlighted text hides, and typing is locked out so a stray key can\'t edit the doc. Click 👁️ again, press Alt-Shift-R, or press Esc to exit.',
     ),
     blank(),
     paraText(
       'The status bar shows live read-time estimates for your top two readers. Set their names and words-per-minute in ⚙ → General → "Readers for read-time estimates".',
+    ),
+    blank(),
+    paraText(
+      'The ⏱ timer in the ribbon runs speeches and prep: while it\'s showing, Alt-Shift-T starts and pauses it, and Alt-Shift-A / Alt-Shift-N start Aff / Neg prep.',
     ),
     blank(),
 
@@ -5877,6 +5882,10 @@ function makeStarterDoc(): PMNode {
     n['hat']!.create({ id: newHeadingId() }, schema.text('9. Make it yours')),
     paraText(
       'Click ⚙ for Settings and 📖 for the full keyboard reference any time.',
+    ),
+    blank(),
+    paraText(
+      'Word habits carry over: Mod-Shift-G is Word Count, and Mod-Shift-> / Mod-Shift-< (or Mod-] / Mod-[ in the desktop app) make the selected text 1 pt bigger or smaller.',
     ),
     blank(),
 
@@ -10118,6 +10127,8 @@ const NATIVE_MENU_COMMANDS: RibbonCommandId[] = [
   'navTextBigger',
   'navTextSmaller',
   'navTextReset',
+  'toggleReadMode',
+  'wordCountSelection',
   // Edit
   'openFind',
   'openFindReplace',
@@ -11006,6 +11017,9 @@ if (BOOT_MULTI_DOC_WORKSPACE) {
       );
       return;
     }
+    // New default keys yield to a user's own binding of the same key —
+    // the three-pane workspace never runs the single-doc boot's pass.
+    migrateNewDefaultKeys();
     m.mountMultiPaneShell();
     // The dropzone pill anchors to the leftmost VISIBLE pane body, but
     // panes boot `[hidden]` until a doc loads — so the anchor doesn't
@@ -11187,8 +11201,9 @@ async function initSingleDocBoot(): Promise<void> {
     // High School timer became the default (2026-10-03): move installs
     // still on the untouched College default over once.
     migrateHighSchoolTimerDefault();
-    // Send to Starred got Mod-Shift-P (1.15.46): an install whose own
-    // override already uses it keeps its binding; the new default yields.
+    // New default keys (Send to Starred's Mod-Shift-P in 1.15.46, the Word /
+    // Verbatim keys in 1.15.50): an install whose own override already uses
+    // one keeps its binding; the new default yields.
     migrateNewDefaultKeys();
     // Update checks became opt-OUT (2026-07-27): flip an older
     // install's stored `false` default exactly once, with a one-time

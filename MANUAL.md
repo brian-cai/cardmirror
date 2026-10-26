@@ -1182,8 +1182,8 @@ as [send-to-speech](#8-reading-and-delivering-a-speech).
 
 ### Read mode
 
-Click the **eye** in the ribbon (or bind a key to *Toggle Read Mode*) to
-enter read mode — CardMirror's version of Verbatim's invisibility, with
+Click the **eye** in the ribbon (or press **Alt-Shift-R**; on a Mac
+**⌥⇧R**, also View → Read Mode) to enter read mode — CardMirror's version of Verbatim's invisibility, with
 two improvements:
 
 **Convert Cards to Read Mode** (command bar; also *zap card*) makes that
@@ -1274,8 +1274,8 @@ covers everything; set it, and every readout splits the math (the Word
 Count dialog shows both, e.g. "200 / 260"). The **first two** readers appear live in the status bar; the
 numbers update as you highlight and trim.
 
-Click the word count (the **Σ** button / Word Count) for the full
-breakdown — that dialog shows the read time for **every** reader on your
+Click the word count (the **Σ** button / Word Count, or **Mod-Shift-G** as
+in Word) for the full breakdown — that dialog shows the read time for **every** reader on your
 list, not just the two in the bar, and the word count and read time for
 the current selection.
 
@@ -1392,14 +1392,16 @@ display**, **Start / Pause** (▶), three **speech preset** buttons, and the
   per-side prep total under Settings → General; the compact layout lives under
   Settings → Appearance.
 
-- **Keyboard transport.** Eight more unbound commands drive the timer from the
-  keyboard (assign keys under Settings → Keyboard): **Timer: Show / Hide
-  Panel**, **Timer: Start / Pause**, **Timer: Start Speech Preset 1–3** (loads
-  that preset *and* starts it counting), **Timer: Start Aff Prep** / **Start
-  Neg Prep** (switches to that side's clock and starts it), and **Timer:
-  Reset**. Apart from Show / Hide, they only fire while the timer panel is
-  visible, and — like the buttons — a press in one window drives the clocks in
-  every window.
+- **Keyboard transport.** **Alt-Shift-T** starts / pauses the timer, and
+  **Alt-Shift-A** / **Alt-Shift-N** start Aff / Neg prep (switch to that
+  side's clock and start it); on a Mac that's ⌥⇧T / ⌥⇧A / ⌥⇧N. (On a
+  Chromebook, Alt-Shift-N opens the system's notifications, so Neg prep has
+  no key there — give it one.) More commands are unbound until you assign
+  keys under Settings → Keyboard: **Timer: Show / Hide Panel**, **Timer: Start
+  Speech Preset 1–3** (loads that preset *and* starts it counting), and
+  **Timer: Reset**. Apart from Show / Hide, they only fire while the timer
+  panel is visible, and — like the buttons — a press in one window drives the
+  clocks in every window.
 
 ### Arranging windows around the speech doc
 
@@ -3246,6 +3248,7 @@ All defaults; rebind any of them in **Settings → Keyboard shortcuts**.
 | Mod-F11 | Background color |
 | Mod-Z / Mod-Y | Undo / Redo (Mod-Shift-Z also redoes) |
 | Mod-B / Mod-I | Bold / Italic |
+| Mod-Shift-. / Mod-Shift-, | Font size up / down 1 pt (Word's Ctrl+Shift+> / <; Mod-] / Mod-[ too on the desktop) |
 | Mod-Shift-= | Superscript (Subscript is unbound by default; Mod-= is Zoom In) |
 | F12 | Clear formatting |
 | F2 | Paste Text |
@@ -3281,7 +3284,7 @@ these to extend the selection.
 |----------|--------|
 | `` ` `` / Alt-`` ` `` | Send to speech at cursor / at end |
 | Mod-`` ` `` | Send to dropzone |
-| *(unbound)* | Send to the starred recipient / group — bind it in Settings |
+| Mod-Shift-P | Send to the starred recipient / group |
 | Mod-P / Mod-Alt-P | Insert most recently received card at cursor / at end of doc |
 | Mod-Shift-N | Add note to selection |
 | Mod-Shift-Q | Ask AI about selection |
@@ -3289,7 +3292,7 @@ these to extend the selection.
 | Mod-Shift-R | Repair OCR/PDF text in selection (AI) |
 | Mod-Alt-R | Repair Formatting in selection (AI) |
 | Mod-Shift-T | Translate selection to clipboard (AI) |
-| Mod-Shift-D | Toggle a reading-position marker (Space / Enter also work in read mode) |
+| Mod-Shift-D | Toggle a reading-position marker (Space / Enter also work in read mode; `` ` `` in the speech doc) |
 
 ### Files and view
 | Shortcut | Action |
@@ -3298,6 +3301,8 @@ these to extend the selection.
 | Mod-Alt-S | Save Send Doc |
 | Mod-Alt-M | Save Marked Cards |
 | Mod-= / Mod-- | Zoom in / out |
+| Alt-Shift-R | Read mode on / off |
+| Mod-Shift-G | Word Count |
 | Mod-Alt-= / Mod-Alt-- / Mod-Alt-0 | Interface scale up / down / reset (desktop) |
 
 ### Multi-doc workspace
@@ -3306,6 +3311,13 @@ these to extend the selection.
 | Mod-1 / Mod-2 / Mod-3 | Focus slot 1 / 2 / 3 |
 | Mod-Shift-1/2/3 | Move active doc to slot |
 | Mod-W | Close the focused document or window |
+
+### Timer
+Only while the timer is shown.
+| Shortcut | Action |
+|----------|--------|
+| Alt-Shift-T | Start / pause |
+| Alt-Shift-A / Alt-Shift-N | Start Aff / Neg prep (Neg prep unbound on a Chromebook) |
 
 ### Voice control (desktop)
 | Shortcut | Action |

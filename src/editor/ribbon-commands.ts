@@ -5459,6 +5459,13 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
  * inline marks.
  */
 const IS_MAC_PLATFORM = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform ?? '');
+/** ChromeOS (the web build on a Chromebook) keeps Alt-Shift-N for its own
+ *  notifications panel before the page ever sees it. */
+const IS_CHROMEOS = typeof navigator !== 'undefined' && /\bCrOS\b/.test(navigator.userAgent ?? '');
+/** Mod-[ / Mod-] are the browser's Back / Forward on macOS; the web build
+ *  leaves them to the browser so a press outside the editor can't navigate
+ *  away from the page. */
+const IS_ELECTRON_HOST = getHost().kind === 'electron';
 
 export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   undo: 'Mod-z',
@@ -5517,7 +5524,11 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   standardizeShadingExcept: '',
   convertCardsToReadMode: '',
   findUnformattedCites: '',
-  toggleReadMode: '',
+  // Alt-Shift-R ("read"), in the Alt-Shift family with Voice (Alt-Shift-V):
+  // free in every default, menu and OS (no macOS / Windows / Linux system
+  // chord; Option-Shift-R only types ‰), and a chord read mode's keyboard
+  // lock lets through, so the same press turns it back off.
+  toggleReadMode: 'Alt-Shift-r',
   toggleReaderView: '',
   openContainingFolder: '',
   saveWorkspace: '',
@@ -5551,7 +5562,9 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   openCutterGuidance: '',
   createFlashcard: '',
   manageFlashcards: '',
-  wordCountSelection: '',
+  // Word's Word Count (Ctrl+Shift+G). In a browser it's Find Previous, which
+  // the editor takes only while it has focus.
+  wordCountSelection: 'Mod-Shift-g',
   openShortcutsReference: '',
   startUiTour: '',
   selectSimilar: '',
@@ -5691,11 +5704,14 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   setNavDepth2: '',
   setNavDepth3: '',
   setNavDepth4: '',
-  // Ribbon actions with no default key — all already reachable via
-  // the ribbon, so a default chord would be noise. Bindable in
-  // Settings → Keyboard shortcuts.
-  adjustFontSizeUp: '',
-  adjustFontSizeDown: '',
+  // Word's font-size keys: Ctrl+Shift+> / < (named by the unshifted key,
+  // as Superscript's Mod-Shift-=; prosemirror-keymap matches the shifted
+  // character through the key code) and Ctrl+] / Ctrl+[ (desktop only:
+  // Back / Forward in a Mac browser). Mod-Shift-, is not Settings (Mod-,).
+  adjustFontSizeUp: IS_ELECTRON_HOST ? ['Mod-Shift-.', 'Mod-]'] : 'Mod-Shift-.',
+  adjustFontSizeDown: IS_ELECTRON_HOST ? ['Mod-Shift-,', 'Mod-['] : 'Mod-Shift-,',
+  // Ribbon actions with no default key — already reachable via the
+  // ribbon. Bindable in Settings → Keyboard shortcuts.
   applyFontColor: '',
   // The platform-wide preferences chord (⌘, on macOS; Ctrl+, elsewhere).
   openSettings: 'Mod-,',
@@ -5743,12 +5759,20 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   closeDocOrWindow: 'Mod-w',
   insertFootnote: '',
   timerToggleVisible: '',
-  timerStartPause: '',
+  // Timer transport: Alt-Shift-T start / pause, Alt-Shift-A / Alt-Shift-N
+  // Aff / Neg prep. They act only while the timer is shown, so the chord
+  // means nothing otherwise. No OS uses them (Option-Shift only types a
+  // character on macOS; Alt-Shift with a letter doesn't switch the Windows
+  // input language), Ctrl-Alt would type AltGr characters on European
+  // layouts, and a browser's Alt-Shift-T / -A focus shortcuts yield to the
+  // page. ChromeOS keeps Alt-Shift-N (notifications), so Neg prep is
+  // unbound there.
+  timerStartPause: 'Alt-Shift-t',
   timerPreset1: '',
   timerPreset2: '',
   timerPreset3: '',
-  timerStartAffPrep: '',
-  timerStartNegPrep: '',
+  timerStartAffPrep: 'Alt-Shift-a',
+  timerStartNegPrep: IS_CHROMEOS ? '' : 'Alt-Shift-n',
   timerReset: '',
 };
 
@@ -7384,10 +7408,33 @@ export function buildRibbonKeymap(
 const NEW_DEFAULT_KEYS: ReadonlyArray<{ id: RibbonCommandId; marker: string }> = [
   // 1.15.46: Send to Starred Recipient on Mod-Shift-P.
   { id: 'sendToStarred', marker: 'cm-key-default-sendToStarred-migrated' },
+  // 1.15.50: Word / Verbatim muscle memory.
+  { id: 'wordCountSelection', marker: 'cm-key-default-wordCountSelection-migrated' },
+  { id: 'adjustFontSizeUp', marker: 'cm-key-default-adjustFontSizeUp-migrated' },
+  { id: 'adjustFontSizeDown', marker: 'cm-key-default-adjustFontSizeDown-migrated' },
+  { id: 'toggleReadMode', marker: 'cm-key-default-toggleReadMode-migrated' },
+  { id: 'timerStartPause', marker: 'cm-key-default-timerStartPause-migrated' },
+  { id: 'timerStartAffPrep', marker: 'cm-key-default-timerStartAffPrep-migrated' },
+  { id: 'timerStartNegPrep', marker: 'cm-key-default-timerStartNegPrep-migrated' },
 ];
 
+/** US-layout shifted characters of the punctuation keys the new defaults
+ *  name: a binding recorded from the keyboard stores what Shift typed
+ *  ('Mod-Shift->', or 'Mod->'), and prosemirror-keymap fires either one on
+ *  the same press as 'Mod-Shift-.'. */
+const SHIFTED_PUNCT: Readonly<Record<string, string>> = { '.': '>', ',': '<' };
+
+/** Folded spellings of `key` that the same keypress also triggers. */
+function sameKeySpellings(key: string): string[] {
+  const folded = foldKeyString(key);
+  const m = /^(.*)-Shift-(.)$/.exec(folded);
+  const shifted = m ? SHIFTED_PUNCT[m[2]!] : undefined;
+  if (!m || !shifted) return [folded];
+  return [folded, `${m[1]}-Shift-${shifted}`, `${m[1]}-${shifted}`];
+}
+
 /** One-shot, per new default key: when a user override already binds the
- *  same (folded) key to another command, the new default is dropped (an
+ *  same (folded) key to another command, that new default key is dropped (an
  *  empty override: unbound, rebindable in the keybindings editor) so the
  *  user's binding keeps working — buildRibbonKeymap's last-wins would
  *  otherwise pick one by command order. Nothing changes without a clash,
@@ -7402,11 +7449,20 @@ export function migrateNewDefaultKeys(): void {
     }
     const overrides = settings.get('ribbonKeyOverrides');
     if (overrides[id] != null) continue; // the user set this one already
-    const mine = new Set(keysArray(DEFAULT_RIBBON_KEYS[id]).filter((k) => !!k).map(foldKeyString));
-    const clash = Object.entries(overrides).some(
-      ([other, spec]) => other !== id && spec != null && keysArray(spec).some((k) => !!k && mine.has(foldKeyString(k))),
+    const taken = new Set(
+      Object.entries(overrides)
+        .filter(([other, spec]) => other !== id && spec != null)
+        .flatMap(([, spec]) => keysArray(spec!).filter((k) => !!k).map(foldKeyString)),
     );
-    if (clash) settings.set('ribbonKeyOverrides', { ...overrides, [id]: '' });
+    const defaults = keysArray(DEFAULT_RIBBON_KEYS[id]).filter((k) => !!k);
+    // Keep the default keys nobody took (Font Size Up keeps Mod-] when only
+    // Mod-Shift-. clashed); with none left, unbound.
+    const free = defaults.filter((k) => !sameKeySpellings(k).some((f) => taken.has(f)));
+    if (free.length === defaults.length) continue;
+    settings.set('ribbonKeyOverrides', {
+      ...overrides,
+      [id]: free.length === 0 ? '' : free.length === 1 ? free[0]! : free,
+    });
   }
 }
 
