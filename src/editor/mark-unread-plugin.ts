@@ -13,15 +13,17 @@
  * only colors the body that comes after it.
  *
  * Perf: the setting is OFF by default, so `build` bails before walking
- * anything (zero cost for the common case). When on, it rebuilds the whole
- * set on each doc change — an O(doc) full rebuild, which is fine since "on" is
- * a review posture (few edits). If a big doc ever lags while on, upgrade to
- * incremental (map + recompute the changed card, like read-mode-plugin).
+ * anything (zero cost for the common case). When on, a doc change maps the
+ * existing set and recomputes only the top-level children the change touched
+ * (like font-size-class / read mode): a full rebuild was ~15 ms per keystroke
+ * on a masterfile. A card's decorations depend only on that card, so the
+ * result is the same as a full rebuild.
  */
 
 import { Plugin } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import type { Node as PMNode } from 'prosemirror-model';
+import { changedRange, expandToTopLevel } from './decoration-range.js';
 import { settings } from './settings.js';
 import { isMarkerText } from './reading-marker.js';
 
@@ -32,10 +34,11 @@ import { isMarkerText } from './reading-marker.js';
 export const MARK_UNREAD_TOGGLE = 'pmdMarkUnreadToggle';
 
 /** The decorations for one doc, ignoring the toggle (the plugin gates on the
- *  setting before calling this). Pure; exported for testing. */
-export function computeUnreadDecorations(doc: PMNode): Decoration[] {
+ *  setting before calling this). Pure; exported for testing. With a range
+ *  (top-level-child aligned, see `expandToTopLevel`), only the cards in it. */
+export function computeUnreadDecorations(doc: PMNode, from = 0, to = doc.content.size): Decoration[] {
   const decos: Decoration[] = [];
-  doc.descendants((node, pos) => {
+  doc.nodesBetween(from, to, (node, pos) => {
     const name = node.type.name;
     // Descend through structural containers (pocket/hat/block) to reach cards.
     if (name !== 'card' && name !== 'analytic_unit') return true;
@@ -60,27 +63,45 @@ export function computeUnreadDecorations(doc: PMNode): Decoration[] {
   return decos;
 }
 
-function build(doc: PMNode): DecorationSet {
-  // OFF (the default) bails before any walk: zero cost for the common case.
-  if (!settings.get('markUnreadAfterMarker')) return DecorationSet.empty;
-  return DecorationSet.create(doc, computeUnreadDecorations(doc));
+/** The set plus whether it was built with the setting on, so a doc change
+ *  can trust it as a base for an incremental update only when it was (a
+ *  toggle that reached this view without its nudge still self-heals with a
+ *  full rebuild on the next edit). */
+interface UnreadState {
+  on: boolean;
+  set: DecorationSet;
 }
 
-export const markUnreadPlugin: Plugin<DecorationSet> = new Plugin<DecorationSet>({
+function build(doc: PMNode): UnreadState {
+  // OFF (the default) bails before any walk: zero cost for the common case.
+  if (!settings.get('markUnreadAfterMarker')) return { on: false, set: DecorationSet.empty };
+  return { on: true, set: DecorationSet.create(doc, computeUnreadDecorations(doc)) };
+}
+
+export const markUnreadPlugin: Plugin<UnreadState> = new Plugin<UnreadState>({
   state: {
     init(_config, state) {
       return build(state.doc);
     },
     apply(tr, prev, _old, newState) {
-      // Rebuild on doc edits (a marker moved / body changed) and on the
-      // toggle nudge; otherwise (selection-only, unrelated meta) reuse prev.
-      if (tr.getMeta(MARK_UNREAD_TOGGLE) === undefined && !tr.docChanged) return prev;
-      return build(newState.doc);
+      // Rebuild on the toggle nudge; on doc edits (a marker moved / body
+      // changed) update incrementally; otherwise (selection-only, unrelated
+      // meta) reuse prev.
+      if (tr.getMeta(MARK_UNREAD_TOGGLE) !== undefined) return build(newState.doc);
+      if (!tr.docChanged) return prev;
+      if (!prev.on || !settings.get('markUnreadAfterMarker')) return build(newState.doc);
+      const mapped = prev.set.map(tr.mapping, newState.doc);
+      const range = changedRange(tr);
+      if (!range) return { on: true, set: mapped };
+      const zone = expandToTopLevel(newState.doc, range.from, range.to);
+      const stale = mapped.find(zone.from, zone.to);
+      const fresh = computeUnreadDecorations(newState.doc, zone.from, zone.to);
+      return { on: true, set: mapped.remove(stale).add(newState.doc, fresh) };
     },
   },
   props: {
     decorations(state) {
-      return markUnreadPlugin.getState(state);
+      return markUnreadPlugin.getState(state)?.set;
     },
   },
 });

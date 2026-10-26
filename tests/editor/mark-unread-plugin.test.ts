@@ -58,3 +58,78 @@ describe('computeUnreadDecorations', () => {
     expect(decoratedText(doc)).toEqual([' after']);
   });
 });
+
+describe('markUnreadPlugin incremental updates', () => {
+  const key = (doc: PMNode, decos: readonly { from: number; to: number }[]) =>
+    decos
+      .map((d) => `${d.from}-${d.to}:${doc.textBetween(d.from, d.to)}`)
+      .sort();
+
+  function rng(seed: number): () => number {
+    let s = seed >>> 0;
+    return () => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 4294967296;
+    };
+  }
+
+  function textPositions(doc: PMNode): number[] {
+    const out: number[] = [];
+    doc.descendants((node, pos) => {
+      if (node.isTextblock) for (let k = 0; k <= node.content.size; k++) out.push(pos + 1 + k);
+      return !node.isTextblock;
+    });
+    return out;
+  }
+
+  function randomDoc(rand: () => number): PMNode {
+    const cards: PMNode[] = [];
+    const n = 3 + Math.floor(rand() * 5);
+    for (let i = 0; i < n; i++) {
+      const bodies: PMNode[] = [];
+      const m = 1 + Math.floor(rand() * 3);
+      for (let j = 0; j < m; j++) {
+        bodies.push(rand() < 0.3 ? cardBody(schema.text(`b${i}${j} `), marker(), schema.text(' rest')) : cardBody(schema.text(`body ${i}.${j}`)));
+      }
+      cards.push(card(tag(`Tag ${i}`), ...bodies));
+    }
+    return makeDoc(...cards);
+  }
+
+  it('matches a full rebuild after random edits (typing, markers, deletes, splits)', async () => {
+    const { EditorState } = await import('prosemirror-state');
+    const { settings } = await import('../../src/editor/settings.js');
+    const { markUnreadPlugin } = await import('../../src/editor/mark-unread-plugin.js');
+    const was = settings.get('markUnreadAfterMarker');
+    settings.set('markUnreadAfterMarker', true);
+    try {
+      for (let seed = 1; seed <= 150; seed++) {
+        const rand = rng(seed);
+        let state = EditorState.create({ doc: randomDoc(rand), plugins: [markUnreadPlugin] });
+        for (let k = 0; k < 25; k++) {
+          const spots = textPositions(state.doc);
+          const a = spots[Math.floor(rand() * spots.length)]!;
+          const b = spots[Math.floor(rand() * spots.length)]!;
+          const tr = state.tr;
+          const op = Math.floor(rand() * 6);
+          try {
+            if (op === 0) tr.insertText('x', a);
+            else if (op === 1) tr.insert(a, marker());
+            else if (op === 2) tr.delete(Math.min(a, b), Math.max(a, b));
+            else if (op === 3) tr.removeMark(Math.min(a, b), Math.max(a, b), schema.marks['font_color']!);
+            else if (op === 4) tr.split(a);
+            else tr.insertText('ab', a).delete(a, a + 1);
+          } catch {
+            continue; // an edit the schema refuses
+          }
+          if (!tr.docChanged) continue;
+          state = state.apply(tr);
+          const live = markUnreadPlugin.getState(state)!.set.find();
+          expect(key(state.doc, live), `seed ${seed} step ${k}`).toEqual(key(state.doc, computeUnreadDecorations(state.doc)));
+        }
+      }
+    } finally {
+      settings.set('markUnreadAfterMarker', was);
+    }
+  });
+});
