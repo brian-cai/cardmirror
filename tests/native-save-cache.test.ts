@@ -26,6 +26,19 @@ describe('native save caches', () => {
     expect(docJsonBytes(empty)).toEqual(utf8(JSON.stringify(empty.toJSON())));
   });
 
+  it('docJsonBytes returns a fresh buffer: transferring it leaves the block cache intact', () => {
+    const doc = docOf(para('Caf\u00e9 \u{1F525}'), ...mixedDoc().content.content);
+    const expected = new TextEncoder().encode(JSON.stringify(doc.toJSON()));
+    const first = docJsonBytes(doc);
+    // What the .docx save does: post the bytes to its worker as a transferable.
+    structuredClone(first, { transfer: [first.buffer] });
+    expect(first.byteLength).toBe(0);
+    expect(docJsonBytes(doc)).toEqual(expected);
+    const second = docJsonBytes(doc);
+    expect(second.buffer).not.toBe(docJsonBytes(doc).buffer);
+    expect(gunzipSync(serializeNative(doc)).byteLength).toBeGreaterThan(expected.byteLength);
+  });
+
   it('serializeNative envelope is byte-identical to JSON.stringify of the whole file', () => {
     let doc = docOf(para('\u00c9t\u00e9 \u{1F4A5}'), ...mixedDoc().content.content);
     const threads = [{ id: 't1', comments: [{ id: 't1', author: 'Z\u00f6e', initials: 'Z', date: '2026-05-15T20:00:00.000Z', text: 'ok \u2713', kind: 'human' as const, parentId: null }] }];

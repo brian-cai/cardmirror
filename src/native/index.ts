@@ -171,60 +171,45 @@ function tripwireForSave(doc: PMNode): PMNode {
  *  ~10× smaller files; the gzip magic (0x1F 0x8B) lets `parseNative`
  *  tell compressed files from legacy plaintext ones (which begin
  *  with `{`). */
-/** JSON text per top-level block, keyed by the immutable node: the crash
- *  journal re-serializes the whole doc every few seconds while typing, and
- *  an edit changes only the blocks on its path — so only those are
- *  re-stringified (on a masterfile, ~1 s of editor-thread work per journal
- *  write becomes a few ms). */
-const blockJson = new WeakMap<PMNode, string>();
-
-/** Exactly `JSON.stringify(doc.toJSON())`, assembled from cached block JSON. */
-export function docJsonText(doc: PMNode): string {
-  if (doc.marks.length > 0 || Object.keys(doc.attrs).length > 0) return JSON.stringify(doc.toJSON());
-  if (doc.content.size === 0) return `{"type":${JSON.stringify(doc.type.name)}}`;
-  const parts: string[] = [];
-  doc.forEach((child) => {
-    let json = blockJson.get(child);
-    if (json === undefined) {
-      json = JSON.stringify(child.toJSON());
-      blockJson.set(child, json);
-    }
-    parts.push(json);
-  });
-  return `{"type":${JSON.stringify(doc.type.name)},"content":[${parts.join(',')}]}`;
-}
-
-/** UTF-8 bytes of each block's cached JSON, so a save encodes only the
- *  edited blocks too: one TextEncoder pass over a masterfile's whole
- *  envelope (~35 MB) was ~300 ms per journal write. Block JSON is
+/** UTF-8 JSON bytes per top-level block, keyed by the immutable node: the
+ *  crash journal re-serializes the whole doc every few seconds while
+ *  typing, and an edit changes only the blocks on its path — so only those
+ *  are re-stringified and re-encoded (on a masterfile, ~1 s of
+ *  editor-thread work per journal write becomes a few ms; one TextEncoder
+ *  pass over the whole ~35 MB envelope was another ~300 ms). Block JSON is
  *  well-formed (JSON.stringify escapes lone surrogates), so the encoded
- *  pieces concatenate to exactly the encoding of the joined text. */
+ *  pieces concatenate to exactly the encoding of the joined text. Only the
+ *  bytes are cached: a second per-block JSON string cache doubled the
+ *  memory (~70 MB more on a masterfile) for the .docx save alone, which
+ *  now takes the bytes too. */
 const blockBytes = new WeakMap<PMNode, Uint8Array>();
 
 const utf8 = new TextEncoder();
 
-/** Exactly `new TextEncoder().encode(docJsonText(doc))`, from cached block bytes. */
+/** Exactly `JSON.stringify(doc.toJSON())`, decoded from `docJsonBytes`. */
+export function docJsonText(doc: PMNode): string {
+  return new TextDecoder().decode(docJsonBytes(doc));
+}
+
+/** Exactly `new TextEncoder().encode(JSON.stringify(doc.toJSON()))`, from
+ *  cached block bytes. Always a fresh buffer (the parts are copied into
+ *  it), never a cached one, so a caller may transfer or detach it. */
 export function docJsonBytes(doc: PMNode): Uint8Array {
   return concatBytes(docJsonByteParts(doc));
 }
 
-/** docJsonBytes as pieces, so the envelope copies each block once. */
+/** docJsonBytes as pieces, so the envelope copies each block once. The
+ *  block pieces are the cache's own arrays: copy, never transfer them. */
 function docJsonByteParts(doc: PMNode): Uint8Array[] {
-  if (doc.marks.length > 0 || Object.keys(doc.attrs).length > 0 || doc.content.size === 0) {
-    return [utf8.encode(docJsonText(doc))];
-  }
+  if (doc.marks.length > 0 || Object.keys(doc.attrs).length > 0) return [utf8.encode(JSON.stringify(doc.toJSON()))];
+  if (doc.content.size === 0) return [utf8.encode(`{"type":${JSON.stringify(doc.type.name)}}`)];
   const parts: Uint8Array[] = [utf8.encode(`{"type":${JSON.stringify(doc.type.name)},"content":[`)];
   const comma = utf8.encode(',');
   let first = true;
   doc.forEach((child) => {
     let bytes = blockBytes.get(child);
     if (bytes === undefined) {
-      let json = blockJson.get(child);
-      if (json === undefined) {
-        json = JSON.stringify(child.toJSON());
-        blockJson.set(child, json);
-      }
-      bytes = utf8.encode(json);
+      bytes = utf8.encode(JSON.stringify(child.toJSON()));
       blockBytes.set(child, bytes);
     }
     if (!first) parts.push(comma);

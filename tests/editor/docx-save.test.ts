@@ -11,7 +11,7 @@ import { schema } from '../../src/schema/index.js';
 import { toDocx } from '../../src/export/index.js';
 import { fromDocxFull } from '../../src/import/index.js';
 import { toDocxOffThread } from '../../src/editor/docx-save.js';
-import { docJsonText } from '../../src/native/index.js';
+import { docJsonBytes, docJsonText } from '../../src/native/index.js';
 import { mixedDoc } from '../collab/_loro-helpers.js';
 
 async function sampleDoc() {
@@ -30,7 +30,7 @@ describe('toDocxOffThread', () => {
     expect(docXml(await toDocx(schema.nodeFromJSON(JSON.parse(docJsonText(doc))), { defaultFont: 'Calibri' }))).toBe(direct);
   });
 
-  it('the worker builds the same document.xml from the JSON text it is sent', async () => {
+  it('the worker builds the same document.xml from the JSON bytes it is sent', async () => {
     const doc = await sampleDoc();
     const direct = docXml(await toDocx(doc, { defaultFont: 'Calibri' }));
     const replies: unknown[] = [];
@@ -41,7 +41,7 @@ describe('toDocxOffThread', () => {
     g.self = fake;
     try {
       await import('../../src/editor/docx-save-worker.js');
-      fake.onmessage!({ data: { id: 7, docJsonText: docJsonText(doc), opts: { defaultFont: 'Calibri' } } });
+      fake.onmessage!({ data: { id: 7, docJsonBytes: docJsonBytes(doc), opts: { defaultFont: 'Calibri' } } });
       for (let i = 0; i < 200 && replies.length === 0; i++) await new Promise((r) => setTimeout(r, 10));
     } finally {
       if (had) g.self = prev;
