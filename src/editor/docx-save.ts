@@ -5,8 +5,10 @@
  * `toDocx` (OOXML generation + zip compression) ran on the renderer thread
  * for every Word save: ~0.5 s on a typical file, several seconds on a
  * tournament masterfile, with the window frozen throughout. Here it runs in
- * a worker (docx-save-worker.ts); only `doc.toJSON()` (a fraction of the
- * cost) stays on this thread, since a node can't cross the boundary.
+ * a worker (docx-save-worker.ts). A node can't cross the boundary, so the
+ * doc goes as its JSON text — from the native save's per-block cache
+ * (docJsonText), a string copy instead of structured-cloning a `toJSON()`
+ * tree (~0.6 s on a masterfile) — and the worker parses it.
  *
  * Any worker failure, or a worker that doesn't answer in time, re-runs the
  * export inline, so the caller gets exactly the bytes or error it always
@@ -15,6 +17,7 @@
 
 import type { Node as PMNode } from 'prosemirror-model';
 import { toDocx } from '../export/index.js';
+import { docJsonText } from '../native/index.js';
 
 type ExportOpts = NonNullable<Parameters<typeof toDocx>[1]>;
 type WorkerReply = { id: number; ok: true; bytes: Uint8Array } | { id: number; ok: false; error: string };
@@ -77,7 +80,7 @@ export async function toDocxOffThread(doc: PMNode, opts: ExportOpts = {}): Promi
             reject(e);
           },
         });
-        w.postMessage({ id, docJson: doc.toJSON(), opts });
+        w.postMessage({ id, docJsonText: docJsonText(doc), opts });
       });
     } catch {
       /* worker died or the export failed there — run it inline below */
