@@ -10,6 +10,7 @@
 
 import type { Transaction } from 'prosemirror-state';
 import type { Node as PMNode } from 'prosemirror-model';
+import { hasMirrors } from './transaction-utils.js';
 
 /**
  * Compute the union of doc-position ranges affected by a transaction.
@@ -24,7 +25,8 @@ import type { Node as PMNode } from 'prosemirror-model';
  *      AddNodeMark / RemoveNodeMark) produce identity mappings, so
  *      step (1) misses them entirely. Each such step carries its
  *      own `from` / `to`. We map those forward through subsequent
- *      steps (`tr.mapping.slice(i + 1)`) to land in the final doc.
+ *      steps to land in the final doc (one pass, carrying the running
+ *      bounds through each step map).
  *
  * Without step (2), a transaction that ONLY changes marks (e.g., F9
  * stripping `font_size` from a run) registers no changed range, and
@@ -40,15 +42,37 @@ export function changedRange(tr: Transaction): { from: number; to: number } | nu
       if (nTo > to) to = nTo;
     });
   });
-  tr.steps.forEach((step, i) => {
-    const s = step as unknown as { from?: unknown; to?: unknown };
-    if (typeof s.from !== 'number' || typeof s.to !== 'number') return;
-    const after = tr.mapping.slice(i + 1);
-    const f = after.map(s.from, -1);
-    const t = after.map(s.to, 1);
-    if (f < from) from = f;
-    if (t > to) to = t;
-  });
+  if (hasMirrors(tr.mapping)) {
+    tr.steps.forEach((step, i) => {
+      const s = step as unknown as { from?: unknown; to?: unknown };
+      if (typeof s.from !== 'number' || typeof s.to !== 'number') return;
+      const after = tr.mapping.slice(i + 1);
+      const f = after.map(s.from, -1);
+      const t = after.map(s.to, 1);
+      if (f < from) from = f;
+      if (t > to) to = t;
+    });
+  } else {
+    // Same union in one forward pass: carry the running step-bounds
+    // through each later step map instead of slicing the mapping per
+    // step (O(steps²) — seconds on a whole-doc F11). `StepMap.map` is
+    // monotone for a fixed assoc, so the result is identical.
+    let sf = Infinity;
+    let st = -Infinity;
+    const maps = tr.mapping.maps;
+    tr.steps.forEach((step, i) => {
+      if (sf !== Infinity) {
+        sf = maps[i]!.map(sf, -1);
+        st = maps[i]!.map(st, 1);
+      }
+      const s = step as unknown as { from?: unknown; to?: unknown };
+      if (typeof s.from !== 'number' || typeof s.to !== 'number') return;
+      if (s.from < sf) sf = s.from;
+      if (s.to > st) st = s.to;
+    });
+    if (sf < from) from = sf;
+    if (st > to) to = st;
+  }
   if (from > to) return null;
   return { from, to };
 }
