@@ -77,27 +77,29 @@ describe('mailbox proof v1', () => {
 });
 
 describe('mailbox proof v2', () => {
-  // Same keys as the v1 vector. The expected MACs come from an independent
-  // implementation (Python: RFC 7748 X25519, RFC 5869 HKDF, stdlib HMAC)
-  // that reproduces the relay's v1 vector above.
+  // The relay's vector (xtgg-relay docs/mailbox-proof-v2.md,
+  // TestMailboxProofV2Vector): same keys as the v1 vector.
   const CLIENT_D = '4PmucOgffIuKNKrxqPOCtBR80WUYBYjqkRD-jX08AEI';
   const CLIENT_X = '8pB2ioOXJb-pIuFgTYKVUgJWuPclbI5k3i5x1m32324';
   const RELAY_X = 'gvLzV2acc2QI1Qol0Ak4Sw6YFE7ZKIdZxJtjRYuX7mE';
   const RCP = 'BAv-el6lu4RdVysJCWlDag';
-  const BODY = `{"code":"cmk1.${CLIENT_X}","name":"Ana"}`;
+  const ORIGIN = 'https://relay.extinction.gg';
+  const BODY = `{"code":"cmk1.${CLIENT_X}","name":"Sam"}`;
   const shared = () =>
     diffieHellman({
       privateKey: createPrivateKey({ key: { kty: 'OKP', crv: 'X25519', d: CLIENT_D, x: CLIENT_X }, format: 'jwk' }),
       publicKey: createPublicKey({ key: { kty: 'OKP', crv: 'X25519', x: RELAY_X }, format: 'jwk' }),
     });
 
-  it('matches the cross-language test vector', () => {
+  it('matches the relay test vector (xtgg-relay TestMailboxProofV2Vector)', () => {
+    expect(shared().toString('base64url')).toBe('Bn9s5ZOEqmu6zJQg5MJq0mOT-QTBokcgLM-UBRcWiDI');
+    expect(mailboxProofOrigin('https://relay.extinction.gg/r/abc123')).toBe(ORIGIN);
+    const del = mailboxProofMacV2(shared(), b(CLIENT_X), b(RELAY_X), ORIGIN, 'DELETE', RCP, 1761234567, mailboxProofBodyHash('DELETE'));
+    expect(del.toString('base64url')).toBe('4D2C9-ueOHnJ82YG6jQ0RyvHzPlRibE7vPtTGB6x-yY');
     const bh = mailboxProofBodyHash('PUT', BODY);
-    expect(bh).toBe('GQKiMBzxJh-K-b0ne7jiZV0AiJdppo0uUgdK0vTqrVo');
-    const put = mailboxProofMacV2(shared(), b(CLIENT_X), b(RELAY_X), 'https://relay.example.com', 'PUT', RCP, 1761234567, bh);
-    expect(put.toString('base64url')).toBe('7zEhWklVKd-XyWCGmeLsgpI6rAG2Rl9CMHQpfe6TEnQ');
-    const del = mailboxProofMacV2(shared(), b(CLIENT_X), b(RELAY_X), 'https://relay.example.com', 'DELETE', RCP, 1761234567, '');
-    expect(del.toString('base64url')).toBe('VSq36352NR5hYiQL-ZOp7B5F1TAcb_uV3lRJQjkuZ68');
+    expect(bh).toBe('XMIzxzTC3lYGCSqkI_QNJzO1PTg6yvNCBbX9A0bc0Cw');
+    const put = mailboxProofMacV2(shared(), b(CLIENT_X), b(RELAY_X), ORIGIN, 'PUT', RCP, 1761234567, bh);
+    expect(put.toString('base64url')).toBe('9AVB8YK_wox895mImwin02bqi9P8NkAHx4DLMotqzTA');
   });
 
   it('BODYHASH is only for PUT, over the exact bytes', () => {
