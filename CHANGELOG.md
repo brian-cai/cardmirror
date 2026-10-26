@@ -5,6 +5,35 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.50 — 2026-10-26
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Speed
+
+- Big edits across a whole document (formatting every card, or undoing
+  it) no longer freeze the window for seconds.
+- Saving a large Word file uses about 70 MB less memory.
+- The first Find in a large document is instant instead of a
+  half-second pause.
+- Typing stays fast with "Mark unread after marker" on in large
+  documents.
+
+### In rounds
+
+- **` with no speech doc** offers to create one and sends your card
+  straight into it, or to pick one of your open documents.
+- **` inside your speech doc** drops a red "Marked" note at the cursor,
+  as in Verbatim; press it on the note to remove it.
+- **Word and Verbatim keys by default:** Ctrl+Shift+G word count,
+  Ctrl+Shift+> / < font size, Alt+Shift+R read mode, and Alt+Shift+T
+  start/pause, Alt+Shift+A / Alt+Shift+N Aff / Neg prep while the timer
+  is showing. None of them replaces a key you had already set.
+- In a half-width window the status bar keeps your word count and read
+  time in full; Tournament mode is a small trophy icon until you turn
+  it on.
+
 ## 1.15.49 — 2026-10-26
 
 BCai's (@brian-cai) build of CardMirror, updating from
