@@ -7,11 +7,13 @@
  * compare — against a fake relay (fetchImpl).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RoomsClient } from '../../src/editor/collab/room-client.js';
+import { createHash } from 'node:crypto';
+import { RoomsClient, RoomStream } from '../../src/editor/collab/room-client.js';
 import {
   activeNotice,
   currentRelayInfo,
   customRelayExtHeaders,
+  customRelayInstallHeader,
   installNameToSend,
   installsLine,
   parseRelayInfo,
@@ -28,6 +30,7 @@ import {
   relayExtHeaders,
   RELAY_CLIENT_ID,
   RELAY_EXT_CLIENT_HEADER,
+  RELAY_EXT_INSTALL_HEADER,
   RELAY_EXT_INSTALL_NAME_HEADER,
 } from '../../src/editor/relay-protocol.js';
 import { appVersion } from '../../src/editor/install-info.js';
@@ -167,6 +170,63 @@ describe('relay info headers', () => {
     settings.set('pairingRelayUrl', '');
     await client.createRoom();
     expect(sent[2]!.headers[RELAY_EXT_CLIENT_HEADER]).toBeUndefined();
+  });
+});
+
+describe('X-Relay-Install (room create and room stream)', () => {
+  const CODE = 'cmk1.8pB2ioOXJb-pIuFgTYKVUgJWuPclbI5k3i5x1m32324';
+  const ROUTING = createHash('sha256').update(Buffer.from(CODE.slice(5), 'base64url')).digest().subarray(0, 16).toString('base64url');
+
+  function client(sent: Array<{ url: string; headers: Record<string, string> }>) {
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push({ url: String(input), headers: { ...((init?.headers ?? {}) as Record<string, string>) } });
+      return new Response(JSON.stringify({ roomId: 'r1', seq: 1 }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    return new RoomsClient({
+      baseUrl: () => 'https://relay.example/relay',
+      token: () => 'tok',
+      extHeaders: () => customRelayExtHeaders(),
+      installHeader: () => customRelayInstallHeader(),
+      fetchImpl,
+    });
+  }
+
+  it('is the routing code the mailbox polls with, on a custom relay only', async () => {
+    settings.set('pairingOwnCode', CODE);
+    expect(ROUTING).toBe('BAv-el6lu4RdVysJCWlDag'); // pairing-crypto routingId of this key (mailbox-proof vector)
+    expect(await customRelayInstallHeader({ pairingRelayUrl: 'https://r.example/relay' })).toEqual({ [RELAY_EXT_INSTALL_HEADER]: ROUTING });
+    expect(await customRelayInstallHeader({ pairingRelayUrl: '' })).toEqual({});
+    settings.set('pairingOwnCode', '');
+    expect(await customRelayInstallHeader({ pairingRelayUrl: 'https://r.example/relay' })).toEqual({});
+  });
+
+  it('rides on room create and the room stream, not on other room calls', async () => {
+    settings.set('pairingOwnCode', CODE);
+    const sent: Array<{ url: string; headers: Record<string, string> }> = [];
+    const c = client(sent);
+    await c.createRoom();
+    await c.postUpdate('r1', new Uint8Array([1]));
+    expect(sent[0]!.headers[RELAY_EXT_INSTALL_HEADER]).toBe(ROUTING);
+    expect(sent[1]!.headers[RELAY_EXT_INSTALL_HEADER]).toBeUndefined();
+    const stream = new RoomStream({
+      baseUrl: c.opts.baseUrl,
+      token: c.opts.token,
+      extHeaders: c.opts.extHeaders,
+      installHeader: c.opts.installHeader,
+      fetchImpl: c.opts.fetchImpl,
+      roomId: 'r1',
+      callbacks: { onHello: () => {}, onUpdate: () => {}, onEnded: () => {} } as never,
+      minBackoffMs: 60_000,
+    });
+    stream.start();
+    await new Promise((r) => setTimeout(r, 20));
+    stream.stop();
+    const st = sent.find((x) => x.url.includes('/rooms/r1/stream'))!;
+    expect(st.headers[RELAY_EXT_INSTALL_HEADER]).toBe(ROUTING);
+    // The built-in relay never gets it.
+    settings.set('pairingRelayUrl', '');
+    await c.createRoom();
+    expect(sent.at(-1)!.headers[RELAY_EXT_INSTALL_HEADER]).toBeUndefined();
   });
 });
 

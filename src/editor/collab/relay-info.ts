@@ -25,7 +25,8 @@
 
 import { RoomsError, type RoomsClient } from './room-client.js';
 import { appVersion } from '../install-info.js';
-import { compareAppVersions, RELAY_CLIENT_ID, relayExtHeaders } from '../relay-protocol.js';
+import { compareAppVersions, RELAY_CLIENT_ID, RELAY_EXT_INSTALL_HEADER, relayExtHeaders } from '../relay-protocol.js';
+import { fromBase64Url, toBase64Url } from '../pairing/team-key.js';
 import { settings, type Settings } from '../settings.js';
 
 /** Background refresh cadence (spec: at most once an hour). */
@@ -121,6 +122,35 @@ export function isCustomRelay(st: Pick<Settings, 'pairingRelayUrl'> = liveSettin
 export function customRelayExtHeaders(st: HeaderSettings = liveSettings()): Record<string, string> {
   if (!isCustomRelay(st)) return {};
   return relayExtHeaders({ version: appVersion, installName: installNameToSend(st) });
+}
+
+/** This install's routing code, per pairing code (one derivation each). */
+let routingMemo: { code: string; routing: Promise<string> } | null = null;
+
+function ownRoutingCode(): Promise<string> {
+  const code = settings.get('pairingOwnCode').trim();
+  if (!code.startsWith('cmk1.')) return Promise.resolve('');
+  if (routingMemo?.code !== code) {
+    // sha256(raw key)[0..16), base64url — the mailbox's `recipient`
+    // (pairing-crypto.ts routingId, team-sessions.ts routingIdFor).
+    const routing = crypto.subtle
+      .digest('SHA-256', fromBase64Url(code.slice(5)) as BufferSource)
+      .then((d) => toBase64Url(new Uint8Array(d).subarray(0, 16)))
+      .catch(() => '');
+    routingMemo = { code, routing };
+  }
+  return routingMemo.routing;
+}
+
+/** `X-Relay-Install` for a room create or room stream: this install's
+ *  routing code, already sent to this relay as the mailbox `recipient`.
+ *  {} unless a custom relay is configured (scoped like the relay-info
+ *  headers), or when there is no pairing code yet. These calls carry
+ *  `Authorization`, so they are preflighted already: no new preflight. */
+export async function customRelayInstallHeader(st: Pick<Settings, 'pairingRelayUrl'> = liveSettings()): Promise<Record<string, string>> {
+  if (!isCustomRelay(st)) return {};
+  const routing = await ownRoutingCode();
+  return /^[A-Za-z0-9_-]{22}$/.test(routing) ? { [RELAY_EXT_INSTALL_HEADER]: routing } : {};
 }
 
 // --- the info document ------------------------------------------------

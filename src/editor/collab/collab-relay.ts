@@ -13,7 +13,7 @@ import { webEntitlementToken, webRoutingCodeSync } from './web-account.js';
 import { RoomsClient, RoomsError } from './room-client.js';
 import { WEB_DEFAULT_RELAY_URL } from './relay-endpoint.js';
 import { unlistRoom } from './team-sessions.js';
-import { customRelayExtHeaders } from './relay-info.js';
+import { customRelayExtHeaders, customRelayInstallHeader } from './relay-info.js';
 import { tokenFromAnotherHost } from './relay-profiles.js';
 
 /** Baked relay endpoint from the desktop main process — resolved once,
@@ -188,6 +188,8 @@ export function relayClient(): RoomsClient | null {
     // a relay the user configured; {} on the built-in relay (kept so when
     // a custom relay is set later).
     extHeaders: custom ? () => customRelayExtHeaders() : () => ({}),
+    // X-Relay-Install on room create / stream: custom relays only, as above.
+    ...(custom ? { installHeader: () => customRelayInstallHeader() } : {}),
     // Mailbox proof (v2, else v1): signed in main for this pinned relay and
     // token; a PUT's body goes along so v2 can sign its hash.
     mailboxProof: (method, code, body) =>

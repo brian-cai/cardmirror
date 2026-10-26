@@ -133,6 +133,9 @@ export interface RoomsClientOptions {
    *  `X-Relay-Client` / `X-Relay-Install-Name` pair on a custom relay
    *  (collab/relay-info.ts). Absent or {} = none. */
   extHeaders?: () => Record<string, string>;
+  /** `X-Relay-Install` (relay-info.ts customRelayInstallHeader) for room
+   *  create and room stream calls: custom relays only. Absent = none. */
+  installHeader?: () => Promise<Record<string, string>>;
   /** Mailbox proof for this install's own team-list entry (`code`):
    *  `X-Mailbox-Proof` from the desktop main process, {} when the relay
    *  doesn't offer proofs or there is no desktop host. Absent = none.
@@ -158,6 +161,15 @@ export interface RoomsClientOptions {
    *  carries the room snapshot) — a slow link legitimately exceeds the
    *  control-call deadline on these. Default = postTimeoutMs (120s). */
   bulkTimeoutMs?: number;
+}
+
+/** The install header, {} when absent or when it fails. */
+async function installHeaderOf(fn: (() => Promise<Record<string, string>>) | undefined): Promise<Record<string, string>> {
+  try {
+    return (await fn?.()) ?? {};
+  } catch {
+    return {};
+  }
 }
 
 /** Compose the caller's signal (if any) with a deadline. */
@@ -304,7 +316,8 @@ export class RoomsClient {
   }
 
   async createRoom(): Promise<{ roomId: string; guestPass: string | null }> {
-    const res = await this.request('/rooms', { method: 'POST', headers: this.headers() });
+    const install = await installHeaderOf(this.opts.installHeader);
+    const res = await this.request('/rooms', { method: 'POST', headers: this.headers(install) });
     const body = await this.readJson<{ roomId?: string; guestPass?: string }>(res, '/rooms');
     if (!body.roomId) throw new RoomsError(0, 'malformed createRoom response');
     // guestPass rides along only when the relay's guest_pass flip is on
@@ -624,6 +637,8 @@ export interface RoomStreamOptions {
   credentials?: () => { token: string; routingCode: string };
   /** See RoomsClientOptions.extHeaders. */
   extHeaders?: () => Record<string, string>;
+  /** See RoomsClientOptions.installHeader. */
+  installHeader?: () => Promise<Record<string, string>>;
   /** Backoff bounds, injectable for tests. */
   minBackoffMs?: number;
   maxBackoffMs?: number;
@@ -871,6 +886,7 @@ export class RoomStream {
       const cred = this.opts.credentials?.();
       const routing = cred ? cred.routingCode : (this.opts.routingCode?.() ?? '');
       const token = cred ? cred.token : this.opts.token();
+      const install = await installHeaderOf(this.opts.installHeader);
       const res = await fetchImpl(`${this.opts.baseUrl()}/rooms/${this.opts.roomId}/stream${sidQ}`, {
         method: 'GET',
         headers: {
@@ -879,6 +895,7 @@ export class RoomStream {
           [RELAY_CLIENT_VERSION_HEADER]: appVersion,
           ...(routing ? { [RELAY_CLIENT_ROUTING_HEADER]: routing } : {}),
           ...this.opts.extHeaders?.(),
+          ...install,
         },
         signal: this.controller.signal,
       });

@@ -70,6 +70,7 @@ On any request, alongside the base protocol's `X-CardMirror-Version`:
 | `X-Relay-Client` | `<client id>/<version>`, e.g. `example-build/1.15.22`. At most 64 bytes, `[A-Za-z0-9._-]` and one `/`. |
 | `X-Relay-Install-Name` | A name for this install chosen or approved by the user, percent-encoded UTF-8, at most 64 bytes after decoding (e.g. `Sam%27s%20MacBook`). |
 | `X-Relay-Install-Name-Prompt` | Optional, only without an install name: how the user answered the client's ask for one, `later` or `never`. A relay records it with the install until a name arrives and shows it to the people managing the access; other values are ignored. Relays that don't know it ignore it, and clients that never ask never send it. |
+| `X-Relay-Install` | Optional, on room create (`POST /rooms`) and room stream (`GET /rooms/{id}/stream`) only: this install's mailbox routing code, the same value it polls with as `recipient`, so an install limit also counts computers that only co-edit. A relay that doesn't know it ignores it. |
 
 - Both are optional. A relay must treat requests without them exactly as before, and must
   never refuse a request because of them (invalid values are ignored, not rejected).
@@ -82,7 +83,7 @@ On any request, alongside the base protocol's `X-CardMirror-Version`:
 - Clients must let the user turn `X-Relay-Install-Name` off and should default it to
   something the user already chose to show teammates (their display name), not a device or
   account name read from the system.
-- CORS: relays that answer browsers add both headers to `Access-Control-Allow-Headers`.
+- CORS: relays that answer browsers add these headers to `Access-Control-Allow-Headers`.
 
 ## Install limit errors
 

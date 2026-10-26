@@ -90,6 +90,11 @@ export const RELAY_EXT_CLIENT_HEADER = 'X-Relay-Client';
  *  the relay credential (relay info v1). Percent-encoded UTF-8. */
 export const RELAY_EXT_INSTALL_NAME_HEADER = 'X-Relay-Install-Name';
 
+/** This install's mailbox routing code (the `recipient` its mailbox polls
+ *  use) on room create and room stream calls to a custom relay, so a
+ *  relay's install limit also covers computers that only co-edit (xtgg). */
+export const RELAY_EXT_INSTALL_HEADER = 'X-Relay-Install';
+
 /** With no install name: how the user answered the ask for one, 'later'
  *  or 'never' (xtgg). Sent only on the desktop mailbox requests. */
 export const RELAY_EXT_NAME_PROMPT_HEADER = 'X-Relay-Install-Name-Prompt';
