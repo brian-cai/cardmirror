@@ -5,6 +5,18 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.49 — 2026-10-26
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Security
+
+- **Settings files never change where updates come from.** Exports
+  leave the update source out, and an older file that names a different
+  one is reported but not applied. Change it yourself under About this
+  install only if you trust it.
+
 ## 1.15.48 — 2026-10-26
 
 BCai's (@brian-cai) build of CardMirror, updating from
