@@ -11,13 +11,14 @@
  * protocol, exactly as before), asked again an hour later. Each proof is
  * one call's: it names the method and is good for minutes. A v2 proof
  * also names the relay's origin (from the URL configured here, never
- * from the relay) and, for a PUT, the hash of the exact body sent.
+ * from the relay) and, for a PUT, the hash of the exact body sent; for a
+ * DELETE, the message id or team-list code it deletes.
  */
 import { mailboxProofOrigin } from './pairing-crypto.js';
 
 export interface ProofSigner {
   mailboxProof(relayKey: string, method: string, ts: number): string;
-  mailboxProofV2?(relayKey: string, origin: string, method: string, ts: number, body?: string | Uint8Array): string;
+  mailboxProofV2?(relayKey: string, origin: string, method: string, ts: number, body?: string | Uint8Array, target?: string): string;
 }
 
 type Info = { v: 1 | 2; relayKey: string; skewS: number } | null;
@@ -80,8 +81,10 @@ export function createMailboxProofs(opts: {
   }
 
   /** The header for one call, from what is already known ({} if nothing).
-   *  `body`: a PUT's exact request body (v2 signs its hash). */
-  function headerFor(base: string, method: string, body?: string | Uint8Array): Record<string, string> {
+   *  `body`: a PUT's exact request body (v2 signs its hash). `target`: what
+   *  a DELETE deletes, URL-decoded (v2 signs it): the message id, or the
+   *  code of a team-list entry. */
+  function headerFor(base: string, method: string, body?: string | Uint8Array, target?: string): Record<string, string> {
     const info = known.get(base)?.info;
     if (!info) return {};
     const ts = Math.floor(now() / 1000) + info.skewS;
@@ -90,7 +93,7 @@ export function createMailboxProofs(opts: {
       if (info.v === 2) {
         const origin = mailboxProofOrigin(base);
         if (!origin || !signer.mailboxProofV2) return {};
-        return { [MAILBOX_PROOF_HEADER]: signer.mailboxProofV2(info.relayKey, origin, method, ts, body) };
+        return { [MAILBOX_PROOF_HEADER]: signer.mailboxProofV2(info.relayKey, origin, method, ts, body, target) };
       }
       return { [MAILBOX_PROOF_HEADER]: signer.mailboxProof(info.relayKey, method, ts) };
     } catch {

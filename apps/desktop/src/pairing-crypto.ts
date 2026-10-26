@@ -63,8 +63,9 @@ export interface PairingKeystore {
    *  mailboxProofMac). */
   mailboxProof(relayKey: string, method: string, ts: number): string;
   /** The v2 header (mailboxProofMacV2): also binds the relay's origin and,
-   *  for a PUT, the exact body bytes. */
-  mailboxProofV2(relayKey: string, origin: string, method: string, ts: number, body?: string | Uint8Array): string;
+   *  for a PUT, the exact body bytes; for a DELETE, `target` (what it
+   *  deletes — mailboxProofBodyHash). */
+  mailboxProofV2(relayKey: string, origin: string, method: string, ts: number, body?: string | Uint8Array, target?: string): string;
 }
 
 const PROOF_INFO = Buffer.from('xtgg-mailbox-proof-v1');
@@ -99,8 +100,12 @@ export function mailboxProofMacV2(
   return createHmac('sha256', key).update(`v2|${origin}|${method}|${routing}|${ts}|${bodyHash}`).digest();
 }
 
-/** BODYHASH for v2: base64url(sha256(body bytes)) for a PUT, '' otherwise. */
-export function mailboxProofBodyHash(method: string, body?: string | Uint8Array): string {
+/** BODYHASH for v2: base64url(sha256(body bytes)) for a PUT; for a DELETE,
+ *  `target` as is, not hashed (the message id as in the path of
+ *  `DELETE /messages/{id}`, or C of `DELETE /team-directory/me?code=C`, both
+ *  URL-decoded), so the proof deletes only what it names; '' otherwise. */
+export function mailboxProofBodyHash(method: string, body?: string | Uint8Array, target?: string): string {
+  if (method === 'DELETE') return target ?? '';
   if (method !== 'PUT') return '';
   const bytes = typeof body === 'string' ? Buffer.from(body, 'utf8') : Buffer.from(body ?? new Uint8Array(0));
   return createHash('sha256').update(bytes).digest('base64url');
@@ -247,12 +252,12 @@ export function createPairingKeystore(keysFilePath: string): PairingKeystore {
       const mac = mailboxProofMac(shared, pubRawCache!, relayRaw, method, routing, ts);
       return `v1.${pubRawCache!.toString('base64url')}.${ts}.${mac.toString('base64url')}`;
     },
-    mailboxProofV2(relayKey: string, origin: string, method: string, ts: number, body?: string | Uint8Array): string {
+    mailboxProofV2(relayKey: string, origin: string, method: string, ts: number, body?: string | Uint8Array, target?: string): string {
       ensure();
       const relayRaw = Buffer.from(relayKey, 'base64url');
       const shared = diffieHellman({ privateKey: priv!, publicKey: pubObjectFromRaw(relayRaw) });
       const routing = routingId(CODE_PREFIX + pubRawCache!.toString('base64url'));
-      const mac = mailboxProofMacV2(shared, pubRawCache!, relayRaw, origin, method, routing, ts, mailboxProofBodyHash(method, body));
+      const mac = mailboxProofMacV2(shared, pubRawCache!, relayRaw, origin, method, routing, ts, mailboxProofBodyHash(method, body, target));
       return `v2.${pubRawCache!.toString('base64url')}.${ts}.${mac.toString('base64url')}`;
     },
   };

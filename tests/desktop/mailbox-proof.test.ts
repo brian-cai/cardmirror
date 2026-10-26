@@ -102,8 +102,45 @@ describe('mailbox proof v2', () => {
     expect(put.toString('base64url')).toBe('9AVB8YK_wox895mImwin02bqi9P8NkAHx4DLMotqzTA');
   });
 
+  it('a DELETE binds what it deletes (xtgg-relay TestMailboxProofV2DeleteVector)', () => {
+    const id = '3f9a1c0e5b7d2468ace0135792468bdf';
+    const code = `cmk1.${CLIENT_X}`;
+    expect(mailboxProofBodyHash('DELETE', undefined, id)).toBe(id);
+    expect(mailboxProofBodyHash('DELETE', undefined, code)).toBe(code);
+    const msg = mailboxProofMacV2(shared(), b(CLIENT_X), b(RELAY_X), ORIGIN, 'DELETE', RCP, 1761234567, mailboxProofBodyHash('DELETE', undefined, id));
+    expect(msg.toString('base64url')).toBe('MRrE1oV6TznNt0B_8nUQHMSpHmoehlKD58yD1fDtvZM');
+    const entry = mailboxProofMacV2(shared(), b(CLIENT_X), b(RELAY_X), ORIGIN, 'DELETE', RCP, 1761234567, mailboxProofBodyHash('DELETE', undefined, code));
+    expect(entry.toString('base64url')).toBe('-wvrzsud23yBvH0UGIpe6xrAjF-0CydyYRwo_r4qYIg');
+  });
+
+  it("the keystore's v2 DELETE header signs the target; headerFor passes it through", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cm-mproof2d-'));
+    const ks = createPairingKeystore(path.join(dir, 'keys.json'));
+    const relay = generateKeyPairSync('x25519');
+    const relayX = (relay.publicKey.export({ format: 'jwk' }) as { x: string }).x;
+    const [, pub, ts, mac] = ks.mailboxProofV2(relayX, 'https://r.example', 'DELETE', 1700000000, undefined, 'msg-1').split('.') as [string, string, string, string];
+    const sh = diffieHellman({ privateKey: relay.privateKey, publicKey: createPublicKey({ key: { kty: 'OKP', crv: 'X25519', x: pub }, format: 'jwk' }) });
+    expect(mailboxProofMacV2(sh, b(pub), b(relayX), 'https://r.example', 'DELETE', ks.ownRoutingId(), Number(ts), 'msg-1').toString('base64url')).toBe(mac);
+    expect(mailboxProofMacV2(sh, b(pub), b(relayX), 'https://r.example', 'DELETE', ks.ownRoutingId(), Number(ts), 'msg-2').toString('base64url')).not.toBe(mac);
+
+    const t = 1_700_000_000_000;
+    const signed: unknown[][] = [];
+    const p = createMailboxProofs({
+      signer: () => ({
+        mailboxProof: () => 'v1',
+        mailboxProofV2: (k, o, m, ts2, body, target) => (signed.push([m, body, target]), 'v2'),
+      }),
+      fetchImpl: (async () => new Response(JSON.stringify({ v: 2, relayKey: 'B'.repeat(43), now: t / 1000 }), { status: 200 })) as unknown as typeof fetch,
+      now: () => t,
+    });
+    await p.ensure('https://v2.example/relay', {});
+    p.headerFor('https://v2.example/relay', 'DELETE', undefined, 'msg-1');
+    expect(signed.at(-1)).toEqual(['DELETE', undefined, 'msg-1']);
+  });
+
   it('BODYHASH is only for PUT, over the exact bytes', () => {
     expect(mailboxProofBodyHash('GET')).toBe('');
+    expect(mailboxProofBodyHash('GET', undefined, 'x')).toBe('');
     expect(mailboxProofBodyHash('DELETE', 'x')).toBe('');
     expect(mailboxProofBodyHash('PUT', BODY)).toBe(mailboxProofBodyHash('PUT', new TextEncoder().encode(BODY)));
     expect(mailboxProofBodyHash('PUT', BODY + ' ')).not.toBe(mailboxProofBodyHash('PUT', BODY));

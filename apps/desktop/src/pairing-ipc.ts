@@ -615,7 +615,8 @@ function deleteMessage(msgId: string): void {
   void (async () => {
     // A relay with mailbox proofs gets the recipient named and the proof;
     // any other relay, the base protocol's bare DELETE.
-    const proof = (await proofs.ensure(base, authHeaders())) ? proofs.headerFor(base, 'DELETE') : {};
+    // v2 binds the proof to this message id (as in the path, decoded).
+    const proof = (await proofs.ensure(base, authHeaders())) ? proofs.headerFor(base, 'DELETE', undefined, msgId) : {};
     const named = Object.keys(proof).length ? `?recipient=${encodeURIComponent(ks().ownRoutingId())}` : '';
     const url = `${base}/messages/${encodeURIComponent(msgId)}${named}`;
     const res = await fetch(url, { method: 'DELETE', headers: authHeaders(proof), signal: AbortSignal.timeout(ACK_TIMEOUT_MS) });
@@ -1036,7 +1037,8 @@ export function registerPairingIpc(): void {
       // v2 signs the PUT's exact body: the renderer sends the string it will send.
       const body = typeof payload?.body === 'string' ? payload.body : undefined;
       const info = await proofs.ensure(base, { Authorization: `Bearer ${token}`, [RELAY_CLIENT_VERSION_HEADER]: app.getVersion() });
-      return info ? proofs.headerFor(base, method, body) : {};
+      // A DELETE is `/team-directory/me?code=<this code>`: v2 binds the code.
+      return info ? proofs.headerFor(base, method, body, method === 'DELETE' ? payload.code : undefined) : {};
     },
   );
   // Does a self-hosted relay accept us? One authenticated mailbox GET
