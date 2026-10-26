@@ -23,7 +23,7 @@ import {
   tournamentModeUntil,
   TOURNAMENT_MODE_MS,
 } from '../../src/editor/tournament-mode.js';
-import { initTournamentChip } from '../../src/editor/tournament-mode-ui.js';
+import { initTournamentChip, renderTournamentChip } from '../../src/editor/tournament-mode-ui.js';
 import { timerQuiet, TIMER_QUIET_MS } from '../../src/editor/quiet-hours.js';
 import { barWanted, outageText } from '../../src/editor/collab/relay-reachability.js';
 import { syncRelayNotice, __resetRelayInfoUiForTests } from '../../src/editor/collab/relay-info-ui.js';
@@ -83,6 +83,20 @@ describe('the status-bar chip', () => {
     expect(el.dataset['state']).toBe('on');
     vi.advanceTimersByTime(1_100);
     expect(el.dataset['state']).toBe('off');
+  });
+
+  it('off is an icon with its name in aria-label + title; on keeps its text', () => {
+    const el = document.createElement('button');
+    renderTournamentChip(el);
+    expect(el.textContent).toBe('');
+    expect(el.querySelector('.pmd-icon-trophy')).not.toBeNull();
+    expect(el.getAttribute('aria-label')).toBe('Tournament mode: off');
+    expect(el.title).toMatch(/^Tournament mode: off\b/);
+    setTournamentMode(true);
+    renderTournamentChip(el);
+    expect(el.textContent).toBe('Tournament mode on');
+    expect(el.querySelector('.pmd-icon')).toBeNull();
+    expect(el.hasAttribute('aria-label')).toBe(false);
   });
 });
 

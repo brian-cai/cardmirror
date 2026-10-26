@@ -14,6 +14,7 @@ import {
 import { confirmDialog } from './text-prompt.js';
 import { showToast } from './toast.js';
 import { settings } from './settings.js';
+import { setIcon } from './icons';
 
 /** Palette command + chip click. */
 export async function toggleTournamentMode(): Promise<void> {
@@ -34,17 +35,25 @@ export async function toggleTournamentMode(): Promise<void> {
 /** Per chip: the re-render at the moment tournament mode runs out. */
 const expiryTimers = new WeakMap<HTMLButtonElement, ReturnType<typeof setTimeout>>();
 
-/** Render the chip: a quiet "Tournament mode" when off, lit when on (and
- *  re-rendered the moment the week runs out). */
+/** Render the chip: a quiet trophy icon when off (text would crowd the
+ *  word-count / read-time readout out of a half-width window), a lit
+ *  "Tournament mode on" when on (and re-rendered the moment the week runs
+ *  out). */
 export function renderTournamentChip(el: HTMLButtonElement, now = Date.now()): void {
   const on = tournamentModeOn(now);
   el.hidden = false;
   el.dataset['state'] = on ? 'on' : 'off';
   el.setAttribute('aria-pressed', on ? 'true' : 'false');
-  el.textContent = on ? 'Tournament mode on' : 'Tournament mode';
-  el.title = on
-    ? `Tournament mode is on until ${tournamentModeEndText()}. Click to turn it off.`
-    : 'Turn on tournament mode: a week with no update checks, reminders, relay notices or join-request sounds.';
+  if (on) {
+    el.textContent = 'Tournament mode on';
+    el.removeAttribute('aria-label');
+    el.title = `Tournament mode is on until ${tournamentModeEndText()}. Click to turn it off.`;
+  } else {
+    setIcon(el, 'trophy');
+    el.setAttribute('aria-label', 'Tournament mode: off');
+    el.title =
+      'Tournament mode: off. Click to turn it on: a week with no update checks, reminders, relay notices or join-request sounds.';
+  }
   const t = expiryTimers.get(el);
   if (t) clearTimeout(t);
   expiryTimers.delete(el);

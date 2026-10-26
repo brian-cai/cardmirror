@@ -2297,6 +2297,12 @@ body:not(.pmd-multi-doc) #app {
   border-color: var(--pmd-c-accent);
   font-weight: 600;
 }
+/* Off: icon only (aria-label + title carry the name), so a half-width
+   window keeps its room for the word count and read time. */
+#tournament-chip[data-state="off"] {
+  padding: 0 0.3rem;
+  flex-shrink: 0;
+}
 
 /* Update chip (install-on-confirm): accent-outlined, clickable. Hidden
    ([hidden]) until the desktop main process reports an update. */
@@ -2420,6 +2426,12 @@ html[data-tournament-mode] .pmd-home-update {
 
 .status-spacer {
   flex: 1 1 auto;
+}
+
+/* The word count + read time is the readout people glance at; chips to
+   its right shrink (and ellipsize) before it does. */
+#word-count-display {
+  flex-shrink: 0;
 }
 
 #word-count-text {
