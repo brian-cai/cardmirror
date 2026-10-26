@@ -5,6 +5,22 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.48 — 2026-10-26
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Security
+
+- **Settings files carry only preferences.** Importing a settings file
+  can no longer turn on the card cutter, unlock plugins, change your
+  relay or app permissions, or load code from a file you didn't pick
+  yourself. Relay settings in a file are skipped (use an invite link),
+  and the import tells you what it left out. API keys still come only
+  with "Import with API keys".
+- The card cutter engine and plugin files load only from CardMirror's
+  own folder or a file you picked, never from a network path.
+
 ## 1.15.47 — 2026-10-26
 
 BCai's (@brian-cai) build of CardMirror, updating from
