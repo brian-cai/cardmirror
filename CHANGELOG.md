@@ -5,6 +5,42 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.47 — 2026-10-26
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Joining your team
+
+- **Invite links keep your team key.** Opening a new invite link for
+  your team (after your coach rotated the token) no longer loses the
+  key your team's sessions are listed under.
+- **Pasted invite links ask normally:** Enter connects, as with any
+  dialog you opened yourself.
+- **Connect says what it does:** it also lists you, by name, on your
+  team's list.
+- **The relay's own reason.** When your team's relay turns this
+  computer away (for example, its install limit), CardMirror shows the
+  relay's message instead of "credentials rejected". If it turns down
+  only some recipients, the message says how many.
+
+### Team changes
+
+- Changes waiting for your review are offered again after a restart,
+  including people named like one of your contacts.
+- "Add" only adds the people the dialog showed; if the team list
+  changed while it was open, you see the new version first.
+
+### Smaller fixes
+
+- Mod-Shift-P (Send to Starred Recipient) doesn't take over a shortcut
+  you had already set up.
+- The Tournament mode chip turns off when the week ends, not up to an
+  hour later.
+- In the web version, a failed send now shows the relay-down bar.
+- Deleting a waiting card or your team-list entry uses a proof that
+  only works for that item.
+
 ## 1.15.46 — 2026-10-25
 
 BCai's (@brian-cai) build of CardMirror, updating from
