@@ -166,6 +166,9 @@ export async function mergeImportedSettings(
       ownCode: String(cur['pairingOwnCode'] ?? ''),
       partners: arr(cur['pairingPartners']) as PairingPartner[],
       groups: arr(cur['pairingGroups']) as PairingGroup[],
+      // Your own settings file: top up groups as before (team-review.ts
+      // guards only shared team files and relay lists).
+      topUp: true,
     });
     merged['pairingPartners'] = result.partners;
     merged['pairingGroups'] = result.groups;

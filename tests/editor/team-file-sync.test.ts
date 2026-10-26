@@ -24,10 +24,22 @@ vi.mock('../../src/editor/host/index.js', async (importOriginal) => {
   };
 });
 
+const rooms = vi.hoisted(() => new Map<string, unknown>());
+vi.mock('../../src/editor/collab/collab-store.js', () => ({
+  loadRecentRoom: async (id: string) => rooms.get(id) ?? null,
+  saveRecentRoom: async (r: { roomId: string }) => void rooms.set(r.roomId, r),
+}));
+
 import { settings } from '../../src/editor/settings.js';
 import { addPersonToTeamFileJson, parseTeamFile } from '../../src/editor/pairing/team-file.js';
 import { syncTeamFile } from '../../src/editor/pairing/team-file-sync.js';
-import { noticeCount, __resetNoticesForTests } from '../../src/editor/status-notices.js';
+import { noticeCount, __noticesForTests, __resetNoticesForTests } from '../../src/editor/status-notices.js';
+import {
+  acceptTeamReview,
+  declineTeamReview,
+  pendingTeamReview,
+  __resetTeamReviewForTests,
+} from '../../src/editor/pairing/team-review.js';
 
 const ME = 'cmk1.MEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEMEM';
 const ANA = 'cmk1.ANAANAANAANAANAANAANAANAANAANAANAANAANAANA';
@@ -52,6 +64,8 @@ beforeEach(() => {
   settings.set('teamFileSyncPath', PATH);
   settings.set('teamSessionsKey', '');
   __resetNoticesForTests();
+  __resetTeamReviewForTests();
+  rooms.clear();
 });
 
 describe('adding yourself to a team file', () => {
@@ -122,5 +136,70 @@ describe('syncing the team file', () => {
 
   it('reports a missing file', async () => {
     expect(await syncTeamFile(true)).toBe('failed');
+  });
+
+  it('adds new groups, but holds new members for a group you already have (with name + short code)', async () => {
+    settings.set('pairingPartners', [{ code: ANA, name: 'Ana' }]);
+    settings.set('pairingGroups', [{ id: 'grp-v', label: 'Varsity', memberCodes: [ANA] }]);
+    disk.files.set(
+      PATH,
+      teamJson([{ name: 'Brian', code: ME }, { name: 'Ana', code: ANA }, { name: 'Ben', code: BEN }], {
+        teamKey: KEY_A,
+        groups: [{ label: 'varsity', members: ['Ana', 'Ben'] }, { label: 'Novice', members: ['Ben'] }],
+      }),
+    );
+    await syncTeamFile(true);
+    const groups = () => settings.get('pairingGroups').map((g) => [g.label, g.memberCodes]);
+    expect(groups()).toEqual([['Varsity', [ANA]], ['Novice', [BEN]]]);
+    const n = __noticesForTests().find((x) => x.key === 'team-review:file')!;
+    expect(n.body).toContain('add to your group \u201cVarsity\u201d: Ben (BENB\u2026NBEN)');
+    expect(n.action?.label).toBe('Review\u2026');
+    // A later sync asks nothing new and applies nothing.
+    await syncTeamFile(true);
+    expect(groups()).toEqual([['Varsity', [ANA]], ['Novice', [BEN]]]);
+    expect(await acceptTeamReview('file')).toBe(true);
+    expect(groups()).toEqual([['Varsity', [ANA, BEN]], ['Novice', [BEN]]]);
+    expect(__noticesForTests().some((x) => x.key === 'team-review:file')).toBe(false);
+  });
+
+  it('“Don’t add” sticks across syncs', async () => {
+    settings.set('pairingPartners', [{ code: ANA, name: 'Ana' }, { code: BEN, name: 'Ben' }]);
+    settings.set('pairingGroups', [{ id: 'grp-v', label: 'Varsity', memberCodes: [ANA] }]);
+    disk.files.set(PATH, teamJson([{ name: 'Brian', code: ME }, { name: 'Ana', code: ANA }, { name: 'Ben', code: BEN }], {
+      teamKey: KEY_A,
+      groups: [{ label: 'Varsity', members: ['Ana', 'Ben'] }],
+    }));
+    await syncTeamFile(true);
+    declineTeamReview('file');
+    await syncTeamFile(true);
+    expect(pendingTeamReview('file')).toBeNull();
+    expect(settings.get('pairingGroups')[0]!.memberCodes).toEqual([ANA]);
+  });
+
+  it('flags a new person named like a contact and does not add them on its own', async () => {
+    const FAKE = 'cmk1.FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE';
+    settings.set('pairingPartners', [{ code: ANA, name: 'Ana Lopez' }]);
+    disk.files.set(PATH, teamJson([{ name: 'Brian', code: ME }, { name: 'Ana Lopez', code: FAKE }], { teamKey: KEY_A }));
+    await syncTeamFile(true);
+    expect(settings.get('pairingPartners').map((p) => p.code)).toEqual([ANA]);
+    const body = __noticesForTests().find((x) => x.key === 'team-review:file')!.body;
+    expect(body).toContain('add contact Ana Lopez (FAKE\u2026FAKE)');
+    expect(body).toContain('same name as your contact \u201cAna Lopez\u201d (ANAA\u2026AANA)');
+  });
+
+  it('puts the file\u2019s sessions in your recents only after a yes', async () => {
+    disk.files.set(PATH, teamJson([{ name: 'Brian', code: ME }], {
+      teamKey: KEY_A,
+      sessions: [{ roomId: 'r1', shareCode: 'share-1', docTitle: 'Aff' }],
+    }));
+    await syncTeamFile(true);
+    expect(rooms.size).toBe(0);
+    expect(pendingTeamReview('file')!.sessions.map((x) => x.roomId)).toEqual(['r1']);
+    expect(__noticesForTests().find((x) => x.key === 'team-review:file')!.body).toContain('\u201cAff\u201d');
+    await acceptTeamReview('file');
+    expect([...rooms.keys()]).toEqual(['r1']);
+    // Offered once: a later sync doesn't ask again.
+    await syncTeamFile(true);
+    expect(pendingTeamReview('file')).toBeNull();
   });
 });

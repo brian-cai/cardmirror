@@ -2792,7 +2792,8 @@ async function exportTeamFile(): Promise<void> {
 
 /** Import a team file; resolves true when anything changed. */
 export async function importTeamFile(): Promise<boolean> {
-  const { mergeTeamFile, parseTeamFile, TEAM_FILE_EXTENSION, TEAM_FILE_KIND } = await import('./pairing/team-file.js');
+  const { applyHeldChanges, describeHeldChanges, mergeTeamFile, parseTeamFile, TEAM_FILE_EXTENSION, TEAM_FILE_KIND } =
+    await import('./pairing/team-file.js');
   // Your name first: it's what the team file lists you as and what
   // teammates see on cards and invites from you.
   const typedName = await promptForText({
@@ -2859,8 +2860,13 @@ export async function importTeamFile(): Promise<boolean> {
   const lines = [
     merged.addedPeople ? `\u2022 ${merged.addedPeople} ${merged.addedPeople === 1 ? 'person' : 'people'} to send to` : '',
     merged.addedGroups ? `\u2022 ${merged.addedGroups} new group${merged.addedGroups === 1 ? '' : 's'}` : '',
-    merged.updatedGroups ? `\u2022 new members in ${merged.updatedGroups} existing group${merged.updatedGroups === 1 ? '' : 's'}` : '',
-    file.sessions ? `\u2022 ${file.sessions.length} collaboration session${file.sessions.length === 1 ? '' : 's'} to join` : '',
+    // Members for groups you already have (and look-alike names), each by
+    // name and short code: the import's confirm is where you say yes.
+    ...describeHeldChanges(merged.held),
+    file.sessions
+      ? `\u2022 ${file.sessions.length === 1 ? 'a collaboration session' : `${file.sessions.length} collaboration sessions`} under Join session: ` +
+        file.sessions.map((s) => `\u201c${s.docTitle}\u201d`).join(', ')
+      : '',
     !settings.get('pairingEnabled') ? '\u2022 turns on collaboration (card sharing and co-editing)' : '',
     addYou
       ? myName
@@ -2907,8 +2913,10 @@ export async function importTeamFile(): Promise<boolean> {
   return applyMerged();
 
   async function applyMerged(): Promise<boolean> {
-    settings.set('pairingPartners', merged.partners);
-    settings.set('pairingGroups', merged.groups);
+    // The confirm listed the held members, so Import takes them too.
+    const all = applyHeldChanges({ held: merged.held, ownCode: settings.get('pairingOwnCode'), partners: merged.partners, groups: merged.groups });
+    settings.set('pairingPartners', all.partners);
+    settings.set('pairingGroups', all.groups);
     if (useRelay && file!.relay) {
       // As a switch, so the file's key (below) goes to the team's relay.
       adoptRelay(file!.relay.url, file!.relay.token);

@@ -56,6 +56,12 @@ import {
 } from '../../src/editor/collab/team-directory.js';
 import { offerText, renderOffer, __resetTeamDirectoryUiForTests } from '../../src/editor/collab/team-directory-ui.js';
 import { mergeTeamFile, parseTeamFile } from '../../src/editor/pairing/team-file.js';
+import {
+  acceptTeamReview,
+  declineTeamReview,
+  pendingTeamReview,
+  __resetTeamReviewForTests,
+} from '../../src/editor/pairing/team-review.js';
 import { settings } from '../../src/editor/settings.js';
 import { __noticesForTests, __resetNoticesForTests } from '../../src/editor/status-notices.js';
 
@@ -155,6 +161,8 @@ const later = () => (clock += TEAM_DIRECTORY_REFRESH_MS + 1);
 
 beforeEach(() => {
   __resetTeamDirectoryForTests();
+  __resetTeamReviewForTests();
+  localStorage.clear();
   __resetTeamDirectoryUiForTests();
   __resetNoticesForTests();
   toasts.length = 0;
@@ -254,7 +262,7 @@ describe('merge = team file import', () => {
       { label: 'Novice', members: ['Cal'] },
     ],
   };
-  const strip = ({ groupIds: _ids, ...r }: ReturnType<typeof mergeTeamFile> & { groupIds?: string[] }) => ({
+  const strip = ({ groupIds: _ids, createdGroupIds: _made, ...r }: ReturnType<typeof mergeTeamFile> & { groupIds?: string[] }) => ({
     ...r,
     groups: r.groups.map((g) => ({ label: g.label, memberCodes: g.memberCodes })),
   });
@@ -264,16 +272,18 @@ describe('merge = team file import', () => {
     const viaFile = mergeTeamFile({ file: parseTeamFile(fileJson)!, ...local });
     expect(strip(viaDir)).toEqual(strip(viaFile));
     // The rules themselves: existing name kept, own code skipped, group
-    // matched by name (case-insensitive) gains members, new group added.
+    // matched by name (case-insensitive) is offered its new members (held,
+    // not added), new group added.
     expect(viaDir.partners).toEqual([
       { code: ANA, name: 'Ana (my name for her)' },
       { code: BEN, name: 'Ben Wu' },
       { code: CAL, name: 'Cal' },
     ]);
     expect(strip(viaDir).groups).toEqual([
-      { label: 'varsity', memberCodes: [ANA, BEN] },
+      { label: 'varsity', memberCodes: [ANA] },
       { label: 'Novice', memberCodes: [CAL] },
     ]);
+    expect(viaDir.held.topUps).toEqual([{ groupId: 'grp-1', label: 'varsity', members: [{ code: BEN, name: 'Ben Wu' }] }]);
     expect(viaDir.addedPeople).toBe(2);
   });
 
@@ -465,8 +475,14 @@ describe('import', () => {
       groups: [{ label: 'Varsity', members: [ANA, BEN, CAL] }],
     });
     await refreshTeamDirectory(relay.ctx, { now: later() });
-    expect(toasts).toEqual(['Added 1 teammate from your relay.']);
+    expect(toasts[0]).toBe('Added 1 teammate from your relay.');
     expect(settings.get('pairingPartners').map((p) => p.code)).toEqual([ANA, BEN, CAL]);
+    // Cal joining the existing Varsity waits for a yes (status-bar review).
+    expect(settings.get('pairingGroups')[0]!.memberCodes).toEqual([ANA, BEN]);
+    const source = `dir:${directoryKey(BASE, TOKEN)}`;
+    expect(pendingTeamReview(source)!.held.topUps.map((t) => [t.label, t.members.map((m) => m.code)])).toEqual([['Varsity', [CAL]]]);
+    expect(__noticesForTests().some((n) => n.key === `team-review:${source}` && n.action?.label === 'Review\u2026')).toBe(true);
+    expect(await acceptTeamReview(source)).toBe(true);
     expect(settings.get('pairingGroups')[0]!.memberCodes).toEqual([ANA, BEN, CAL]);
     expect(currentOffer()).toBeNull();
   });
@@ -716,7 +732,28 @@ describe('groups and relay tags follow the list only when it changes', () => {
     expect(varsity().memberCodes).toEqual([ANA]);
     relay.edit({ groups: [{ label: 'Varsity', members: [ANA, BEN] }] });
     await refreshTeamDirectory(relay.ctx, { now: later() });
+    // The list moved: Ben back in Varsity is offered, not done.
+    expect(varsity().memberCodes).toEqual([ANA]);
+    const source = `dir:${directoryKey(BASE, TOKEN)}`;
+    expect(await acceptTeamReview(source)).toBe(true);
     expect(varsity().memberCodes).toEqual([ANA, BEN]);
+  });
+
+  it('“Don’t add” is remembered: the next change to the list doesn’t ask about the same member again', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay();
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    const varsity = () => settings.get('pairingGroups').find((g) => g.label === 'Varsity')!;
+    settings.set('pairingGroups', settings.get('pairingGroups').map((g) => ({ ...g, memberCodes: [ANA] })));
+    relay.edit({ groups: [{ label: 'Varsity', members: [ANA, BEN] }] });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    const source = `dir:${directoryKey(BASE, TOKEN)}`;
+    expect(pendingTeamReview(source)).not.toBeNull();
+    declineTeamReview(source);
+    relay.edit({ name: 'Lincoln Debate', groups: [{ label: 'Varsity', members: [ANA, BEN] }] });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(pendingTeamReview(source)).toBeNull();
+    expect(varsity().memberCodes).toEqual([ANA]);
   });
 
   it('a group of yours with the same name as a later list group is left alone', async () => {

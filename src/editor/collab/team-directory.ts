@@ -9,8 +9,9 @@
  *
  * Importing behaves exactly like importing a team file (.cmteam): the
  * directory is turned into a TeamFile and merged with mergeTeamFile —
- * existing contacts keep their names, your own code is skipped, groups are
- * matched by name and gain members — and the team key follows the same
+ * existing contacts keep their names, your own code is skipped, new groups
+ * are added, and members for a group you already have wait for a yes
+ * (team-review.ts) — and the team key follows the same
  * rule (mergeTeamKey: a local key is never silently replaced; a different
  * one gets the same quiet notice as a team file's).
  *
@@ -30,14 +31,15 @@
 
 import { RoomsError, type RoomsClient } from './room-client.js';
 import { settings, type PairingGroup, type PairingPartner, type TeamDirectoryRelayState } from '../settings.js';
-import { generateGroupId, normalizePairingCode } from '../pairing/pairing-ids.js';
-import { mergeTeamFile, TEAM_FILE_KIND, type TeamFile, type TeamMergeResult } from '../pairing/team-file.js';
+import { normalizePairingCode } from '../pairing/pairing-ids.js';
+import { mergeTeamFile, TEAM_FILE_KIND, type HeldChanges, type TeamFile, type TeamMergeResult } from '../pairing/team-file.js';
 import { isTeamKey, mergeTeamKey } from '../pairing/team-key.js';
 import { applyTeamKeyFromFile, ensureLocalTeamKey } from '../pairing/team-file-sync.js';
 import { keyBelongsHere, noteTeamKeyOrigin, type TeamKeyOrigin } from './relay-profiles.js';
 import { showToast } from '../toast.js';
 import { relayMatchKey, tokenFingerprint } from '../relay-protocol.js';
 import { relayTag, tagImported } from '../pairing/contact-relays.js';
+import { queueTeamReview } from '../pairing/team-review.js';
 
 /** Background refresh cadence: a conditional GET (usually a 304), so cheap enough that a teammate who joins mid-practice shows up within minutes. */
 export const TEAM_DIRECTORY_REFRESH_MS = 5 * 60_000;
@@ -176,7 +178,8 @@ export function directoryAsTeamFile(dir: TeamDirectory): TeamFile {
 
 /** Merge the directory's people and groups into the importer's lists:
  *  the first time exactly as a team file (groups matched by name), after
- *  that only into the groups the list owns. */
+ *  that only into the groups the list owns. Members for a group you
+ *  already have are held (`held`), as a team file's are. */
 export function mergeTeamDirectory(opts: {
   directory: TeamDirectory;
   ownCode: string;
@@ -187,46 +190,29 @@ export function mergeTeamDirectory(opts: {
   groupIds?: readonly string[];
 }): TeamMergeResult & { groupIds: string[] } {
   const owned = opts.groupIds;
+  const file = directoryAsTeamFile(opts.directory);
   if (!owned) {
-    const merged = mergeTeamFile({
-      file: directoryAsTeamFile(opts.directory),
-      ownCode: opts.ownCode,
-      partners: opts.partners,
-      groups: opts.groups,
-    });
+    const merged = mergeTeamFile({ file, ownCode: opts.ownCode, partners: opts.partners, groups: opts.groups });
     const labels = new Set(opts.directory.groups.map((g) => g.label.toLowerCase()));
     return { ...merged, groupIds: merged.groups.filter((g) => labels.has(g.label.toLowerCase())).map((g) => g.id) };
   }
-  // People as a team file merges them; groups only into the ones this list
-  // made, so a group of yours with the same name never gains its members.
-  const people = mergeTeamFile({
-    file: { ...directoryAsTeamFile(opts.directory), groups: [] },
+  // Groups only into the ones this list made, so a group of yours with
+  // the same name never gains its members (nor is a second one made).
+  const ids = new Set(owned.filter((id) => opts.groups.some((g) => g.id === id)));
+  const merged = mergeTeamFile({
+    file,
     ownCode: opts.ownCode,
     partners: opts.partners,
-    groups: [],
+    groups: opts.groups,
+    match: (label, groups) => {
+      const l = label.toLowerCase();
+      const mine = groups.find((x) => ids.has(x.id) && x.label.toLowerCase() === l);
+      if (mine) return mine;
+      return groups.some((x) => x.label.toLowerCase() === l) ? 'skip' : null;
+    },
   });
-  const own = normalizePairingCode(opts.ownCode);
-  const known = new Set(people.partners.map((p) => normalizePairingCode(p.code)));
-  const groups = opts.groups.map((g) => ({ ...g, memberCodes: [...g.memberCodes] }));
-  const ids = new Set(owned.filter((id) => groups.some((g) => g.id === id)));
-  let addedGroups = 0;
-  let updatedGroups = 0;
-  for (const g of opts.directory.groups) {
-    const members = g.memberCodes.filter((c) => c !== own && known.has(c));
-    const label = g.label.toLowerCase();
-    const mine = groups.find((x) => ids.has(x.id) && x.label.toLowerCase() === label);
-    if (mine) {
-      const before = mine.memberCodes.length;
-      mine.memberCodes = [...new Set([...mine.memberCodes, ...members])];
-      if (mine.memberCodes.length > before) updatedGroups++;
-    } else if (members.length > 0 && !groups.some((x) => x.label.toLowerCase() === label)) {
-      const id = generateGroupId();
-      groups.push({ id, label: g.label, memberCodes: members });
-      ids.add(id);
-      addedGroups++;
-    }
-  }
-  return { partners: people.partners, groups, addedPeople: people.addedPeople, addedGroups, updatedGroups, groupIds: [...ids] };
+  for (const id of merged.createdGroupIds) ids.add(id);
+  return { ...merged, groupIds: [...ids] };
 }
 
 /** How many of the directory's people this install doesn't have (its own
@@ -395,8 +381,26 @@ const inflight = new Map<string, Promise<TeamDirectory | null>>();
 
 export type ApplyResult = { addedPeople: number; addedGroups: number };
 
+/** Offer what the list held back (members for a group you already have,
+ *  a new person named like one of your contacts) — team-review.ts; a yes
+ *  tags the people as on this relay and records any group it made as
+ *  the list's. */
+function queueDirectoryReview(dir: TeamDirectory, key: string, held: HeldChanges, tag: string): void {
+  queueTeamReview({
+    source: `dir:${key}`,
+    teamName: dir.name.trim() || 'your relay\u2019s team',
+    held,
+    sessions: [],
+    onAccept: (created, before) => {
+      settings.set('pairingPartners', tagImported(settings.get('pairingPartners'), before, dir.people.map((p) => p.code), tag));
+      if (created.length > 0) patchState(key, { groupIds: [...(directoryState(key).groupIds ?? []), ...created] });
+    },
+  });
+}
+
 /** Merge silently (an imported directory): new people every time (the
- *  list is the team); groups and relay tags only when the list changed,
+ *  list is the team); new groups and relay tags only when the list
+ *  changed (members for a group you have are offered, not added),
  *  so a member you took out of a group or a relay you unticked for a
  *  contact stays that way until the team's list moves. Toasts "Added N
  *  teammates from your relay" when N > 0. */
@@ -413,7 +417,7 @@ function applyImported(dir: TeamDirectory, tag: string, key: string): ApplyResul
   });
   // Everyone on this relay's list is on this relay (contact-relays.ts).
   const tagged = tagImported(merged.partners, before, dir.people.map((p) => p.code), tag, { retag: changed });
-  if (merged.addedPeople || merged.addedGroups || merged.updatedGroups || JSON.stringify(tagged) !== JSON.stringify(before)) {
+  if (merged.addedPeople || merged.addedGroups || JSON.stringify(tagged) !== JSON.stringify(before)) {
     settings.set('pairingPartners', tagged);
     settings.set('pairingGroups', merged.groups);
   }
@@ -422,6 +426,7 @@ function applyImported(dir: TeamDirectory, tag: string, key: string): ApplyResul
   if (merged.addedPeople > 0) {
     showToast(`Added ${merged.addedPeople} teammate${merged.addedPeople === 1 ? '' : 's'} from your relay.`);
   }
+  if (changed) queueDirectoryReview(dir, key, merged.held, tag);
   return { addedPeople: merged.addedPeople, addedGroups: merged.addedGroups };
 }
 
@@ -725,6 +730,7 @@ export async function importTeamDirectory(
   // directory again (our own entry, and anything a manager changed in
   // between), and merging it twice is a no-op.
   patchState(key, { imported: true, revision: dir.revision, hasKey: !!dir.teamKey, mergedRevision: dir.revision, groupIds: merged.groupIds });
+  queueDirectoryReview(dir, key, merged.held, relayTag(ctx.baseUrl));
   publishOffer(null);
   if (!dir.teamKey) await syncTeamKeyUp(ctx, key, dir.name);
   return { ok: true, addedPeople: merged.addedPeople, addedGroups: merged.addedGroups };

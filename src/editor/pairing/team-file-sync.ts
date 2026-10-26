@@ -2,9 +2,12 @@
  * Team file sync — keep this machine in step with the team file (.cmteam)
  * it imported, usually one sitting in a shared Dropbox / Drive folder.
  *
- * - Re-read on launch, on window focus and every few minutes. New people,
- *   groups and sessions merge in (additive, like Import team: nothing you
- *   have is removed). A changed relay is NOT applied silently — a shared
+ * - Re-read on launch, on window focus and every few minutes. New people
+ *   and new groups merge in (additive, like Import team: nothing you have
+ *   is removed). Members for a group you already have, a new person named
+ *   like one of your contacts, and the file's sessions for your recents
+ *   wait for a yes: they're offered in the status bar (team-review.ts),
+ *   never applied by the sync itself. A changed relay is NOT applied silently — a shared
  *   file must not be able to reroute everyone's cards without asking; that
  *   still takes a manual Import team.
  * - Add yourself: when your code isn't in the file, your pairing code and
@@ -30,9 +33,11 @@ import {
   mergeTeamFile,
   parseTeamFile,
   type TeamFile,
+  type TeamFileSession,
 } from './team-file.js';
 import { generateTeamKey, isTeamKey, mergeTeamKey } from './team-key.js';
 import { postNotice } from '../status-notices.js';
+import { queueTeamReview } from './team-review.js';
 
 const POLL_MS = 5 * 60_000;
 const FOCUS_MIN_GAP_MS = 60_000;
@@ -207,7 +212,7 @@ export async function syncTeamFile(force = false): Promise<'changed' | 'unchange
       news.push(names.length <= 3 ? names.join(', ') : `${merged.addedPeople} people`);
     }
     if (merged.addedGroups > 0) news.push(`${merged.addedGroups} group${merged.addedGroups === 1 ? '' : 's'}`);
-    if (merged.addedPeople || merged.addedGroups || merged.updatedGroups) {
+    if (merged.addedPeople || merged.addedGroups) {
       settings.set('pairingPartners', merged.partners);
       settings.set('pairingGroups', merged.groups);
     }
@@ -223,8 +228,16 @@ export async function syncTeamFile(force = false): Promise<'changed' | 'unchange
       }
     }
 
-    const newRooms = await addNewSessions(file);
-    if (newRooms > 0) news.push(`${newRooms} session${newRooms === 1 ? '' : 's'} to join`);
+    // Held members and new sessions: offered, never applied here.
+    const sessions = await newSessions(file);
+    queueTeamReview({
+      source: 'file',
+      teamName: file.name,
+      held: merged.held,
+      sessions,
+      onAccept: () => saveSessions(sessions),
+      onDecline: () => markSessionsSeen(sessions),
+    });
     let changed = news.length > 0;
     if (changed) showToast(`Team “${file.name}”: added ${news.join(', ')}.`);
 
@@ -244,16 +257,41 @@ export async function syncTeamFile(force = false): Promise<'changed' | 'unchange
   }
 }
 
-async function addNewSessions(file: TeamFile): Promise<number> {
-  if (!file.sessions?.length) return 0;
+/** The file's sessions not offered before and not already in your recents. */
+async function newSessions(file: TeamFile): Promise<TeamFileSession[]> {
+  if (!file.sessions?.length) return [];
   const seen = new Set(readJson<string[]>(SEEN_ROOMS_KEY, []));
   const fresh = file.sessions.filter((s) => !seen.has(s.roomId));
-  if (fresh.length === 0) return 0;
-  let added = 0;
+  if (fresh.length === 0) return [];
+  const out: TeamFileSession[] = [];
   try {
     const store = await import('../collab/collab-store.js');
     for (const s of fresh) {
-      seen.add(s.roomId);
+      if (await store.loadRecentRoom(s.roomId)) seen.add(s.roomId);
+      else out.push(s);
+    }
+  } catch {
+    return [];
+  } finally {
+    writeJson(SEEN_ROOMS_KEY, [...seen]);
+  }
+  return out;
+}
+
+function markSessionsSeen(sessions: readonly TeamFileSession[]): void {
+  if (sessions.length === 0) return;
+  const seen = new Set(readJson<string[]>(SEEN_ROOMS_KEY, []));
+  for (const s of sessions) seen.add(s.roomId);
+  writeJson(SEEN_ROOMS_KEY, [...seen]);
+}
+
+/** Yes to the file's sessions: add them to your recents (Join session). */
+async function saveSessions(sessions: readonly TeamFileSession[]): Promise<void> {
+  if (sessions.length === 0) return;
+  markSessionsSeen(sessions);
+  try {
+    const store = await import('../collab/collab-store.js');
+    for (const s of sessions) {
       if (await store.loadRecentRoom(s.roomId)) continue;
       await store.saveRecentRoom({
         roomId: s.roomId,
@@ -263,14 +301,10 @@ async function addNewSessions(file: TeamFile): Promise<number> {
         docTitle: s.docTitle,
         lastActiveAt: Date.now(),
       });
-      added++;
     }
   } catch {
-    return added;
-  } finally {
-    writeJson(SEEN_ROOMS_KEY, [...seen]);
+    showToast('Couldn\u2019t save the team\u2019s sessions; join them with their invite codes instead.');
   }
-  return added;
 }
 
 /** Remember the imported file's sessions as already offered (Import team

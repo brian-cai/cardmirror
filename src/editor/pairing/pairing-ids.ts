@@ -43,3 +43,11 @@ export function looksLikePairingCode(normalized: string): boolean {
 export function generateGroupId(): string {
   return `grp-${randomChars(8).toLowerCase()}`;
 }
+
+/** A code short enough to read aloud and check against a teammate's
+ *  screen: its first and last four characters (`AbCd…WxYz`). Shown next
+ *  to names wherever a list could add someone you'd send cards to. */
+export function shortPairingCode(code: string): string {
+  const body = normalizePairingCode(code).replace(/^cmk1\./, '');
+  return body.length <= 9 ? body : `${body.slice(0, 4)}…${body.slice(-4)}`;
+}

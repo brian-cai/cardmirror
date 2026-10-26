@@ -4,9 +4,11 @@
  *
  * A coach (or anyone) exports it from Settings → Collaboration; everyone
  * else imports it. Import MERGES: people are added by code (an existing
- * contact keeps its name; the importer's own code is skipped), groups are
- * matched by name and gain any missing members, and the relay / sessions
- * apply only when the importer agrees. Nothing the importer had is lost.
+ * contact keeps its name; the importer's own code is skipped), new groups
+ * are added, and the relay / sessions apply only when the importer agrees.
+ * Members for a group the importer already has (matched by name), and a
+ * new person named like an existing contact, are held for an explicit
+ * yes (mergeTeamFile → held). Nothing the importer had is lost.
  *
  * The file is plain JSON meant to be editable by hand: people are
  * `{ "name", "code" }`, and groups list their members BY NAME
@@ -20,7 +22,7 @@
  * Pure module (no settings / DOM): build + merge + parse, unit-tested.
  */
 import type { PairingGroup, PairingPartner } from '../settings.js';
-import { generateGroupId, normalizePairingCode } from './pairing-ids.js';
+import { generateGroupId, normalizePairingCode, shortPairingCode } from './pairing-ids.js';
 import { isTeamKey } from './team-key.js';
 
 export const TEAM_FILE_KIND = 'cardmirror-team';
@@ -167,49 +169,183 @@ export function parseTeamFile(raw: unknown): TeamFile | null {
   return file;
 }
 
+/** Someone a file would add to a group you already have — held until you
+ *  say yes (a shared file must not slip a stranger into "Varsity"). */
+export interface HeldMember {
+  code: string;
+  name: string;
+  /** A contact you already have under this name but another code. */
+  clashesWith?: { name: string; code: string };
+}
+
+export interface GroupTopUp {
+  /** Your group, or null for a group the file adds that has only held
+   *  members (it's created when you say yes). */
+  groupId: string | null;
+  label: string;
+  members: HeldMember[];
+}
+
+/** What a merge holds back for the user to confirm (applyHeldChanges). */
+export interface HeldChanges {
+  topUps: GroupTopUp[];
+  /** New people named like a contact you have under another code: not
+   *  added until you say yes. */
+  clashes: HeldMember[];
+}
+
 export interface TeamMergeResult {
   partners: PairingPartner[];
   groups: PairingGroup[];
   addedPeople: number;
   addedGroups: number;
+  /** Existing groups that gained members (only with `topUp`). */
   updatedGroups: number;
+  /** Ids of the groups this merge created. */
+  createdGroupIds: string[];
+  held: HeldChanges;
 }
 
-/** Merge a team file's people and groups into the importer's own lists. */
+/** Merge a team file's people and groups into the importer's own lists.
+ *  New people and new groups go straight in; members for a group you
+ *  already have, and a new person named like one of your contacts, are
+ *  held (`held`) for a confirm — unless `topUp` (your own settings
+ *  backup), which adds them as before. `match` picks the group a file
+ *  group lands in (default: yours with the same name; 'skip' = neither
+ *  top it up nor create it). */
 export function mergeTeamFile(opts: {
   file: TeamFile;
   ownCode: string;
   partners: readonly PairingPartner[];
   groups: readonly PairingGroup[];
+  topUp?: boolean;
+  match?: (label: string, groups: readonly PairingGroup[]) => PairingGroup | null | 'skip';
 }): TeamMergeResult {
   const own = normalizePairingCode(opts.ownCode);
   const partners = opts.partners.map((p) => ({ ...p }));
   const known = new Set(partners.map((p) => normalizePairingCode(p.code)));
+  const byName = new Map<string, PairingPartner>();
+  for (const p of partners) {
+    const k = p.name.trim().toLowerCase();
+    if (k && !byName.has(k)) byName.set(k, p);
+  }
+  const heldPeople = new Map<string, HeldMember>();
   let addedPeople = 0;
   for (const p of opts.file.people) {
     if (p.code === own || known.has(p.code)) continue;
-    partners.push({ code: p.code, name: p.name || p.code.slice(0, 12) });
+    const name = p.name || p.code.slice(0, 12);
+    const twin = byName.get(name.trim().toLowerCase());
+    if (twin && !opts.topUp) {
+      heldPeople.set(p.code, { code: p.code, name, clashesWith: { name: twin.name, code: normalizePairingCode(twin.code) } });
+      continue;
+    }
+    partners.push({ code: p.code, name });
     known.add(p.code);
     addedPeople++;
   }
+  const nameOf = new Map(partners.map((p) => [normalizePairingCode(p.code), p.name]));
+  const heldMember = (c: string): HeldMember => heldPeople.get(c) ?? { code: c, name: nameOf.get(c) ?? c.slice(0, 12) };
   const groups = opts.groups.map((g) => ({ ...g, memberCodes: [...g.memberCodes] }));
+  const match =
+    opts.match ?? ((label: string, gs: readonly PairingGroup[]) => gs.find((x) => x.label.toLowerCase() === label.toLowerCase()) ?? null);
+  const topUps: GroupTopUp[] = [];
+  const createdGroupIds: string[] = [];
   let addedGroups = 0;
   let updatedGroups = 0;
   for (const g of opts.file.groups) {
     // The importer's own code is a member of their team's group too, but
     // you don't send to yourself — leave it out.
     const members = g.memberCodes.filter((c) => c !== own && known.has(c));
-    const existing = groups.find((x) => x.label.toLowerCase() === g.label.toLowerCase());
+    const held = g.memberCodes.filter((c) => c !== own && heldPeople.has(c));
+    const existing = match(g.label, groups);
+    if (existing === 'skip') continue;
     if (existing) {
-      const before = existing.memberCodes.length;
-      existing.memberCodes = [...new Set([...existing.memberCodes, ...members])];
-      if (existing.memberCodes.length > before) updatedGroups++;
+      const have = new Set(existing.memberCodes.map(normalizePairingCode));
+      const fresh = [...new Set([...members, ...held])].filter((c) => !have.has(c));
+      if (fresh.length === 0) continue;
+      if (opts.topUp) {
+        existing.memberCodes = [...existing.memberCodes, ...fresh];
+        updatedGroups++;
+      } else {
+        topUps.push({ groupId: existing.id, label: existing.label, members: fresh.map(heldMember) });
+      }
     } else if (members.length > 0) {
-      groups.push({ id: generateGroupId(), label: g.label, memberCodes: members });
+      const id = generateGroupId();
+      groups.push({ id, label: g.label, memberCodes: [...new Set(members)] });
+      createdGroupIds.push(id);
       addedGroups++;
+      if (held.length > 0) topUps.push({ groupId: id, label: g.label, members: [...new Set(held)].map(heldMember) });
+    } else if (held.length > 0) {
+      topUps.push({ groupId: null, label: g.label, members: [...new Set(held)].map(heldMember) });
     }
   }
-  return { partners, groups, addedPeople, addedGroups, updatedGroups };
+  return {
+    partners,
+    groups,
+    addedPeople,
+    addedGroups,
+    updatedGroups,
+    createdGroupIds,
+    held: { topUps, clashes: [...heldPeople.values()] },
+  };
+}
+
+/** Anything held? */
+export function hasHeldChanges(h: HeldChanges): boolean {
+  return h.topUps.length > 0 || h.clashes.length > 0;
+}
+
+/** Apply held changes the user said yes to: add the held people as
+ *  contacts and the members to their groups (creating a group whose id is
+ *  null, or whose group has since been deleted). Returns new lists plus
+ *  the ids of groups it created. */
+export function applyHeldChanges(opts: {
+  held: HeldChanges;
+  ownCode: string;
+  partners: readonly PairingPartner[];
+  groups: readonly PairingGroup[];
+}): { partners: PairingPartner[]; groups: PairingGroup[]; createdGroupIds: string[] } {
+  const own = normalizePairingCode(opts.ownCode);
+  const partners = opts.partners.map((p) => ({ ...p }));
+  const known = new Set(partners.map((p) => normalizePairingCode(p.code)));
+  const addPerson = (m: HeldMember): void => {
+    if (m.code === own || known.has(m.code)) return;
+    partners.push({ code: m.code, name: m.name });
+    known.add(m.code);
+  };
+  for (const m of opts.held.clashes) addPerson(m);
+  const groups = opts.groups.map((g) => ({ ...g, memberCodes: [...g.memberCodes] }));
+  const createdGroupIds: string[] = [];
+  for (const t of opts.held.topUps) {
+    for (const m of t.members) addPerson(m);
+    const codes = t.members.map((m) => m.code).filter((c) => c !== own);
+    let g = t.groupId ? groups.find((x) => x.id === t.groupId) : undefined;
+    if (!g) g = groups.find((x) => x.label.toLowerCase() === t.label.toLowerCase());
+    if (!g) {
+      g = { id: generateGroupId(), label: t.label, memberCodes: [] };
+      groups.push(g);
+      createdGroupIds.push(g.id);
+    }
+    g.memberCodes = [...new Set([...g.memberCodes, ...codes])];
+  }
+  return { partners, groups, createdGroupIds };
+}
+
+/** The held changes as lines for a confirm: each person by name and short
+ *  code, with a warning when the name is already one of your contacts. */
+export function describeHeldChanges(h: HeldChanges): string[] {
+  const who = (m: HeldMember): string =>
+    `${m.name} (${shortPairingCode(m.code)})` +
+    (m.clashesWith
+      ? ` \u2014 \u26a0 same name as your contact \u201c${m.clashesWith.name}\u201d (${shortPairingCode(m.clashesWith.code)}) but a different code`
+      : '');
+  const lines: string[] = [];
+  for (const t of h.topUps) {
+    lines.push(`\u2022 add to ${t.groupId ? 'your group' : 'new group'} \u201c${t.label}\u201d: ${t.members.map(who).join(', ')}`);
+  }
+  const inGroups = new Set(h.topUps.flatMap((t) => t.members.map((m) => m.code)));
+  for (const m of h.clashes) if (!inGroups.has(m.code)) lines.push(`\u2022 add contact ${who(m)}`);
+  return lines;
 }
 
 /** The team file's raw JSON with `{ name, code }` appended to `people`, or

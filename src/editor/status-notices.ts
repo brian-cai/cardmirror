@@ -37,6 +37,11 @@ export interface NoticeInput {
   /** Called when the USER dismisses it (Dismiss / Dismiss all) — not on
    *  clearNotice. Lets a caller remember "don't show this again". */
   onDismiss?: () => void;
+  /** A button beside Copy / Dismiss (e.g. "Review…"): the notice is an
+   *  offer the user takes up when they choose to, never a dialog that
+   *  pops on its own. Clicking it closes the panel; the caller clears
+   *  the notice once it's handled. */
+  action?: { label: string; run: () => void };
 }
 
 interface Notice {
@@ -49,6 +54,7 @@ interface Notice {
   lastAt: number;
   full: boolean;
   onDismiss: (() => void) | null;
+  action: { label: string; run: () => void } | null;
 }
 
 const MAX_NOTICES = 50;
@@ -69,6 +75,8 @@ export function postNotice(input: NoticeInput): void {
     existing.body = input.body;
     existing.severity = input.severity;
     existing.full = input.full === true;
+    if (input.action) existing.action = input.action;
+    if (input.onDismiss) existing.onDismiss = input.onDismiss;
     notices = [existing, ...notices.filter((n) => n !== existing)];
     // A repeat never toasts — this is what turns the save-heal
     // heartbeat into a counter instead of a once-a-minute nag.
@@ -83,6 +91,7 @@ export function postNotice(input: NoticeInput): void {
       lastAt: Date.now(),
       full: input.full === true,
       onDismiss: input.onDismiss ?? null,
+      action: input.action ?? null,
     });
     if (notices.length > MAX_NOTICES) notices.length = MAX_NOTICES;
     if (input.toast !== false) showToast(input.body);
@@ -119,7 +128,13 @@ export function __dismissNoticeForTests(key: string): void {
 }
 
 /** Test hook: the current notices, newest first. */
-export function __noticesForTests(): ReadonlyArray<{ key: string | null; title: string; body: string; count: number }> {
+export function __noticesForTests(): ReadonlyArray<{
+  key: string | null;
+  title: string;
+  body: string;
+  count: number;
+  action: { label: string; run: () => void } | null;
+}> {
   return notices;
 }
 
@@ -252,6 +267,18 @@ function renderPanel(): void {
 
     const actions = document.createElement('div');
     actions.className = 'pmd-notice-actions';
+    if (n.action) {
+      const { label, run } = n.action;
+      const actBtn = document.createElement('button');
+      actBtn.type = 'button';
+      actBtn.className = 'pmd-settings-btn';
+      actBtn.textContent = label;
+      actBtn.addEventListener('click', () => {
+        closePanel();
+        run();
+      });
+      actions.appendChild(actBtn);
+    }
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
     copyBtn.className = 'pmd-settings-btn';
