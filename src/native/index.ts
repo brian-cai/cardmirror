@@ -194,20 +194,74 @@ export function docJsonText(doc: PMNode): string {
   return `{"type":${JSON.stringify(doc.type.name)},"content":[${parts.join(',')}]}`;
 }
 
+/** UTF-8 bytes of each block's cached JSON, so a save encodes only the
+ *  edited blocks too: one TextEncoder pass over a masterfile's whole
+ *  envelope (~35 MB) was ~300 ms per journal write. Block JSON is
+ *  well-formed (JSON.stringify escapes lone surrogates), so the encoded
+ *  pieces concatenate to exactly the encoding of the joined text. */
+const blockBytes = new WeakMap<PMNode, Uint8Array>();
+
+const utf8 = new TextEncoder();
+
+/** Exactly `new TextEncoder().encode(docJsonText(doc))`, from cached block bytes. */
+export function docJsonBytes(doc: PMNode): Uint8Array {
+  return concatBytes(docJsonByteParts(doc));
+}
+
+/** docJsonBytes as pieces, so the envelope copies each block once. */
+function docJsonByteParts(doc: PMNode): Uint8Array[] {
+  if (doc.marks.length > 0 || Object.keys(doc.attrs).length > 0 || doc.content.size === 0) {
+    return [utf8.encode(docJsonText(doc))];
+  }
+  const parts: Uint8Array[] = [utf8.encode(`{"type":${JSON.stringify(doc.type.name)},"content":[`)];
+  const comma = utf8.encode(',');
+  let first = true;
+  doc.forEach((child) => {
+    let bytes = blockBytes.get(child);
+    if (bytes === undefined) {
+      let json = blockJson.get(child);
+      if (json === undefined) {
+        json = JSON.stringify(child.toJSON());
+        blockJson.set(child, json);
+      }
+      bytes = utf8.encode(json);
+      blockBytes.set(child, bytes);
+    }
+    if (!first) parts.push(comma);
+    first = false;
+    parts.push(bytes);
+  });
+  parts.push(utf8.encode(']}'));
+  return parts;
+}
+
+function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
+  let len = 0;
+  for (const p of parts) len += p.length;
+  const out = new Uint8Array(len);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+}
+
 function buildNativeEnvelope(doc: PMNode, opts: SerializeNativeOptions): Uint8Array {
   // Same bytes as JSON.stringify of the NativeFile object below (same key
   // order: format, formatVersion, createdBy, createdAt, doc, threads,
-  // docId), with the doc's JSON coming from the per-block cache.
+  // docId), with the doc's bytes coming from the per-block cache.
   const head: Omit<NativeFile, 'doc'> = {
     format: FORMAT_ID,
     formatVersion: FORMAT_VERSION,
     createdBy: opts.appVersion ?? 'CardMirror',
     createdAt: new Date().toISOString(),
   };
-  let text = JSON.stringify(head).slice(0, -1) + `,"doc":${docJsonText(tripwireForSave(doc))}`;
-  if (opts.threads && opts.threads.length > 0) text += `,"threads":${JSON.stringify([...opts.threads])}`;
-  if (opts.docId) text += `,"docId":${JSON.stringify(opts.docId)}`;
-  return new TextEncoder().encode(text + '}');
+  const docParts = docJsonByteParts(tripwireForSave(doc));
+  let tail = '';
+  if (opts.threads && opts.threads.length > 0) tail += `,"threads":${JSON.stringify([...opts.threads])}`;
+  if (opts.docId) tail += `,"docId":${JSON.stringify(opts.docId)}`;
+  return concatBytes([utf8.encode(JSON.stringify(head).slice(0, -1) + ',"doc":'), ...docParts, utf8.encode(tail + '}')]);
 }
 
 /** Serialize a ProseMirror doc + optional threads to bytes in the
