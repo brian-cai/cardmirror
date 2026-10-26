@@ -515,7 +515,7 @@ export class SendPillController {
     this.addContactEl = this.actionButton(
       ADD_CONTACT_ICON,
       'Add contact',
-      'Add a contact by pairing code',
+      'Add a contact by send code',
       () => {
         this.collapse();
         void this.addContactFlow();
@@ -576,7 +576,7 @@ export class SendPillController {
       ? 'Copy code'
       : 'Start session';
     this.startSessionEl.title = live
-      ? 'Copy this session’s share code for a teammate to join'
+      ? 'Copy the session code for a teammate to join'
       : 'Start a collaboration session on this document';
   }
 
@@ -614,13 +614,13 @@ export class SendPillController {
   private async addContactFlow(): Promise<void> {
     const raw = await promptForText({
       message: 'Add a contact',
-      detail: 'Paste the pairing code they shared with you (cmk1.…).',
+      detail: 'Paste the send code they shared with you (cmk1.…).',
       placeholder: 'cmk1.…',
     });
     if (raw == null) return;
     const code = normalizePairingCode(raw);
     if (!looksLikePairingCode(code)) {
-      showToast('That does not look like a pairing code');
+      showToast('That does not look like a send code');
       return;
     }
     const cur = settings.get('pairingPartners');
@@ -650,14 +650,14 @@ export class SendPillController {
    *  a one-off send, no contact saved. */
   private async sendItemsByCode(items: SendItem[]): Promise<void> {
     const raw = await promptForText({
-      message: 'Send by pairing code',
-      detail: 'Paste the pairing code to send this to (cmk1.…). One-off — this does not save a contact.',
+      message: 'Send to a send code',
+      detail: 'Paste the send code to send this to (cmk1.…). One-off — this does not save a contact.',
       placeholder: 'cmk1.…',
     });
     if (raw == null) return;
     const code = normalizePairingCode(raw);
     if (!looksLikePairingCode(code)) {
-      showToast('That does not look like a pairing code');
+      showToast('That does not look like a send code');
       return;
     }
     let ok = 0;
@@ -770,8 +770,8 @@ export class SendPillController {
     if (this.addContactEl) {
       (this.addContactEl.lastChild as HTMLElement).textContent = drag ? 'Send by code' : 'Add contact';
       this.addContactEl.title = drag
-        ? 'Drop here to send by pairing code (one-off)'
-        : 'Add a contact by pairing code';
+        ? 'Drop here to send to a send code (one-off)'
+        : 'Add a contact by send code';
     }
     if (this.startSessionEl) {
       if (drag) {

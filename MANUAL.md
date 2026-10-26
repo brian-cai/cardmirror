@@ -1517,7 +1517,7 @@ edition's mobile layout has neither.
 
 1. In **Settings → Collaboration**, turn on **Enable collaboration**. Two
    pills — **Send** and **Receive** — appear next to the dropzone, and your
-   machine gets a **pairing code**, shown in the same settings section.
+   machine gets a **send code**, shown in the same settings section.
 2. Swap codes. Give your code to anyone who should be able to send to you.
    To send to *them*, paste the code they gave you under **Recipients** and
    give it a name.
@@ -1552,18 +1552,18 @@ unlinks it.
 pill — onto the **Send** pill. It expands into your recipients and groups;
 drop on a row to send. Dragging a **multi-selection** (from the nav pane)
 sends everything as **one bundle**: the recipient sees a single item and
-takes the whole set at once. **Send to Starred** sends the card under the
+takes the whole set at once. **Send to Starred** (**Mod-Shift-P**) sends the card under the
 cursor (or the current selection) to your starred target without opening
 the pill; **Send to Recipient** (unbound by default — run it from the
 command bar or give it a key) does the same but asks which contact or
 group to send to first.
 
 The pill's bottom row does more than send. **Clicking** the pill opens it
-with two buttons there: **Add contact** (paste a pairing code, name them,
+with two buttons there: **Add contact** (paste a send code, name them,
 and they join the bottom of your recipients) and **Start session** (the
 same flow as the Start Collaboration Session command, for the current
 document). While **dragging**, the same two spots become drop zones:
-the left sends the card to a pasted pairing code as a one-off (no contact
+the left sends the card to a pasted send code as a one-off (no contact
 saved), and hovering the right opens a list of people who **recently sent
 you** things — drop on one to send back, no pairing setup needed.
 
@@ -1633,8 +1633,8 @@ Inviting requires the person's code in *your* Recipients list.
 
 **Or use a share code:** run **Start Collaboration Session** (ribbon
 **Collaboration** group, or the command bar). It confirms which document
-you're sharing, then copies a **share code** to the clipboard — send it
-however you like (**Copy Session Share Code** re-copies it). The other
+you're sharing, then copies a **session code** to the clipboard — send it
+however you like (**Copy Session Code** re-copies it). The other
 person runs **Join or Rejoin Collaboration Session** and pastes it. The shared
 document opens in a new window — in three-pane, you pick which pane.
 
@@ -1661,7 +1661,7 @@ the session (rejoin later from the Sessions list) or end/leave it now. The
 or just forget your copy; as guest, forgets your copy.
 
 **Rejoining:** **Join or Rejoin Collaboration Session** (or **Join session** on the
-Receive pill) opens with a box for a share code or invite link, ready to
+Receive pill) opens with a box for a session code or invite link, ready to
 paste into: paste and press Enter to join a new session. Below it are the
 sessions you can get back into: saved copies (the same ones as the home
 screen's Sessions list; rejoining syncs your offline edits) and sessions you
@@ -2547,17 +2547,20 @@ automatically** toggle in Settings → General → About this install;
 **Help → Check for Updates…** always works either way. Linux users who
 installed via the AUR update with `yay -Syu`.
 
-**Going to a tournament?** The **Pause update checks for 1 week**
-button (next to the auto-check toggle in Settings → General → About
-this install) stops all automatic checks and downloads until the shown
-resume date — nothing about the app changes mid-tournament. While
-paused, the row shows when checks resume and offers a **Resume update
-checks now** button. Manual checks still work.
+**Going to a tournament?** Turn on **Tournament mode** (Settings →
+General → About this install, the **Tournament mode** chip in the status
+bar, or **Tournament Mode** in the command bar). For one week it turns
+off automatic update checks and downloads, the Wednesday update reminder
+and the pulsing update pill, the name reminder, the "relay isn't
+answering" bar, relay notices, "Added teammates" messages, and the sound
+of join requests (the Approve / Deny card still shows). Manual update
+checks, card sending and co-editing work as usual. While it's on, the
+row shows when it ends and offers **Turn off tournament mode**.
 
 Automatic updates never interrupt you: when a new version has been
 downloaded in the background, a small **chip appears in the status bar**
 ("Update x.y.z ready — restart to install"). Nothing installs until you
-click it — on Windows and Linux, quitting the app normally also applies
+click it (and confirm the restart) — on Windows and Linux, quitting the app normally also applies
 a downloaded update on the way out. On macOS the update is staged the
 same way and clicking the chip restarts straight into the new version;
 if your install can't be updated in place (for example the app isn't in
@@ -3424,7 +3427,7 @@ documented in the repository README and reference docs.
   this document), kept linked to its source so you can refresh it and see when
   the original changes. *(Formerly called a "live zone.")*
 - **Co-editing** — real-time collaborative editing of a shared document over the
-  encrypted relay; join with a share code or an invitation.
+  encrypted relay; join with a session code or an invitation.
 - **Card numbering** — automatic, display-only numbering of cards and their
   sub-parts.
 - **Flashcard** — a spaced-repetition study card anchored to evidence,

@@ -380,7 +380,7 @@ function pickFileFromArgv(argv: readonly string[]): string | null {
  *  launch fires `open-url` before whenReady; Windows / Linux pass it in
  *  argv) or before its renderer has booted, so main holds the latest one
  *  here until a window reports `host:relay-join-ready`. */
-let pendingRelayJoin: RelayJoinLink | null = null;
+let pendingRelayJoin: RelayJoinLink | { error: 'invalid' | 'lite' } | null = null;
 
 /** Window ids whose renderer has wired its relay-join listener. */
 const relayJoinReadyWindows = new Set<number>();
@@ -407,20 +407,23 @@ function flushRelayJoin(): void {
   target.focus();
 }
 
-/** Entry point for every relay setup link the OS hands us. Invalid links
- *  are dropped with a log line; valid ones queue for the renderer's
- *  confirm dialog. Lite has no collaboration, so it ignores them. */
+/** Entry point for every relay setup link the OS hands us. Valid ones
+ *  queue for the renderer's confirm dialog; an invalid one (or any link
+ *  in Lite, which has no collaboration) queues an error the renderer
+ *  shows, so a coach's bad link isn't a click that silently does nothing.
+ *  The reason stays in the log. */
 function handleRelayJoinUrl(raw: string): void {
   if (LITE_BUILD) {
     console.log('[relay-join] ignored link: Lite build has no collaboration');
-    return;
+    pendingRelayJoin = { error: 'lite' };
+  } else {
+    const parsed = parseRelayJoinLink(raw);
+    if (parsed.ok) pendingRelayJoin = parsed.link;
+    else {
+      console.warn(`[relay-join] ignored link: ${parsed.reason}`);
+      pendingRelayJoin = { error: 'invalid' };
+    }
   }
-  const parsed = parseRelayJoinLink(raw);
-  if (!parsed.ok) {
-    console.warn(`[relay-join] ignored link: ${parsed.reason}`);
-    return;
-  }
-  pendingRelayJoin = parsed.link;
   // App running with no windows (macOS after closing the last one):
   // open one so there is a renderer to confirm in. Before whenReady
   // the launch path creates the first window itself.
@@ -2435,6 +2438,16 @@ ipcMain.on('host:relay-join-ready', (event) => {
   flushRelayJoin();
 });
 
+// An invite link pasted into the app (the Join box, the sharing setup
+// offer): the same strict parser as an OS-delivered link, answered to the
+// pasting window, which then shows the same confirm.
+ipcMain.handle('host:relay-join-parse', (_event, raw: unknown) => {
+  if (LITE_BUILD) return { ok: false as const, reason: 'lite' };
+  const parsed = parseRelayJoinLink(typeof raw === 'string' ? raw : '');
+  if (!parsed.ok) console.warn(`[relay-join] pasted link rejected: ${parsed.reason}`);
+  return parsed;
+});
+
 ipcMain.handle('host:is-first-window', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return false;
@@ -3152,6 +3165,23 @@ ipcMain.handle(
 
 // Release a previously-registered path. No-op if the caller
 // doesn't own it (defensive — shouldn't happen in normal flow).
+/** Live co-editing sessions across EVERY window. A live session holds a
+ *  claim on a synthetic `cardmirror-collab-room://<roomId>` key in this
+ *  registry (collab-hooks.ts collabRoomClaimKey), so counting those keys
+ *  answers "is anyone mid-session?" for the update restart and the
+ *  reminders, which used to look only at the asking window. Claims whose
+ *  window is gone don't count. */
+const COLLAB_CLAIM_MARK = 'cardmirror-collab-room:';
+ipcMain.handle('host:collab-live-session-total', () => {
+  let n = 0;
+  for (const [key, winId] of openPathOwners) {
+    if (!key.includes(COLLAB_CLAIM_MARK)) continue;
+    const w = BrowserWindow.fromId(winId);
+    if (w && !w.isDestroyed()) n++;
+  }
+  return n;
+});
+
 ipcMain.handle('host:open-path-release', async (event, p: string) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win || typeof p !== 'string' || !p) return;
@@ -3412,6 +3442,11 @@ function buildMenu(): Menu {
         label: 'Send to Speech (At End)',
         accelerator: menuAccelerator('sendToSpeechAtEnd'),
         click: () => dispatchMenuCommand('sendToSpeechAtEnd'),
+      },
+      {
+        label: 'Send to Starred Recipient',
+        accelerator: menuAccelerator('sendToStarred'),
+        click: () => dispatchMenuCommand('sendToStarred'),
       },
       { type: 'separator' },
       {

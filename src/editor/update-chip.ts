@@ -5,7 +5,8 @@
  * module renders the chip and forwards clicks. Two states:
  *
  *   'ready'     — the update is downloaded and staged (Windows/Linux).
- *                 Click = restart now and install. Users who never
+ *                 Click = confirm, then restart and install (one stray
+ *                 click must not restart mid-round). Users who never
  *                 click still get it on next quit (install-on-quit
  *                 stays on as the fallback).
  *   'available' — detected but not stageable (macOS until the swap
@@ -59,9 +60,14 @@ export function initUpdateChip(
     /** Status bar: when no update is pending, show "Check for updates" and
      *  run this on click. Resolves 'latest' / 'updating' / anything else. */
     idleCheck?: () => Promise<string>;
+    /** Asked before a 'ready' click restarts the app; false = do nothing.
+     *  Absent = restart straight away. */
+    confirmRestart?: (s: UpdateChipState) => Promise<boolean>;
   },
 ): () => void {
   const idleCheck = opts?.idleCheck;
+  const confirmRestart = opts?.confirmRestart;
+  let asking = false;
   let current: UpdateChipState | null = null;
   let revert: ReturnType<typeof setTimeout> | null = null;
   const render = (s: UpdateChipState | null): void => {
@@ -89,6 +95,18 @@ export function initUpdateChip(
         else if (outcome === 'updating') flash('Downloading update…', 10 * 60 * 1000);
         else render(null);
       });
+      return;
+    }
+    const s = current;
+    if (s?.state === 'ready' && confirmRestart) {
+      if (asking) return;
+      asking = true;
+      void confirmRestart(s)
+        .then((ok) => (ok ? host.updateChipAction() : undefined))
+        .catch((err) => console.warn('Update chip action failed:', err))
+        .finally(() => {
+          asking = false;
+        });
       return;
     }
     void host.updateChipAction().catch((err) => {

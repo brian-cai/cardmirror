@@ -172,7 +172,7 @@ describe('send pill actions row + hidden recipients', () => {
     (root.querySelector('.pmd-send-action') as HTMLElement).click();
     await new Promise((r) => setTimeout(r, 0));
     expect(settings.get('pairingPartners')).toHaveLength(1);
-    expect(vi.mocked(showToast).mock.calls.flat().join(' ')).toContain('pairing code');
+    expect(vi.mocked(showToast).mock.calls.flat().join(' ')).toContain('send code');
   });
 
   it('the drag recent-senders list excludes blocked codes and labels known partners', () => {

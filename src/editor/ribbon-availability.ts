@@ -45,6 +45,8 @@ const COLLAB_COMMANDS = new Set<RibbonCommandId>([
   'collabInviteStarred',
   'collabEndSession',
   'collabSwitchRelay',
+  'approveJoinRequest',
+  'denyJoinRequest',
 ]);
 
 /** The card-cutter experiment's commands — every one of them, not just the

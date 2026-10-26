@@ -365,3 +365,17 @@ export function collabLeaveAllForRelaySwitch(): Promise<boolean> {
   if (!anyCollabSessionActive()) return Promise.resolve(true);
   return relaySwitchLeaver?.() ?? Promise.resolve(true);
 }
+
+/** A card send that never reached the relay (every retry failed with no
+ *  answer): the relay-down bar (relay-reachability-ui.ts) shows for this
+ *  outage even with no session live, since someone is now waiting on it.
+ *  Registered by the bar's module; a no-op until then. */
+let relaySendFailureListener: (() => void) | null = null;
+
+export function setRelaySendFailureListener(fn: (() => void) | null): void {
+  relaySendFailureListener = fn;
+}
+
+export function notifyRelaySendFailed(): void {
+  relaySendFailureListener?.();
+}

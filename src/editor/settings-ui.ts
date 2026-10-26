@@ -7,6 +7,7 @@
  * settings store immediately.
  */
 
+import { setTournamentMode, tournamentModeEndText, tournamentModeOn, TOURNAMENT_MODE_SILENCES } from './tournament-mode.js';
 import { WORD_COUNT_ORDERS, type WordCountOrder } from './word-count-order.js';
 import { adoptRelay, tokenFromAnotherHost } from './collab/relay-profiles.js';
 import { confirmDialog, promptForChoice, promptForRouteChoice } from './text-prompt.js';
@@ -923,7 +924,7 @@ class SettingsModal {
     const desc = document.createElement('div');
     desc.className = 'pmd-settings-row-desc';
     desc.textContent =
-      'Save all your settings — shortcuts, keyboard macros, ribbon buttons, file search folders, relay settings, your dictionary words, appearance, and the rest — to a file, or import one, e.g. to move your setup to another computer or start from a teammate\u2019s. Importing sets your preferences to the file\u2019s but never removes anything you have: contacts, groups, folders, macros, custom buttons and dictionary words are merged, folders that don\u2019t exist on this computer are skipped, and your own sharing code and name are kept. Your API keys (Anthropic, OpenRouter, Google Translate) and MyMemory email are included only if you choose to when exporting.';
+      'Save all your settings — shortcuts, keyboard macros, ribbon buttons, file search folders, relay settings, your dictionary words, appearance, and the rest — to a file, or import one, e.g. to move your setup to another computer or start from a teammate\u2019s. Importing sets your preferences to the file\u2019s but never removes anything you have: contacts, groups, folders, macros, custom buttons and dictionary words are merged, folders that don\u2019t exist on this computer are skipped, and your own send code and name are kept. Your API keys (Anthropic, OpenRouter, Google Translate) and MyMemory email are included only if you choose to when exporting.';
     section.appendChild(desc);
 
     const actions = document.createElement('div');
@@ -1022,7 +1023,7 @@ class SettingsModal {
       importSecrets = choice === 'with';
     } else if (
       !(await confirmDialog(
-        'Import settings? Your preferences are set to the file\u2019s. Your contacts, groups, folders, macros and custom buttons all stay \u2014 the file\u2019s new ones are added. Your API keys and your sharing code are kept.',
+        'Import settings? Your preferences are set to the file\u2019s. Your contacts, groups, folders, macros and custom buttons all stay \u2014 the file\u2019s new ones are added. Your API keys and your send code are kept.',
         { okLabel: 'Import' },
       ))
     ) {
@@ -2274,13 +2275,19 @@ function buildInstallInfoSection(): HTMLElement {
     launchRow.appendChild(launchText);
     wrap.appendChild(launchRow);
 
-    // Tournament mode (mirrors ebb): pause the AUTOMATIC checks for a
-    // week so nothing downloads or changes mid-tournament. Manual
-    // checks still work — a deliberate "check now" should always
-    // answer. While paused the row shows when checks resume and the
-    // button flips to an immediate resume.
+    // Tournament mode (mirrors ebb, widened in BCai's build): one switch
+    // for a week of rounds. Stored as the old update pause
+    // (`updateChecksPausedUntil`), so an install paused before stays
+    // paused. Manual checks still work — a deliberate "check now" should
+    // always answer. While on, the row says when it ends and the button
+    // turns it off.
     const pauseWrap = document.createElement('div');
     pauseWrap.className = 'pmd-update-pause';
+    pauseWrap.dataset['anchor'] = 'tournament-mode';
+    pauseWrap.dataset['searchAliases'] = 'tournament mode pause updates quiet do not disturb round';
+    const pauseTitle = document.createElement('div');
+    pauseTitle.className = 'pmd-settings-row-title';
+    pauseTitle.textContent = 'Tournament mode';
     const pauseStatus = document.createElement('div');
     pauseStatus.className = 'pmd-update-pause-status';
     const pauseBtn = document.createElement('button');
@@ -2288,30 +2295,19 @@ function buildInstallInfoSection(): HTMLElement {
     pauseBtn.className = 'pmd-install-info-btn';
     const pauseDesc = document.createElement('div');
     pauseDesc.className = 'pmd-update-pause-desc';
-    pauseDesc.textContent =
-      'Going to a tournament? Pausing stops automatic update checks and downloads; manual checks still work.';
+    pauseDesc.textContent = `Going to a tournament? For one week this turns off: ${TOURNAMENT_MODE_SILENCES} Also in the command palette (Tournament Mode) and the status bar.`;
     const renderPause = (): void => {
-      const until = settings.get('updateChecksPausedUntil');
-      if (until > Date.now()) {
-        const resume = new Date(until).toLocaleDateString(undefined, {
-          weekday: 'long',
-          month: 'long',
-          day: 'numeric',
-        });
-        pauseStatus.textContent = `Automatic update checks are paused — they resume ${resume}.`;
+      if (tournamentModeOn()) {
+        pauseStatus.textContent = `Tournament mode is on until ${tournamentModeEndText()}.`;
         pauseStatus.hidden = false;
-        pauseBtn.textContent = 'Resume update checks now';
+        pauseBtn.textContent = 'Turn off tournament mode';
       } else {
         pauseStatus.hidden = true;
-        pauseBtn.textContent = 'Pause update checks for 1 week';
+        pauseBtn.textContent = 'Turn on tournament mode for 1 week';
       }
     };
     pauseBtn.addEventListener('click', () => {
-      const paused = settings.get('updateChecksPausedUntil') > Date.now();
-      settings.set(
-        'updateChecksPausedUntil',
-        paused ? 0 : Date.now() + 7 * 24 * 60 * 60 * 1000,
-      );
+      setTournamentMode(!tournamentModeOn());
       renderPause();
     });
     const unsubscribePause = settings.subscribe(() => renderPause());
@@ -2319,6 +2315,7 @@ function buildInstallInfoSection(): HTMLElement {
     renderPause();
     // Caption above the button — description-then-control is the
     // ordering everywhere else in Settings.
+    pauseWrap.appendChild(pauseTitle);
     pauseWrap.appendChild(pauseStatus);
     pauseWrap.appendChild(pauseDesc);
     pauseWrap.appendChild(pauseBtn);
@@ -4069,7 +4066,7 @@ function buildPairingOwnCodeEditor(): HTMLElement {
     const code = settings.get('pairingOwnCode');
     if (!code) return;
     void navigator.clipboard?.writeText(code).then(
-      () => showToast('Pairing code copied'),
+      () => showToast('Send code copied'),
       () => showToast('Could not copy code'),
     );
   });
@@ -4085,14 +4082,14 @@ function buildPairingOwnCodeEditor(): HTMLElement {
       if (
         had &&
         !(await confirmDialog(
-          'Regenerate your pairing code? Anyone you already shared the old code with will need the new one.',
+          'Make a new send code? Anyone you already shared the old code with will need the new one.',
           { okLabel: 'Regenerate' },
         ))
       ) {
         return;
       }
       // The keypair lives in the main process; ask it to mint a fresh one.
-      void regenerateOwnCode().then(() => showToast('New pairing code generated'));
+      void regenerateOwnCode().then(() => showToast('New send code made'));
     })();
   });
 

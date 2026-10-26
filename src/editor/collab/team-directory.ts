@@ -37,6 +37,7 @@ import { isTeamKey, mergeTeamKey } from '../pairing/team-key.js';
 import { applyTeamKeyFromFile, ensureLocalTeamKey } from '../pairing/team-file-sync.js';
 import { keyBelongsHere, noteTeamKeyOrigin, type TeamKeyOrigin } from './relay-profiles.js';
 import { showToast } from '../toast.js';
+import { tournamentModeOn } from '../tournament-mode.js';
 import { relayMatchKey, tokenFingerprint } from '../relay-protocol.js';
 import { relayTag, tagImported } from '../pairing/contact-relays.js';
 import { queueTeamReview } from '../pairing/team-review.js';
@@ -423,7 +424,7 @@ function applyImported(dir: TeamDirectory, tag: string, key: string): ApplyResul
   }
   if (changed) patchState(key, { mergedRevision: dir.revision, groupIds: merged.groupIds });
   takeDirectoryKey(dir);
-  if (merged.addedPeople > 0) {
+  if (merged.addedPeople > 0 && !tournamentModeOn()) {
     showToast(`Added ${merged.addedPeople} teammate${merged.addedPeople === 1 ? '' : 's'} from your relay.`);
   }
   if (changed) queueDirectoryReview(dir, key, merged.held, tag);

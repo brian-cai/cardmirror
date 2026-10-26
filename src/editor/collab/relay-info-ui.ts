@@ -25,6 +25,7 @@ import { ensureBakedRelay, relayBaseUrl, relayClient } from './collab-relay.js';
 import { settings } from '../settings.js';
 import { clearNotice, postNotice } from '../status-notices.js';
 import { getElectronHost } from '../host/index.js';
+import { tournamentModeOn } from '../tournament-mode.js';
 
 // --- refresh ----------------------------------------------------------
 
@@ -58,8 +59,15 @@ export function startRelayInfo(): void {
   setInterval(() => void refreshRelayInfoNow(), RELAY_INFO_REFRESH_MS);
   let prevUrl = settings.get('pairingRelayUrl');
   let prevToken = settings.get('pairingRelayToken');
+  let prevQuiet = tournamentModeOn();
   let timer: ReturnType<typeof setTimeout> | null = null;
   settings.subscribe((st) => {
+    // Tournament mode on: the notice comes down; off: it comes back.
+    const quiet = tournamentModeOn();
+    if (quiet !== prevQuiet) {
+      prevQuiet = quiet;
+      syncRelayNotice(currentRelayInfo());
+    }
     if (st.pairingRelayUrl === prevUrl && st.pairingRelayToken === prevToken) return;
     prevUrl = st.pairingRelayUrl;
     prevToken = st.pairingRelayToken;
@@ -83,9 +91,9 @@ export function rememberDismissedNotice(id: string): void {
 
 /** Post the relay's notice once per id (per app run, until dismissed),
  *  take it down when the relay drops or replaces it, and when its
- *  `until` passes. */
+ *  `until` passes. Nothing is shown in tournament mode. */
 export function syncRelayNotice(info: RelayInfo | null, now = Date.now()): void {
-  const n = activeNotice(info, settings.get('relayInfoDismissedNotices'), now);
+  const n = tournamentModeOn(now) ? null : activeNotice(info, settings.get('relayInfoDismissedNotices'), now);
   const key = n ? NOTICE_KEY_PREFIX + n.id : null;
   if (postedKey && postedKey !== key) clearNotice(postedKey);
   if (n && key && key !== postedKey) {

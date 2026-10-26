@@ -621,22 +621,33 @@ describe('offer UI', () => {
     expect(directoryState(key).dismissedRevision).toBe(17);
   });
 
-  it('Import asks for the name (pre-filled), saves it, registers and merges', async () => {
+  it('Import with no display name asks for one, saves it, registers and merges', async () => {
     const relay = fakeRelay();
     relayRef.client = relay.client;
     onTeamDirectoryOffer(renderOffer);
     await refreshTeamDirectory(relay.ctx, { now: clock });
-    settings.set('pairingDisplayName', 'Sam'); // set after the offer appeared (with it, the refresh adds you)
     prompt.answer = 'Sam Lee';
     button('Import').click();
     await vi.waitFor(() => expect(directoryState(key).imported).toBe(true));
     expect(prompt.asked).toHaveLength(1);
     expect(prompt.asked[0]!.message).toBe('Your display name');
-    expect(prompt.asked[0]!.initial).toBe('Sam');
     expect(settings.get('pairingDisplayName')).toBe('Sam Lee');
     expect(settings.get('pairingPartners')).toHaveLength(2);
     expect(toasts.at(-1)).toBe('Imported “Lincoln HS Debate”: added 2 teammates.');
     expect(segment().hidden).toBe(true);
+  });
+
+  it('Import with a display name already set asks nothing (one step, not a second name prompt)', async () => {
+    const relay = fakeRelay();
+    relayRef.client = relay.client;
+    onTeamDirectoryOffer(renderOffer);
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    settings.set('pairingDisplayName', 'Sam'); // set after the offer appeared (with it, the refresh adds you)
+    button('Import').click();
+    await vi.waitFor(() => expect(directoryState(key).imported).toBe(true));
+    expect(prompt.asked).toHaveLength(0);
+    expect(settings.get('pairingDisplayName')).toBe('Sam');
+    expect(toasts.at(-1)).toBe('Imported “Lincoln HS Debate”: added 2 teammates.');
   });
 
   it('cancelling the name prompt imports nothing and keeps the offer', async () => {

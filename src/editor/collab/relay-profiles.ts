@@ -251,14 +251,11 @@ export async function switchRelay(target: string, hooks: SwitchHooks, now = Date
   try {
     stashOutgoingKey(now);
     if (profile) {
-      settings.set('teamSessionsKey', profile.teamKey);
-      settings.set('pairingRelayToken', profile.token);
-      settings.set('pairingRelayUrl', profile.url);
+      // One change: two sets would notify with a mixed URL/token pair.
+      settings.setMany({ teamSessionsKey: profile.teamKey, pairingRelayToken: profile.token, pairingRelayUrl: profile.url });
       save(settings.get('relayProfiles').map((p) => (p.id === profile.id ? { ...p, lastUsed: now } : p)));
     } else {
-      settings.set('teamSessionsKey', settings.get('relayBuiltinTeamKey'));
-      settings.set('pairingRelayToken', '');
-      settings.set('pairingRelayUrl', '');
+      settings.setMany({ teamSessionsKey: settings.get('relayBuiltinTeamKey'), pairingRelayToken: '', pairingRelayUrl: '' });
     }
   } finally {
     switching = false;
@@ -277,9 +274,9 @@ export function adoptRelay(url: string, token: string, now = Date.now()): void {
   try {
     stashOutgoingKey(now);
     const into = findProfile(settings.get('relayProfiles'), url, token);
-    settings.set('teamSessionsKey', into?.teamKey ?? '');
-    settings.set('pairingRelayToken', token);
-    settings.set('pairingRelayUrl', url);
+    // One change: setting the token first used to notify with {old URL,
+    // new token}, and main sent the new relay's token to the old relay.
+    settings.setMany({ teamSessionsKey: into?.teamKey ?? '', pairingRelayToken: token, pairingRelayUrl: url });
     if (into) save(settings.get('relayProfiles').map((p) => (p.id === into.id ? { ...p, lastUsed: now } : p)));
   } finally {
     switching = false;

@@ -2274,6 +2274,30 @@ body:not(.pmd-multi-doc) #app {
   color: var(--pmd-c-text-secondary);
 }
 
+/* Tournament mode chip (tournament-mode-ui.ts): plain secondary text when
+   off, an accent outline when on. */
+#tournament-chip {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--pmd-c-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0 0.6rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+#tournament-chip:hover {
+  color: var(--pmd-c-accent);
+  background: var(--pmd-c-hover);
+}
+#tournament-chip[data-state="on"] {
+  color: var(--pmd-c-accent);
+  border-color: var(--pmd-c-accent);
+  font-weight: 600;
+}
+
 /* Update chip (install-on-confirm): accent-outlined, clickable. Hidden
    ([hidden]) until the desktop main process reports an update. */
 #update-chip,
@@ -2330,6 +2354,11 @@ body:not(.pmd-multi-doc) #app {
   .pmd-home-update {
     animation: none !important;
   }
+}
+/* Tournament mode (tournament-mode.ts): the pill stays, the pulse stops. */
+html[data-tournament-mode] #update-chip,
+html[data-tournament-mode] .pmd-home-update {
+  animation: none !important;
 }
 /* Idle status-bar chip: a quiet "Check for updates" text control, not the
    accent pill an available / ready update gets. */
@@ -12704,6 +12733,25 @@ textarea.pmd-text-prompt-input {
   font-family: inherit;
 }
 .pmd-text-prompt-ok:hover { background: var(--pmd-c-accent-hover); }
+.pmd-text-prompt-ok.pmd-text-prompt-danger {
+  background: var(--pmd-c-danger);
+  border-color: var(--pmd-c-danger);
+}
+/* A dialog the app opened on its own focuses its safe button (Cancel /
+   Later / Not now): show which one Enter will press. */
+.pmd-text-prompt-buttons button:focus-visible {
+  outline: 2px solid var(--pmd-c-focus);
+  outline-offset: 2px;
+}
+.pmd-text-prompt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+.pmd-text-prompt-field-label {
+  color: var(--pmd-c-text-secondary);
+}
 /* In a button row, Cancel matches the accent button's size exactly — the
    default .pmd-route-cancel is the compact trailing link-style used under
    the big route-choice cards, which looked mismatched beside an OK button
@@ -17284,19 +17332,20 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
 }
 
 /* Contact ↔ relay (Settings → Collaboration recipients). */
-.pmd-pairing-relays { font-size: 11px; padding: 2px 6px; border-radius: 10px; border: 1px solid var(--pmd-border, #ccc);
+.pmd-pairing-relays { font-size: 11px; padding: 2px 6px; border-radius: 10px; border: 1px solid var(--pmd-c-border);
   background: transparent; color: inherit; cursor: pointer; white-space: nowrap; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; }
 .pmd-pairing-relay-panel { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 4px 8px 8px 12px; font-size: 12px; }
 .pmd-pairing-relay-panel label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
-.pmd-send-elsewhere { font-size: 11px; opacity: .75; }
+.pmd-send-elsewhere { font-size: 11px; color: var(--pmd-c-text-secondary); }
 
 /* Team-list offer: a line at the top of the Send popup, and a dot on Send while it waits. */
 .pmd-send-offer:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px;
-  margin: 2px 4px 6px; border-radius: 6px; background: var(--pmd-accent-soft, rgba(37, 99, 235, 0.08)); font-size: 12px; }
+  margin: 2px 4px 6px; border-radius: 6px; background: var(--pmd-c-accent-soft); font-size: 12px; }
 .pmd-send-offer .pmd-team-join-requests-text { flex: 1 1 auto; min-width: 8rem; }
 .pmd-send-pill.pmd-send-has-offer .pmd-send-bar { position: relative; }
-.pmd-send-pill.pmd-send-has-offer .pmd-send-bar::after { content: ''; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px;
-  border-radius: 50%; background: var(--pmd-accent, #2563eb); }
+.pmd-send-pill.pmd-send-has-offer .pmd-send-bar::after { content: attr(data-offer-count); position: absolute; top: -4px; right: -4px;
+  min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 7px; background: var(--pmd-c-accent);
+  color: var(--pmd-c-text-on-accent); font-size: 10px; font-weight: 600; line-height: 14px; text-align: center; }
 
 /* Join or rejoin a session: roomier, and the lists scroll inside it. */
 .pmd-rejoin-dialog { width: min(42rem, 94vw); max-width: none; }
@@ -17307,20 +17356,20 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
 .pmd-suggested-groups { margin: 6px 0 12px; }
 .pmd-suggested-group { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 13px; }
 .pmd-suggested-group-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pmd-suggested-group-by { opacity: .65; font-size: 12px; white-space: nowrap; }
+.pmd-suggested-group-by { color: var(--pmd-c-text-secondary); font-size: 12px; white-space: nowrap; }
 
 .pmd-settings-more { margin-top: 8px; }
-.pmd-settings-more > summary { cursor: pointer; font-size: 12px; opacity: .75; }
+.pmd-settings-more > summary { cursor: pointer; font-size: 12px; color: var(--pmd-c-text-secondary); }
 
 /* Join requests: a card above the status bar's right end. */
-.pmd-team-join-requests-card:not([hidden]) { bottom: calc(var(--status-bar-height, 28px) + 10px); right: 14px; display: flex;
+.pmd-team-join-requests-card:not([hidden]) { bottom: calc(var(--status-bar-height) + 10px); right: 14px; display: flex;
   align-items: center; gap: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18); border-radius: 8px; }
 
 /* "The relay isn't answering": a small strip just above the status bar while the relay in
    use is unreachable (relay-reachability-ui.ts). Informational, so muted chrome colors. */
 .pmd-relay-down {
   position: fixed;
-  bottom: calc(var(--status-bar-height, 24px) + 8px);
+  bottom: calc(var(--status-bar-height) + 8px);
   left: 50%;
   transform: translateX(-50%);
   max-width: min(640px, calc(100vw - 32px));
@@ -17335,6 +17384,11 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   font-size: 0.8rem;
   z-index: 210;
+}
+/* A join-request card is up at the bottom right: the bar moves above it
+   rather than under it (a half-width window has room for only one). */
+body:has(.pmd-team-join-requests-card:not([hidden])) .pmd-relay-down {
+  bottom: calc(var(--status-bar-height) + 64px);
 }
 .pmd-relay-down-link {
   color: var(--pmd-c-accent, inherit);

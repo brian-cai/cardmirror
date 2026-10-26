@@ -5,8 +5,12 @@
  * to never find. So once a day, while the name is empty, a dialog asks for
  * it. "Don't ask again" turns the reminder off for good on this computer.
  *
- * Nothing is shown during the tournament pause, while a co-editing session
- * is live, or over another dialog (it tries again on the next check). One
+ * Nothing is shown in tournament mode, while the round timer runs (or ran
+ * in the last 30 minutes), while a co-editing session is live in any
+ * window, or over another dialog (it tries again on the next check). The
+ * dialog keeps the caret out of its name field ("Not now" has the focus)
+ * and ignores the keyboard for its first second, so typing in the editor
+ * as it pops up can't land in it. One
  * reminder per day across every window: the day it was shown is kept in
  * localStorage. Pure decision (`shouldAskName`) plus a small wiring
  * function, so the rule is testable without the app shell.
@@ -35,12 +39,14 @@ export interface NameNudgeInputs {
   lastDay: string | null;
   /** The user ticked "Don't ask again". */
   never: boolean;
-  /** The tournament pause (Settings → General) is on. */
+  /** Tournament mode (tournament-mode.ts) is on. */
   paused: boolean;
-  /** A co-editing session is live in this window. */
+  /** A co-editing session is live in any window. */
   sessionLive: boolean;
   /** Another dialog is open. */
   overlayOpen: boolean;
+  /** The round timer is running or ran in the last 30 minutes. */
+  timerBusy?: boolean;
 }
 
 export function shouldAskName(i: NameNudgeInputs): boolean {
@@ -50,7 +56,8 @@ export function shouldAskName(i: NameNudgeInputs): boolean {
     i.lastDay !== localDayKey(i.now) &&
     !i.paused &&
     !i.sessionLive &&
-    !i.overlayOpen
+    !i.overlayOpen &&
+    !i.timerBusy
   );
 }
 
@@ -78,8 +85,11 @@ export function initNameNudge(deps: {
   name: () => string;
   setName: (name: string) => void;
   paused: () => boolean;
-  sessionLive: () => boolean;
+  /** Any window's live session (may ask the main process). */
+  sessionLive: () => boolean | Promise<boolean>;
   overlayOpen: () => boolean;
+  /** The round timer is busy (quiet-hours.ts timerBusy). */
+  timerBusy?: () => boolean;
   prompt: (opts: {
     message: string;
     detail: string;
@@ -87,6 +97,7 @@ export function initNameNudge(deps: {
     okLabel: string;
     cancelLabel: string;
     checkbox: { label: string; onChange: (checked: boolean) => void };
+    unsolicited: boolean;
   }) => Promise<string | null>;
   /** After an answer: lets the relay hear about it. */
   onAnswered?: () => void;
@@ -94,7 +105,7 @@ export function initNameNudge(deps: {
 }): () => void {
   const now = deps.now ?? (() => new Date());
   let open = false;
-  const consider = (): void => {
+  const consider = async (): Promise<void> => {
     if (open) return;
     const at = now();
     const inputs: NameNudgeInputs = {
@@ -103,15 +114,19 @@ export function initNameNudge(deps: {
       lastDay: read(LAST_DAY_KEY),
       never: read(NEVER_KEY) === '1',
       paused: deps.paused(),
-      sessionLive: deps.sessionLive(),
+      sessionLive: false,
       overlayOpen: deps.overlayOpen(),
+      timerBusy: deps.timerBusy?.() ?? false,
     };
     if (!shouldAskName(inputs)) return;
-    write(LAST_DAY_KEY, localDayKey(at)); // before the dialog, so other windows don't show it too
-    open = true;
-    let never = false;
-    void deps
-      .prompt({
+    open = true; // held across the session check, so a focus burst asks once
+    try {
+      if (await deps.sessionLive()) return;
+      // Re-read: another window may have asked, or a dialog opened, meanwhile.
+      if (!shouldAskName({ ...inputs, name: deps.name(), lastDay: read(LAST_DAY_KEY), overlayOpen: deps.overlayOpen() })) return;
+      write(LAST_DAY_KEY, localDayKey(at)); // before the dialog, so other windows don't show it too
+      let never = false;
+      const typed = await deps.prompt({
         message: 'What should teammates call you?',
         detail:
           'Your display name goes on cards you send, on your cursor when co-editing, and on your team’s relay, ' +
@@ -120,29 +135,30 @@ export function initNameNudge(deps: {
         okLabel: 'Save',
         cancelLabel: 'Not now',
         checkbox: { label: 'Don’t ask again', onChange: (c) => (never = c) },
-      })
-      .then((typed) => {
-        if (never) write(NEVER_KEY, '1');
-        const name = typed?.trim() ?? '';
-        if (name) {
-          write(ANSWER_KEY, '');
-          if (!deps.name().trim()) deps.setName(name.slice(0, 80));
-        } else {
-          write(ANSWER_KEY, 'later');
-          deps.onAnswered?.();
-        }
-      })
-      .catch((err) => console.warn('Name reminder failed:', err))
-      .finally(() => {
-        open = false;
+        unsolicited: true,
       });
+      if (never) write(NEVER_KEY, '1');
+      const name = typed?.trim() ?? '';
+      if (name) {
+        write(ANSWER_KEY, '');
+        if (!deps.name().trim()) deps.setName(name.slice(0, 80));
+      } else {
+        write(ANSWER_KEY, 'later');
+        deps.onAnswered?.();
+      }
+    } catch (err) {
+      console.warn('Name reminder failed:', err);
+    } finally {
+      open = false;
+    }
   };
-  const first = setTimeout(consider, 5000);
-  const timer = setInterval(consider, 15 * 60 * 1000);
-  window.addEventListener('focus', consider);
+  const run = (): void => void consider();
+  const first = setTimeout(run, 5000);
+  const timer = setInterval(run, 15 * 60 * 1000);
+  window.addEventListener('focus', run);
   return () => {
     clearTimeout(first);
     clearInterval(timer);
-    window.removeEventListener('focus', consider);
+    window.removeEventListener('focus', run);
   };
 }

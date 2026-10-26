@@ -28,6 +28,9 @@ describe('shouldAskName', () => {
   it('never after "Don’t ask again"', () => {
     expect(shouldAskName({ ...base, never: true })).toBe(false);
   });
+  it('not while the round timer runs or ran in the last 30 minutes', () => {
+    expect(shouldAskName({ ...base, timerBusy: true })).toBe(false);
+  });
   it('not during the pause, a live session, or another dialog', () => {
     expect(shouldAskName({ ...base, paused: true })).toBe(false);
     expect(shouldAskName({ ...base, sessionLive: true })).toBe(false);
@@ -77,6 +80,8 @@ describe('initNameNudge', () => {
     const s = setup(' Ana Lopez ');
     await vi.advanceTimersByTimeAsync(5000);
     expect(s.prompt).toHaveBeenCalledTimes(1);
+    // Unsolicited: the caret stays out of the field, keys are guarded.
+    expect(s.prompt.mock.calls[0]![0]).toEqual(expect.objectContaining({ unsolicited: true, cancelLabel: 'Not now' }));
     expect(s.name()).toBe('Ana Lopez');
     expect(nameNudgeAnswer()).toBeNull();
     window.dispatchEvent(new Event('focus'));

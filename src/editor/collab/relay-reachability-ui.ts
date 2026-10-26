@@ -8,6 +8,12 @@
  * module also asks the relay's /health every PROBE_MS, so the bar comes
  * and goes on time even when nothing else is talking to the relay. The
  * rules (what counts, when to show, flapping) are in relay-reachability.ts.
+ *
+ * The bar shows only when someone is waiting on the relay: a co-editing
+ * session is live, or a card send just failed (barWanted). A failing
+ * background mailbox poll is tracked but shows nothing by itself, and
+ * tournament mode shows nothing. When the computer itself is offline
+ * (navigator.onLine) the bar says so instead of blaming the relay.
  */
 
 import {
@@ -17,6 +23,7 @@ import {
   outageText,
   outcomeForStatus,
   record,
+  barWanted,
   statusLinkFor,
   tick,
   type ReachabilityState,
@@ -25,8 +32,9 @@ import { setRelayOutcomeListener } from './room-client.js';
 import { relayBaseUrl, relayUsable } from './collab-relay.js';
 import { currentRelayInfo } from './relay-info.js';
 import { openExternally } from './relay-info-ui.js';
-import { anyCollabSessionActive } from './collab-hooks.js';
+import { anyCollabSessionActive, setRelaySendFailureListener } from './collab-hooks.js';
 import { getElectronHost } from '../host/index.js';
+import { tournamentModeOn } from '../tournament-mode.js';
 
 const TICK_MS = 5_000;
 const PROBE_MS = 10_000;
@@ -39,6 +47,12 @@ let probing = false;
 let bar: HTMLDivElement | null = null;
 /** The user closed the bar: hidden until this outage ends. */
 let dismissed = false;
+/** When a card send last failed to reach the relay (0 = not in this
+ *  outage). Cleared by the relay's next answer; stale after SEND_FAIL_MS. */
+let sendFailedAt = 0;
+const SEND_FAIL_MS = 10 * 60_000;
+
+const isOffline = (): boolean => typeof navigator !== 'undefined' && navigator.onLine === false;
 
 const norm = (b: string): string => b.replace(/\/+$/, '');
 
@@ -47,7 +61,18 @@ function note(base: string, status: number): void {
   // Only the relay in use, and only one this computer can actually use: a
   // relay never set up (or a pinned session's old relay) is not news.
   if (!current || norm(base) !== current || !relayUsable()) return;
-  state = record(state, current, outcomeForStatus(status), Date.now());
+  const outcome = outcomeForStatus(status);
+  state = record(state, current, outcome, Date.now());
+  if (outcome === 'ok') sendFailedAt = 0;
+  sync();
+}
+
+/** A card send got no answer from the relay: this outage now matters to
+ *  someone, so the bar may show; probe at once for fresh evidence. */
+function noteSendFailed(): void {
+  if (!relayUsable()) return;
+  sendFailedAt = Date.now();
+  void probe();
   sync();
 }
 
@@ -79,8 +104,14 @@ function sync(): void {
     clearInterval(timer);
     timer = null;
   }
-  if (!state.alerted) dismissed = false;
-  render(state.alerted && !dismissed);
+  if (!state.alerted && !isOffline()) dismissed = false;
+  const wanted = barWanted({
+    inSession: anyCollabSessionActive(),
+    sendFailed: sendFailedAt > 0 && Date.now() - sendFailedAt < SEND_FAIL_MS,
+    tournamentMode: tournamentModeOn(),
+  });
+  // Offline: say so right away (no streak needed: the OS already told us).
+  render(wanted && (state.alerted || (isOffline() && relayUsable())) && !dismissed);
 }
 
 function render(show: boolean): void {
@@ -93,8 +124,9 @@ function render(show: boolean): void {
   const base = norm(relayBaseUrl());
   const info = currentRelayInfo();
   const mw = maintenanceWindowFor(base, info?.maintenance ?? null);
-  const text = outageText({ maintenance: inMaintenanceWindow(mw, Date.now()), inSession: anyCollabSessionActive() });
-  const status = statusLinkFor(base, info?.operator?.status ?? '');
+  const offline = isOffline();
+  const text = outageText({ maintenance: inMaintenanceWindow(mw, Date.now()), inSession: anyCollabSessionActive(), offline });
+  const status = offline ? '' : statusLinkFor(base, info?.operator?.status ?? '');
   if (!bar) {
     bar = document.createElement('div');
     bar.className = 'pmd-relay-down';
@@ -139,5 +171,14 @@ export function startRelayReachability(): void {
   if (started) return;
   started = true;
   setRelayOutcomeListener(note);
+  setRelaySendFailureListener(noteSendFailed);
   getElectronHost()?.onPairingRelayOutcome?.(({ base, status }) => note(base, status));
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => {
+      dismissed = false;
+      void probe();
+      sync();
+    });
+    window.addEventListener('offline', () => sync());
+  }
 }

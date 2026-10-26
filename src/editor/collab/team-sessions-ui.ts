@@ -8,9 +8,16 @@
  * current pending set; Approve / Deny run the caller's handlers. A request
  * acted on here stays hidden even if the next poll still lists it (the
  * DELETE may not have landed yet, or another participant's did first).
+ *
+ * Keyboard: the palette's Approve Join Request / Deny Join Request answer
+ * the oldest request, and the card's buttons are reachable with Tab
+ * (Approve, then Deny). In tournament mode the desktop notification for a
+ * request arrives without a sound; the card still shows.
  */
 
 import type { PendingJoinRequest } from './team-sessions.js';
+import { tournamentModeOn } from '../tournament-mode.js';
+import { showToast } from '../toast.js';
 
 export interface JoinRequestHandlers {
   approve(req: PendingJoinRequest): Promise<void>;
@@ -73,34 +80,56 @@ function render(): void {
   const where = rooms.size > 1 ? ` “${room.handlers.sessionName()}”` : '';
   text.textContent = `${req.name} wants to join${where}:`;
   el.appendChild(text);
-  const act = (label: string, run: () => Promise<void>, primary: boolean): HTMLButtonElement => {
+  el.setAttribute('aria-label', `Join request from ${req.name}`);
+  const act = (label: string, which: 'approve' | 'deny'): HTMLButtonElement => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'pmd-team-join-requests-btn' + (primary ? ' pmd-team-join-requests-approve' : '');
+    b.className = 'pmd-team-join-requests-btn' + (which === 'approve' ? ' pmd-team-join-requests-approve' : '');
     b.textContent = label;
+    b.setAttribute('aria-label', `${label} ${req.name}`);
+    b.dataset['answer'] = which;
     b.disabled = busy;
-    b.addEventListener('click', () => {
-      if (busy) return;
-      busy = true;
-      handled.add(req.requestId);
-      render();
-      void run()
-        .catch(() => {})
-        .finally(() => {
-          busy = false;
-          render();
-        });
-    });
+    b.addEventListener('click', () => answer(req, room, which));
     return b;
   };
-  el.appendChild(act('Approve', () => room.handlers.approve(req), true));
-  el.appendChild(act('Deny', () => room.handlers.deny(req), false));
+  el.appendChild(act('Approve', 'approve'));
+  el.appendChild(act('Deny', 'deny'));
   if (all.length > 1) {
     const more = document.createElement('span');
     more.className = 'pmd-team-join-requests-more';
     more.textContent = `+${all.length - 1} more`;
     el.appendChild(more);
   }
+}
+
+/** Run Approve / Deny for one request (card button or palette). */
+function answer(req: PendingJoinRequest, room: RoomRequests, which: 'approve' | 'deny'): void {
+  if (busy) return;
+  busy = true;
+  // Re-rendering replaces the buttons; keep the focus on the card if it
+  // was there, so a keyboard user lands on the next request's Approve.
+  const el = document.getElementById(ELEMENT_ID);
+  const hadFocus = !!el && el.contains(document.activeElement);
+  handled.add(req.requestId);
+  render();
+  const run = which === 'approve' ? room.handlers.approve(req) : room.handlers.deny(req);
+  void run
+    .catch(() => {})
+    .finally(() => {
+      busy = false;
+      render();
+      if (hadFocus) document.querySelector<HTMLButtonElement>(`#${ELEMENT_ID}:not([hidden]) button`)?.focus();
+    });
+}
+
+/** Palette: answer the oldest pending request. */
+export function answerFirstJoinRequest(which: 'approve' | 'deny'): void {
+  const first = pending()[0];
+  if (!first) {
+    showToast('No one is asking to join right now.');
+    return;
+  }
+  answer(first.req, first.room, which);
 }
 
 /** A desktop notification for a new request while this window isn't in
@@ -114,7 +143,11 @@ function notifyIfAway(reqs: PendingJoinRequest[]): void {
     notified.add(r.requestId);
     if (!away) continue;
     try {
-      new Notification(`${r.name} wants to join your session`, { body: 'Open CardMirror to approve or deny.', silent: false });
+      new Notification(`${r.name} wants to join your session`, {
+        body: 'Open CardMirror to approve or deny.',
+        // Tournament mode: no sound in the middle of a round.
+        silent: tournamentModeOn(),
+      });
     } catch {
       /* notifications off: the card is still there */
     }

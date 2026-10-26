@@ -33,6 +33,10 @@ describe('shouldNudge', () => {
     expect(shouldNudge({ ...base, paused: true })).toBe(false);
     expect(shouldNudge({ ...base, sessionLive: true })).toBe(false);
   });
+  it('not while the round timer runs or ran in the last 30 minutes', () => {
+    expect(shouldNudge({ ...base, timerBusy: true })).toBe(false);
+    expect(shouldNudge({ ...base, timerBusy: false })).toBe(true);
+  });
 });
 
 describe('nudgeText', () => {
@@ -86,5 +90,30 @@ describe('initUpdateNudge', () => {
     await flush(); await flush();
     stop();
     expect(h.actions).toBe(0);
+  });
+
+  it('opens as an unsolicited dialog (Later focused, keys guarded)', async () => {
+    const h = host(READY);
+    const seen: Array<{ unsolicited: boolean; cancelLabel: string }> = [];
+    const stop = initUpdateNudge(h, { paused: () => false, sessionLive: () => false, now: () => WED,
+      confirm: (_m, o) => { seen.push(o); return Promise.resolve(false); } });
+    await flush(); await flush();
+    stop();
+    expect(seen).toEqual([expect.objectContaining({ unsolicited: true, cancelLabel: 'Later' })]);
+  });
+
+  it('waits while a session is live in another window, or the timer is busy', async () => {
+    const h = host(READY);
+    let asked = 0;
+    const stop = initUpdateNudge(h, { paused: () => false, sessionLive: async () => true, now: () => WED,
+      confirm: () => { asked++; return Promise.resolve(true); } });
+    await flush(); await flush();
+    stop();
+    const stop2 = initUpdateNudge(h, { paused: () => false, sessionLive: () => false, timerBusy: () => true, now: () => WED,
+      confirm: () => { asked++; return Promise.resolve(true); } });
+    await flush(); await flush();
+    stop2();
+    expect(asked).toBe(0);
+    expect(localStorage.getItem('cm.updateNudge.lastDay')).toBeNull(); // still owed today
   });
 });

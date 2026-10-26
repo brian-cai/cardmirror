@@ -4731,6 +4731,9 @@ export type RibbonCommandId =
   // Check for a CardMirror update now (desktop) — the Help-menu item as a
   // command, for Windows / Linux, which have no menu bar.
   | 'checkForUpdates'
+  | 'toggleTournamentMode'
+  | 'approveJoinRequest'
+  | 'denyJoinRequest'
   // Minimize the OS window. Desktop-only; the macOS Window menu's
   // Minimize item routes through this same command so its accelerator
   // follows user rebinds (Mod-m default restores the stock Cmd+M).
@@ -4993,6 +4996,9 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'applyFontColor',
   'openSettings',
   'checkForUpdates',
+  'toggleTournamentMode',
+  'approveJoinRequest',
+  'denyJoinRequest',
   'minimizeWindow',
   'switchWindow',
   'openJournalsFolder',
@@ -5181,7 +5187,7 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   openQuickCardSearch: 'Search Everything',
   collabStartSession: 'Start Collaboration Session',
   collabJoinSession: 'Join or Rejoin Collaboration Session',
-  collabCopyShareCode: 'Copy Session Share Code',
+  collabCopyShareCode: 'Copy Session Code',
   collabCopyInviteLink: 'Copy Session Invite Link',
   collabInviteStarred: 'Invite Starred Partner to Session',
   collabEndSession: 'End or Leave Collaboration Session',
@@ -5213,6 +5219,9 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   applyFontColor: 'Apply Font Color',
   openSettings: 'Open Settings',
   checkForUpdates: 'Check for Updates',
+  toggleTournamentMode: 'Tournament Mode (On / Off)',
+  approveJoinRequest: 'Approve Join Request',
+  denyJoinRequest: 'Deny Join Request',
   minimizeWindow: 'Minimize Window',
   switchWindow: 'Switch Window',
   openJournalsFolder: 'Open Crash-Recovery Journals Folder',
@@ -5436,6 +5445,9 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
   sendDocToSlot2: ['two'],
   sendDocToSlot3: ['three'],
   checkForUpdates: ['update', 'updates', 'upgrade', 'new version', 'latest version'],
+  toggleTournamentMode: ['tournament', 'quiet', 'do not disturb', 'pause updates', 'silence notifications', 'round'],
+  approveJoinRequest: ['accept join', 'let in', 'admit', 'join request', 'approve'],
+  denyJoinRequest: ['reject join', 'decline join', 'join request', 'deny'],
 };
 
 /**
@@ -5589,7 +5601,12 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   sendToSpeechAtCursor: '`',
   sendToSpeechAtEnd: 'Alt-`',
   sendToDropzone: 'Mod-`',
-  sendToStarred: '',
+  // Send to your starred partner(s) mid-round without the mouse (BCai's
+  // build). Mod-Shift-P: free on every platform's defaults and next to
+  // Mod-P (insert what a partner sent). Not Mod-Shift-`: on macOS that is
+  // the system's "previous window" shortcut, and Shift-` is ~ on most
+  // layouts.
+  sendToStarred: 'Mod-Shift-p',
   sendToRecipient: '',
   insertReceivedAtCursor: 'Mod-p',
   insertReceivedAtEnd: 'Mod-Alt-p',
@@ -5683,6 +5700,9 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   // The platform-wide preferences chord (⌘, on macOS; Ctrl+, elsewhere).
   openSettings: 'Mod-,',
   checkForUpdates: '',
+  toggleTournamentMode: '',
+  approveJoinRequest: '',
+  denyJoinRequest: '',
   // Stock macOS chord; also works on Win/Linux. Rebindable like all.
   minimizeWindow: 'Mod-m',
   // Ctrl+Tab (Cmd+Tab is the OS app switcher on macOS, but Ctrl+Tab still
@@ -5975,6 +5995,9 @@ export interface RibbonContext {
   openSettings: () => void;
   /** Run a manual update check (desktop; toasts the result). */
   checkForUpdates: () => void;
+  toggleTournamentMode: () => void;
+  approveJoinRequest: () => void;
+  denyJoinRequest: () => void;
   /** Minimize this OS window (desktop only; no-op elsewhere). */
   minimizeWindow: () => void;
   /** Open the Switch Window palette, or step it on when already open
@@ -6122,6 +6145,9 @@ const DEFAULT_RIBBON_CONTEXT: RibbonContext = {
   lastFontColor: () => null,
   openSettings: () => {},
   checkForUpdates: () => {},
+  toggleTournamentMode: () => {},
+  approveJoinRequest: () => {},
+  denyJoinRequest: () => {},
   minimizeWindow: () => {},
   switchWindow: () => {},
   openJournalsFolder: () => {},
@@ -7030,6 +7056,24 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
       return (_state, dispatch) => {
         if (!dispatch) return true;
         ctx.checkForUpdates();
+        return true;
+      };
+    case 'toggleTournamentMode':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.toggleTournamentMode();
+        return true;
+      };
+    case 'approveJoinRequest':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.approveJoinRequest();
+        return true;
+      };
+    case 'denyJoinRequest':
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        ctx.denyJoinRequest();
         return true;
       };
     case 'minimizeWindow':

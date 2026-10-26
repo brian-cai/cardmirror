@@ -41,7 +41,7 @@ describe('sharing before setup', () => {
     await tick();
     await tick();
     const labels = [...document.querySelectorAll('.pmd-route-btn strong')].map((b) => b.textContent);
-    expect(labels).toEqual(['Import a team file', 'Set up in Settings']);
+    expect(labels).toEqual(['Paste an invite link', 'Import a team file', 'Set up in Settings']);
     expect(document.querySelector('.pmd-route-header')?.textContent).toBe('Set up card sharing and co-editing');
   });
 

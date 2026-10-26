@@ -128,9 +128,22 @@ function element(): HTMLElement | null {
   return document.getElementById(ELEMENT_ID);
 }
 
-function markPill(on: boolean): void {
+/** The dot on Send while an offer waits: a count (teammates to add, or
+ *  suggested groups) rather than color alone, and the same words for
+ *  screen readers on the bar. */
+function markPill(on: boolean, count = 0, what = ''): void {
   if (typeof document === 'undefined') return;
-  document.querySelector('.pmd-send-pill')?.classList.toggle('pmd-send-has-offer', on);
+  const pill = document.querySelector('.pmd-send-pill');
+  pill?.classList.toggle('pmd-send-has-offer', on);
+  const bar = pill?.querySelector<HTMLElement>('.pmd-send-bar');
+  if (!bar) return;
+  if (on) {
+    bar.dataset['offerCount'] = count > 0 ? String(Math.min(count, 99)) : '!';
+    bar.setAttribute('aria-label', what ? `Send. ${what}` : 'Send. Your team list has an update');
+  } else {
+    delete bar.dataset['offerCount'];
+    bar.removeAttribute('aria-label');
+  }
 }
 
 /** The offer's sentence. */
@@ -146,7 +159,8 @@ export function offerText(o: TeamDirectoryOffer): string {
 
 export function renderOffer(o: TeamDirectoryOffer | null = currentOffer()): void {
   const suggested = currentSuggestions();
-  markPill(!!o || suggested.length > 0);
+  if (o) markPill(true, o.missing, offerText(o));
+  else markPill(suggested.length > 0, suggested.length, `Teammates suggest ${suggested.length} group${suggested.length === 1 ? '' : 's'}`);
   const el = element();
   if (!el) return;
   if (!o) {
@@ -244,13 +258,16 @@ export function buildSuggestedGroupsSection(onCleanup: (fn: () => void) => void)
   return wrap;
 }
 
-/** Import: confirm the display name (pre-filled), then register + merge. */
+/** Import: register + merge. Asks for the display name only when there
+ *  isn't one yet (one question, not a second confirm of a name already
+ *  set in Settings or in the invite link's Connect dialog). */
 export async function runImport(o: TeamDirectoryOffer): Promise<boolean> {
-  const { promptForText } = await import('../text-prompt.js');
   const dir = o.directory;
   const team = dir.name.trim() ? `“${dir.name.trim()}”` : 'your team';
   const groups = dir.groups.length;
-  const typed = await promptForText({
+  const have = settings.get('pairingDisplayName').trim();
+  const { promptForText } = await import('../text-prompt.js');
+  const typed = have || await promptForText({
     message: 'Your display name',
     detail: addOnly(o)
       ? 'This lists you on the relay’s team list under this name with your send code, so teammates who connect get you as a ' +
@@ -288,6 +305,50 @@ export async function runImport(o: TeamDirectoryOffer): Promise<boolean> {
       : `Imported ${label}.`,
   );
   return true;
+}
+
+/** Right after Connect on an invite link: add the team list with no
+ *  further click. The refresh auto-adds once this install has a display
+ *  name and a send code; this keeps at it for a little while (the code is
+ *  minted and the relay first sees this mailbox a moment after Connect,
+ *  and the relay answers 409 until it has), then imports whatever offer is
+ *  up. Gives up quietly — the Send popup's Import line is still there —
+ *  when the relay has no team list, the user switched relays, there is no
+ *  name, or `timeoutMs` passes. */
+export async function importTeamAfterConnect(opts: { timeoutMs?: number; pollMs?: number } = {}): Promise<void> {
+  const deadline = Date.now() + (opts.timeoutMs ?? 45_000);
+  const pollMs = opts.pollMs ?? 3000;
+  const url = settings.get('pairingRelayUrl');
+  const token = settings.get('pairingRelayToken');
+  const same = (): boolean => settings.get('pairingRelayUrl') === url && settings.get('pairingRelayToken') === token;
+  while (Date.now() < deadline && same()) {
+    if (!settings.get('pairingDisplayName').trim()) return;
+    const ctx = await teamDirectoryContext();
+    if (ctx) {
+      const dir = await refreshTeamDirectory(ctx, { force: true }).catch(() => null);
+      if (!same()) return;
+      const o = currentOffer();
+      if (!dir && !o) {
+        // Unsupported (or not answering yet): one more look, then stop.
+        if (Date.now() + pollMs >= deadline) return;
+      } else if (!o) {
+        return; // imported by the refresh itself (it says so)
+      } else if (settings.get('pairingOwnCode')) {
+        const out = await importTeamDirectory(ctx, o.directory, settings.get('pairingDisplayName'), registerRetry);
+        if (out.ok) {
+          const label = o.directory.name.trim() ? `“${o.directory.name.trim()}”` : 'your team';
+          showToast(
+            out.addedPeople > 0
+              ? `Joined ${label}: added ${out.addedPeople} ${out.addedPeople === 1 ? 'teammate' : 'teammates'}.`
+              : `Joined ${label}.`,
+          );
+          return;
+        }
+        if (out.reason === 'no-name' || out.reason === 'failed') return;
+      }
+    }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
 }
 
 /** Test hook. */

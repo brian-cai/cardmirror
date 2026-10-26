@@ -4490,7 +4490,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
   },
   {
     key: 'pairingOwnCode',
-    label: 'Your pairing code',
+    label: 'Your send code',
     description:
       "This machine's code. Share it with anyone you want to be able to send you cards. Anyone with this code (and the app) can send to you; regenerate it to cut off old shares.",
     kind: 'pairingOwnCode',
@@ -4539,7 +4539,7 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     key: 'teamSessionsOpen',
     label: 'Let teammates join my sessions without asking',
     description:
-      'With a team file that has a team key, the sessions you start are listed under Join session for your team (you can turn this off per session when you start one). Off: a teammate asks to join and anyone in the session approves. On: the listing carries the share code, so any teammate can join directly.',
+      'With a team file that has a team key, the sessions you start are listed under Join session for your team (you can turn this off per session when you start one). Off: a teammate asks to join and anyone in the session approves. On: the listing carries the session code, so any teammate can join directly.',
     kind: 'toggle',
     category: 'pairing',
     electronOnly: true,
@@ -4963,6 +4963,27 @@ export class SettingsStore {
     if (this.values[key] === value) return;
     this.values[key] = value;
     if (!TRANSIENT_SETTING_KEYS.has(key as string)) this.persist();
+    this.notify();
+  }
+
+  /** Set several keys as ONE change: every value lands before any
+   *  subscriber runs, and subscribers run once. For values that only make
+   *  sense together (a relay URL and its token): with two `set` calls the
+   *  first notify shows a mixed pair (new URL, old token), and the pairing
+   *  subscriber pushes that to main, which sends the old token to the new
+   *  relay. */
+  setMany(patch: Partial<Settings>): void {
+    let changed = false;
+    let persist = false;
+    for (const key of Object.keys(patch) as Array<keyof Settings>) {
+      const value = patch[key];
+      if (value === undefined || this.values[key] === value) continue;
+      (this.values as unknown as Record<string, unknown>)[key] = value;
+      changed = true;
+      if (!TRANSIENT_SETTING_KEYS.has(key as string)) persist = true;
+    }
+    if (!changed) return;
+    if (persist) this.persist();
     this.notify();
   }
 

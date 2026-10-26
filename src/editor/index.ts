@@ -29,6 +29,8 @@ import { NavigationPanel, showNavContextMenu } from './nav-panel.js';
 import { initUpdateChip } from './update-chip.js';
 import { initUpdateNudge } from './update-nudge.js';
 import { initNameNudge } from './name-nudge.js';
+import { startTournamentModeWatch, tournamentModeOn } from './tournament-mode.js';
+import { liveSessionsAllWindows, startTimerQuietWatch, timerBusy } from './quiet-hours.js';
 import { mountTimerUI } from './timer-ui.js';
 import { initTimerAudio } from './timer-audio.js';
 import {
@@ -1004,6 +1006,32 @@ function updatePlainPasteIndicator(armed: boolean): void {
     });
   }
 }
+/** Before the update pill restarts the app: one stray click mid-round must
+ *  not close every document. Names the live co-editing sessions in every
+ *  window, since the restart ends them. */
+async function confirmUpdateRestart(s: { version: string }): Promise<boolean> {
+  const live = await liveSessionsAllWindows();
+  let message = 'Your documents reopen when it starts again.';
+  if (live > 0) {
+    message +=
+      live === 1
+        ? ' Your co-editing session closes; reopen it from the Sessions list on the home screen (your unsynced changes are saved).'
+        : ` Your ${live} co-editing sessions close; reopen them from the Sessions list on the home screen (your unsynced changes are saved).`;
+  }
+  return confirmDialog(message, {
+    title: `Restart CardMirror to update to ${s.version}?`,
+    okLabel: 'Restart and update',
+    cancelLabel: 'Not now',
+  });
+}
+startTimerQuietWatch();
+startTournamentModeWatch();
+{
+  const tournamentChipEl = document.getElementById('tournament-chip') as HTMLButtonElement | null;
+  if (tournamentChipEl) {
+    void import('./tournament-mode-ui.js').then((m) => m.initTournamentChip(tournamentChipEl));
+  }
+}
 // Update chip (install-on-confirm) — desktop only; the element stays
 // hidden on web / when the packaged shell predates the chip API.
 {
@@ -1013,15 +1041,15 @@ function updatePlainPasteIndicator(armed: boolean): void {
     // Always visible on the desktop app: "Check for updates" when nothing
     // is pending (Windows / Linux have no menu bar), the install chip when
     // something is.
-    initUpdateChip(
-      updateChipEl,
-      chipHost,
-      canCheckForUpdates() ? { idleCheck: () => checkForUpdatesNow({ quiet: true }) } : undefined,
-    );
+    initUpdateChip(updateChipEl, chipHost, {
+      ...(canCheckForUpdates() ? { idleCheck: () => checkForUpdatesNow({ quiet: true }) } : {}),
+      confirmRestart: confirmUpdateRestart,
+    });
     // Once a week (Wednesday), a pending update also gets a dialog.
     if (canCheckForUpdates()) initUpdateNudge(chipHost, {
-      paused: () => settings.get('updateChecksPausedUntil') > Date.now(),
-      sessionLive: () => collabLiveSessionCount() > 0,
+      paused: () => tournamentModeOn(),
+      sessionLive: async () => (await liveSessionsAllWindows()) > 0,
+      timerBusy: () => timerBusy(),
       confirm: confirmDialog,
     });
   }
@@ -1030,8 +1058,9 @@ function updatePlainPasteIndicator(armed: boolean): void {
 initNameNudge({
   name: () => settings.get('pairingDisplayName'),
   setName: (name) => settings.set('pairingDisplayName', name),
-  paused: () => settings.get('updateChecksPausedUntil') > Date.now(),
-  sessionLive: () => collabLiveSessionCount() > 0,
+  paused: () => tournamentModeOn(),
+  sessionLive: async () => (await liveSessionsAllWindows()) > 0,
+  timerBusy: () => timerBusy(),
   overlayOpen: isAnyOverlayOpen,
   prompt: promptForText,
   onAnswered: refreshPairingConfig,
@@ -2394,6 +2423,15 @@ const ribbonContext: RibbonContext = {
   lastFontColor: () => settings.get('lastFontColor'),
   openSettings: () => settingsBtn.click(),
   checkForUpdates: () => void checkForUpdatesNow(),
+  toggleTournamentMode: () => {
+    void import('./tournament-mode-ui.js').then((m) => m.toggleTournamentMode());
+  },
+  approveJoinRequest: () => {
+    void import('./collab/team-sessions-ui.js').then((m) => m.answerFirstJoinRequest('approve'));
+  },
+  denyJoinRequest: () => {
+    void import('./collab/team-sessions-ui.js').then((m) => m.answerFirstJoinRequest('deny'));
+  },
   minimizeWindow: () => {
     void getElectronHost()?.minimizeWindow();
   },
@@ -4785,6 +4823,10 @@ const VIEWLESS_RIBBON_COMMANDS = new Set<AnyCommandId>([
   'searchNavPane',
   // Update check: main-process work, no document needed.
   'checkForUpdates',
+  // App-wide switches, no document needed.
+  'toggleTournamentMode',
+  'approveJoinRequest',
+  'denyJoinRequest',
   // Home screen overlay — pure UI, no doc needed. Must be view-
   // less so it works in multi-pane with zero panes open.
   'goHome',
@@ -4852,6 +4894,9 @@ function runViewlessRibbon(id: AnyCommandId): void {
     case 'toggleNavPane': ribbonContext.toggleNavPane(); return;
     case 'searchNavPane': ribbonContext.searchNavPane(); return;
     case 'checkForUpdates': ribbonContext.checkForUpdates(); return;
+    case 'toggleTournamentMode': ribbonContext.toggleTournamentMode(); return;
+    case 'approveJoinRequest': ribbonContext.approveJoinRequest(); return;
+    case 'denyJoinRequest': ribbonContext.denyJoinRequest(); return;
     case 'goHome': ribbonContext.goHome(); return;
     case 'openQuickCardSearch': ribbonContext.openQuickCardSearch(); return;
     case 'insertLiveZone': ribbonContext.insertLiveZone(); return;
@@ -5648,7 +5693,11 @@ function makeStarterDoc(): PMNode {
     // Section 2: Bring your setup (settings file + team file)
     n['hat']!.create({ id: newHeadingId() }, schema.text('2. Bring your setup')),
     paraText(
-      'If your coach or another computer gave you a settings file (cardmirror-settings.json): ⚙ → General → Back up settings → Import settings…. It brings over shortcuts, ribbon buttons, appearance, your dictionary and the rest. Nothing you already have is removed: contacts, groups, folders, macros and dictionary words are merged, and your own sharing code stays yours. Folders from the file are added only if they exist on this computer \u2014 if your files live somewhere else, set your own (section 5). API keys come along only if the file has them and you say so.',
+      'If your coach or another computer gave you a settings file (cardmirror-settings.json): ⚙ → General → Back up settings → Import settings…. It brings over shortcuts, ribbon buttons, appearance, your dictionary and the rest. Nothing you already have is removed: contacts, groups, folders, macros and dictionary words are merged, and your own send code stays yours. Folders from the file are added only if they exist on this computer \u2014 if your files live somewhere else, set your own (section 5). API keys come along only if the file has them and you say so.',
+    ),
+    blank(),
+    paraText(
+      'If your coach sent an invite link (extinction.gg/relay/join\u2026): open it and click Open in CardMirror, or paste it into Join or Rejoin Collaboration Session (or the Send pill\u2019s setup). One Connect click joins your team\u2019s relay, turns sharing on, and adds your teammates.',
     ),
     blank(),
     paraText(
@@ -5804,11 +5853,15 @@ function makeStarterDoc(): PMNode {
     // Section 8: Collaboration
     n['hat']!.create({ id: newHeadingId() }, schema.text('8. Share and co-edit')),
     paraText(
-      'In the desktop app, CardMirror machines can send cards to each other and co-edit documents live — both end-to-end encrypted. The quickest setup is your team file (section 2). Without one, click the Send pill and choose Set up in Settings to turn sharing on and swap codes with teammates.',
+      'In the desktop app, CardMirror machines can send cards to each other and co-edit documents live — both end-to-end encrypted. The quickest setup is your coach\u2019s invite link or team file (section 2). Without one, click the Send pill and choose Set up in Settings to turn sharing on and swap send codes with teammates.',
     ),
     blank(),
     paraText(
-      'For live co-editing, click the Send pill and press the invite button on a recipient — or run Start Collaboration Session from the command bar and share the code it copies. Up to 10 people type in one document with live cursors, and everyone keeps their copy when the session ends.',
+      'Star your partner in the Send pill, then put the cursor in a card and press Mod-Shift-P to send it to them (Send to Starred Recipient). Mod-P inserts what they sent you.',
+    ),
+    blank(),
+    paraText(
+      'For live co-editing, click the Send pill and press the invite button on a recipient — or run Start Collaboration Session from the command bar and share the session code it copies. Up to 10 people type in one document with live cursors, and everyone keeps their copy when the session ends.',
     ),
     blank(),
 
@@ -7667,7 +7720,7 @@ const homeCallbacks: HomeScreenCallbacks = {
   },
   mountUpdateChip: (el) => {
     const chipHost = getElectronHost();
-    if (chipHost) initUpdateChip(el, chipHost);
+    if (chipHost) initUpdateChip(el, chipHost, { confirmRestart: confirmUpdateRestart });
   },
   // Clean: Electron gets the folder-recursive modal; web cleans one file at a time.
   clean:
@@ -10049,6 +10102,7 @@ const NATIVE_MENU_COMMANDS: RibbonCommandId[] = [
   'sendToSpeechAtCursor',
   'sendToSpeechAtEnd',
   'selectSpeechDoc',
+  'sendToStarred',
   // View
   'chromeScaleReset',
   'chromeScaleUp',
@@ -11132,7 +11186,7 @@ async function initSingleDocBoot(): Promise<void> {
     if (electron) {
       migrateAutoUpdateOptOut(() => {
         showToast(
-          'CardMirror now checks for updates automatically. You can turn this off — or pause it for a tournament — in Settings → General → About this install.',
+          'CardMirror now checks for updates automatically. You can turn this off — or turn on Tournament mode for a week of rounds — in Settings → General → About this install.',
         );
       });
     }
@@ -11145,7 +11199,7 @@ async function initSingleDocBoot(): Promise<void> {
     if (
       electron &&
       settings.get('checkForUpdatesOnLaunch') &&
-      settings.get('updateChecksPausedUntil') <= Date.now() // tournament pause
+      !tournamentModeOn()
     ) {
       try {
         await electron.triggerAutoUpdateCheck();
@@ -11167,7 +11221,7 @@ async function initSingleDocBoot(): Promise<void> {
       const backgroundCheck = (): void => {
         if (
           !settings.get('checkForUpdatesOnLaunch') ||
-          settings.get('updateChecksPausedUntil') > Date.now() // tournament pause
+          tournamentModeOn()
         ) {
           return;
         }

@@ -14,7 +14,9 @@
 import { getElectronHost } from '../host/index.js';
 import { collabEnabled } from '../collab/collab-gate.js';
 import { webEntitlementToken } from '../collab/web-account.js';
-import { RELAY_FIX_PATH } from '../relay-decline.js';import { recordSend } from './send-frequency.js';
+import { relayDeclined } from '../relay-decline.js';
+import { recordSend } from './send-frequency.js';
+import { notifyRelaySendFailed } from '../collab/collab-hooks.js';
 
 
 /** The minimal card shape sent over the wire — the dropzone's existing
@@ -45,7 +47,7 @@ export function sendOutcomeToast(label: string, res: SendResult): string {
   if (res.fail === 0) return `Sent to ${label} ✓`;
   if (res.authFail > 0) {
     const scope = res.ok === 0 && res.authFail === res.fail ? '' : ` for ${res.authFail} recipient(s)`;
-    return `The relay declined your credentials${scope}. ${RELAY_FIX_PATH}`;
+    return relayDeclined(`The relay declined your credentials${scope}.`);
   }
   if (res.ok === 0) return `Couldn't reach ${label}`;
   return `Sent to ${label} (${res.fail} failed)`;
@@ -104,6 +106,8 @@ class RelayClient {
       });
       // Delivered somewhere: count it toward who you send to most.
       if ((res?.ok ?? 0) > 0) recordSend(targets, opts?.via);
+      // Nothing got through and the relay didn't refuse it: unreachable.
+      else if ((res?.fail ?? 0) > 0 && !(res?.authFail ?? 0)) notifyRelaySendFailed();
       // authFail ?? 0 keeps an older main (no decline counting) working.
       return { ok: res?.ok ?? 0, fail: res?.fail ?? 0, authFail: res?.authFail ?? 0 };
     } catch {

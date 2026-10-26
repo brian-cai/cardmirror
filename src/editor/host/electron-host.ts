@@ -343,7 +343,13 @@ interface ElectronAPI {
   /** Main forwards a validated relay setup link (xtgg-relay://join) for
    *  this window to confirm; subscribing reports the window ready.
    *  Optional so an older preload without the channel is tolerated. */
-  onRelayJoin?(handler: (payload: { relayUrl: string; token: string }) => void): () => void;
+  onRelayJoin?(
+    handler: (payload: { relayUrl: string; token: string } | { error: 'invalid' | 'lite' }) => void,
+  ): () => void;
+  /** Main's strict parse of a pasted invite link. Optional: older preload. */
+  relayJoinParse?(
+    raw: string,
+  ): Promise<{ ok: true; link: { relayUrl: string; token: string } } | { ok: false; reason: string }>;
   journalAndCloseOtherWindows(): Promise<void>;
   closeSelf(): Promise<void>;
   /** Report that a close-request ended without closing (Cancel or a
@@ -476,6 +482,9 @@ interface ElectronAPI {
     opts?: { journaledBase?: DiskBase | null },
   ): Promise<{ claim: ClaimResult; provider: CloudProvider | null } | null>;
   openPathRelease(path: string): Promise<void>;
+  /** Live co-editing sessions across every window. Optional: an older
+   *  preload without the channel answers with this window's count. */
+  collabLiveSessionTotal?(): Promise<number>;
   cloudProvider(path: string): Promise<CloudProvider | null>;
   onDiskChanged(handler: (payload: { path: string; mtimeMs: number; size: number }) => void): () => void;
   onReopenRequested?(handler: (payload: { path: string; changed: boolean; fromSelf: boolean }) => void): () => void;
@@ -1153,8 +1162,18 @@ export class ElectronHost implements Host {
     return typeof fn === 'function' ? fn(handler) : () => {};
   }
 
-  onRelayJoin(handler: (payload: { relayUrl: string; token: string }) => void): () => void {
+  onRelayJoin(
+    handler: (payload: { relayUrl: string; token: string } | { error: 'invalid' | 'lite' }) => void,
+  ): () => void {
     return api().onRelayJoin?.(handler) ?? (() => {});
+  }
+
+  async relayJoinParse(
+    raw: string,
+  ): Promise<{ ok: true; link: { relayUrl: string; token: string } } | { ok: false; reason: string }> {
+    const fn = api().relayJoinParse;
+    if (typeof fn !== 'function') return { ok: false, reason: 'unsupported' };
+    return await fn(raw);
   }
 
   /** Mode-switch helper. Asks main to broadcast a please-close
@@ -1513,6 +1532,12 @@ export class ElectronHost implements Host {
 
   async openPathRelease(path: string): Promise<void> {
     await api().openPathRelease(path);
+  }
+
+  async collabLiveSessionTotal(): Promise<number> {
+    const fn = api().collabLiveSessionTotal;
+    if (typeof fn !== 'function') throw new Error('collabLiveSessionTotal unavailable');
+    return await fn();
   }
 
   async focusAnchorInWindow(

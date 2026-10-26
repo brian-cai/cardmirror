@@ -142,10 +142,24 @@ export function statusLinkFor(base: string, published: string): string {
   return isXtggHost(hostOf(base)) ? XTGG_STATUS : '';
 }
 
-/** The bar's sentence. */
-export function outageText(opts: { maintenance: boolean; inSession: boolean }): string {
+/** The bar's sentence. `offline`: the computer itself has no network
+ *  (navigator.onLine), so the relay isn't the problem. */
+export function outageText(opts: { maintenance: boolean; inSession: boolean; offline?: boolean }): string {
+  if (opts.offline) {
+    return opts.inSession
+      ? 'You’re offline — your edits are kept on this computer and send when you reconnect.'
+      : 'You’re offline — cards will arrive when you reconnect.';
+  }
   const lead = opts.maintenance
     ? 'The relay may be restarting for updates (usually under a minute).'
     : 'The relay isn’t answering. Retrying…';
   return opts.inSession ? `${lead} Your edits are kept on this computer and send when it’s back.` : lead;
+}
+
+/** Is the bar worth showing? Only when someone is waiting on the relay:
+ *  a live co-editing session, or a card send that just failed. A failing
+ *  background mailbox poll alone isn't news (cards queue on the relay and
+ *  arrive later), and tournament mode shows nothing. */
+export function barWanted(opts: { inSession: boolean; sendFailed: boolean; tournamentMode: boolean }): boolean {
+  return !opts.tournamentMode && (opts.inSession || opts.sendFailed);
 }

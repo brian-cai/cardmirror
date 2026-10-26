@@ -20,7 +20,7 @@ import { settings } from '../settings.js';
 import { tokenFromAnotherHost } from '../collab/relay-profiles.js';
 import { appVersion, CARD_COMPAT_MIN_VERSION } from '../install-info.js';
 import { showToast } from '../toast.js';
-import { RELAY_FIX_PATH } from '../relay-decline.js';
+import { relayDeclined } from '../relay-decline.js';
 import { postNotice } from '../status-notices.js';
 import { inboxStore } from './inbox-store.js';
 import { SendPillController } from './send-pill-ui.js';
@@ -219,7 +219,7 @@ export function initPairingWiring(): void {
         title: detail ? 'Your relay refused this install' : 'Card sharing needs credentials',
         body: detail
           ? `Card sharing: the relay refused this install: ${detail}`
-          : 'Card sharing: the relay rejected your credentials. ' + RELAY_FIX_PATH,
+          : relayDeclined('Card sharing: the relay rejected your credentials.'),
         key: 'pairing-401',
         full: true,
       });
@@ -254,7 +254,7 @@ export function initPairingWiring(): void {
         postNotice({
           severity: 'error',
           title: 'Card sharing needs credentials',
-          body: 'Card sharing: the relay rejected your credentials. ' + RELAY_FIX_PATH,
+          body: relayDeclined('Card sharing: the relay rejected your credentials.'),
           key: 'pairing-401',
         });
       });

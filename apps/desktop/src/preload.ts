@@ -473,13 +473,24 @@ interface PairingInboxItemIpc {
   /** Main forwards a validated relay setup link (xtgg-relay://join) for
    *  the renderer to confirm. Subscribing also tells main this window is
    *  ready, so a link queued at launch is delivered now. */
-  onRelayJoin(handler: (payload: { relayUrl: string; token: string }) => void): () => void {
-    const listener = (_evt: unknown, payload: { relayUrl: string; token: string }): void =>
-      handler(payload);
+  onRelayJoin(
+    handler: (payload: { relayUrl: string; token: string } | { error: 'invalid' | 'lite' }) => void,
+  ): () => void {
+    const listener = (
+      _evt: unknown,
+      payload: { relayUrl: string; token: string } | { error: 'invalid' | 'lite' },
+    ): void => handler(payload);
     ipcRenderer.on('host:relay-join', listener);
     ipcRenderer.send('host:relay-join-ready');
     return () => ipcRenderer.removeListener('host:relay-join', listener);
   },
+
+  /** Validate a pasted invite link (`xtgg-relay://join?…`) with main's
+   *  strict parser. */
+  relayJoinParse: (raw: string) =>
+    ipcRenderer.invoke('host:relay-join-parse', raw) as Promise<
+      { ok: true; link: { relayUrl: string; token: string } } | { ok: false; reason: string }
+    >,
 
   /** Spawn a new BrowserWindow, optionally pre-loaded with a doc. */
   spawnWindow: (payload: {
@@ -645,6 +656,9 @@ interface PairingInboxItemIpc {
       claim: 'fresh' | 'journaled' | 'changed' | 'unknown';
       provider: 'dropbox' | 'onedrive' | 'gdrive' | 'icloud' | 'other' | null;
     } | null>,
+  /** Live co-editing sessions in every window (their room claims in the
+   *  open-path registry). */
+  collabLiveSessionTotal: () => ipcRenderer.invoke('host:collab-live-session-total') as Promise<number>,
   openPathRelease: (path: string) =>
     ipcRenderer.invoke('host:open-path-release', path),
   /** "Show in context": if another window already has `path` open, focus

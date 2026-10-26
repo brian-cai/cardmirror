@@ -98,7 +98,7 @@ export async function joinSessionWithCodeInner(
   }
   const decoded = decodeShareCode(code);
   if (!decoded) {
-    showToast('That does not look like a share code');
+    showToast('That does not look like a session code or invite link');
     return false;
   }
   // v2 codes carry the room's compatibility floor. (Old builds never

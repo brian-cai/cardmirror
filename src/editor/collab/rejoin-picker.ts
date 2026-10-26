@@ -188,8 +188,8 @@ export function pickSessionToJoin(
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'pmd-text-prompt-input pmd-rejoin-input';
-    input.placeholder = 'Paste a share code or invite link, or type to search';
-    input.setAttribute('aria-label', 'Share code or invite link');
+    input.placeholder = 'Paste a session code or invite link, or type to search';
+    input.setAttribute('aria-label', 'Session code or invite link');
     input.autocomplete = 'off';
     input.spellcheck = false;
     entry.appendChild(input);

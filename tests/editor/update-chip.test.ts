@@ -124,4 +124,37 @@ describe('update chip', () => {
     await tick();
     expect(el.hidden).toBe(true);
   });
+
+  it('a ready update asks before restarting; Not now does nothing', async () => {
+    const el = makeEl();
+    const host = makeHost({ state: 'ready', version: '1.16.0' });
+    const answers = [false, true];
+    const asked: string[] = [];
+    initUpdateChip(el, host, {
+      confirmRestart: async (s) => {
+        asked.push(s.version);
+        return answers.shift()!;
+      },
+    });
+    await tick();
+    el.click();
+    await tick();
+    expect(asked).toEqual(['1.16.0']);
+    expect(host.actions).toBe(0); // one stray click never restarts
+    el.click();
+    await tick();
+    expect(host.actions).toBe(1);
+  });
+
+  it('an available (download-page) update needs no restart confirm', async () => {
+    const el = makeEl();
+    const host = makeHost({ state: 'available', version: '1.16.0' });
+    let asked = 0;
+    initUpdateChip(el, host, { confirmRestart: async () => (asked++, false) });
+    await tick();
+    el.click();
+    await tick();
+    expect(asked).toBe(0);
+    expect(host.actions).toBe(1);
+  });
 });

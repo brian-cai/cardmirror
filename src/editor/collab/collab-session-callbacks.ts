@@ -4,7 +4,7 @@
 
 import { showToast } from '../toast.js';
 import { surfaceError } from '../error-surface.js';
-import { RELAY_FIX_PATH } from '../relay-decline.js';
+import { relayDeclined } from '../relay-decline.js';
 import { clearNotice, postNotice } from '../status-notices.js';
 import { notifyCollabCopresenceChange } from './collab-hooks.js';
 import { type ActiveSession, type CollabUiDeps, sessions } from './collab-ui-state.js';
@@ -113,8 +113,7 @@ export function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSessio
         severity: 'error',
         title: 'Session credentials rejected',
         body:
-          'The session relay rejected your credentials. ' +
-          RELAY_FIX_PATH +
+          relayDeclined('The session relay rejected your credentials.') +
           ' Your edits are saved locally and keep retrying.',
         key: 'collab-401',
       });

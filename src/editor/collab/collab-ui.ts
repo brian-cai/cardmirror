@@ -284,9 +284,9 @@ async function startSessionFlowInner(
     showToast(
       copied
         ? getElectronHost()
-          ? 'Session started — share code copied, send it to your partner'
+          ? 'Session started — session code copied, send it to your partner'
           : 'Session started — invite link copied, send it to your partner'
-        : 'Session started — use "Copy Session Share Code" to invite',
+        : 'Session started — use "Copy Session Code" to invite',
     );
   } catch (err) {
     if (err instanceof SessionStartCancelledError) {
@@ -317,6 +317,10 @@ export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
     return;
   }
   const entered = pick.text;
+  // A team relay invite link (https://…/relay/join#… or xtgg-relay://join?…)
+  // pasted here: connect to the relay instead of joining a session.
+  const { joinRelayFromText } = await import('../pairing/relay-join.js');
+  if (await joinRelayFromText(entered)) return;
   // A full invite link pastes here too (the Chromebook path: link
   // received in a chat, app already open). Extract code + guest pass.
   const hashIdx = entered.indexOf('#');
@@ -355,7 +359,7 @@ export async function copyShareCodeFlow(): Promise<void> {
     () => true,
     () => false,
   );
-  showToast(ok ? 'Share code copied' : 'Could not copy the share code');
+  showToast(ok ? 'Session code copied' : 'Could not copy the session code');
 }
 
 /** Re-publish the owner doc's display name to its live session's meta
@@ -465,9 +469,8 @@ async function endOrLeaveSession(sess: ActiveSession): Promise<boolean> {
       // Reconnect and keep the session (and its record) intact — the user
       // retries once the relay is reachable.
       sess.session.start();
-      showToast(
-        `Couldn't end the session — check your connection and try again. (${err instanceof Error ? err.message : err})`,
-      );
+      console.warn('[collab] could not end the session:', err);
+      showToast('Couldn’t end the session — check your connection and try again.');
       return false;
     }
   }
