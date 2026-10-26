@@ -44,9 +44,10 @@ import {
   type EditorState,
   type Transaction,
 } from 'prosemirror-state';
-import { Decoration, DecorationSet } from 'prosemirror-view';
+import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
 import type { Node as PMNode } from 'prosemirror-model';
 import { changedRange, expandToTopLevel } from './decoration-range.js';
+import { cancelIdle, scheduleIdle, type IdleHandle } from './idle-scheduler.js';
 import { preciseScrollIntoView } from './precise-scroll.js';
 import { isWordChar, normalizeForMatch } from './word-break.js';
 
@@ -215,18 +216,18 @@ function preparedText(node: PMNode, caseSensitive: boolean): { text: string; pre
   return { text: entry.text, prep };
 }
 
-/** Fill the search-text cache for `doc` during idle time, in small slices,
- *  so the FIRST keystroke of a search is as cheap as the rest (the cold
- *  fill was the worst Find delay on a big document). Started when the Find
- *  bar opens; returns a cancel function. */
-export function prewarmFindText(doc: PMNode, caseSensitive: boolean): () => void {
-  let cancelled = false;
-  let i = 0;
-  const fill = (child: PMNode): void => {
-    if (child.isTextblock) {
-      preparedText(child, caseSensitive);
-      return;
-    }
+/** Top-level children whose textblocks are all in `preparedTexts` for that
+ *  case mode. A re-warm after an edit walks the doc's children and skips
+ *  these, so it costs O(children) plus only the edited blocks. Weak like
+ *  the text cache: an edited child is a new node and simply isn't here. */
+const warmedChildren = { exact: new WeakSet<PMNode>(), folded: new WeakSet<PMNode>() };
+
+function warmChild(child: PMNode, caseSensitive: boolean): void {
+  const done = warmedChildren[caseSensitive ? 'exact' : 'folded'];
+  if (done.has(child)) return;
+  if (child.isTextblock) {
+    preparedText(child, caseSensitive);
+  } else {
     child.descendants((n) => {
       if (n.isTextblock) {
         preparedText(n, caseSensitive);
@@ -234,19 +235,141 @@ export function prewarmFindText(doc: PMNode, caseSensitive: boolean): () => void
       }
       return true;
     });
+  }
+  done.add(child);
+}
+
+/** True when every textblock of top-level child `child` has its search
+ *  text cached for `caseSensitive`. For tests. */
+export function isFindTextWarm(child: PMNode, caseSensitive: boolean): boolean {
+  return warmedChildren[caseSensitive ? 'exact' : 'folded'].has(child);
+}
+
+type IdleDeadlineLike = { timeRemaining(): number };
+const requestIdle = (cb: (d: IdleDeadlineLike) => void): void => {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(cb);
+  else setTimeout(() => cb({ timeRemaining: () => 8 }), 0);
+};
+
+/** Longest stretch one idle slice of warming runs: well under a frame, so
+ *  a keystroke arriving mid-warm waits at most this long. */
+const WARM_SLICE_MS = 8;
+
+/** Warm the top-level children of `getDoc()` in idle slices. Stops when
+ *  `keepGoing()` turns false or the doc it started on is replaced (an edit
+ *  re-arms the caller). `onDone` runs once every child is warm. */
+function warmInSlices(
+  getDoc: () => PMNode,
+  caseSensitive: boolean,
+  keepGoing: () => boolean,
+  onDone?: () => void,
+): void {
+  const doc = getDoc();
+  let i = 0;
+  const step = (deadline: IdleDeadlineLike): void => {
+    if (!keepGoing() || getDoc() !== doc) return;
+    const start = performance.now();
+    while (i < doc.childCount && deadline.timeRemaining() > 2 && performance.now() - start < WARM_SLICE_MS) {
+      warmChild(doc.child(i++), caseSensitive);
+    }
+    if (i < doc.childCount) requestIdle(step);
+    else onDone?.();
   };
-  const ric =
-    typeof requestIdleCallback === 'function'
-      ? (cb: (d: { timeRemaining(): number }) => void) => requestIdleCallback(cb)
-      : (cb: (d: { timeRemaining(): number }) => void) => setTimeout(() => cb({ timeRemaining: () => 8 }), 0);
-  const step = (deadline: { timeRemaining(): number }): void => {
-    if (cancelled) return;
-    while (i < doc.childCount && deadline.timeRemaining() > 2) fill(doc.child(i++));
-    if (i < doc.childCount) ric(step);
-  };
-  ric(step);
+  requestIdle(step);
+}
+
+/** Fill the search-text cache for `doc` during idle time, in small slices,
+ *  so the FIRST keystroke of a search is as cheap as the rest (the cold
+ *  fill was the worst Find delay on a big document). Started when the Find
+ *  bar opens (for the bar's case mode; the idle warmer below has usually
+ *  done the default one already); returns a cancel function. */
+export function prewarmFindText(doc: PMNode, caseSensitive: boolean): () => void {
+  let cancelled = false;
+  warmInSlices(() => doc, caseSensitive, () => !cancelled);
   return () => {
     cancelled = true;
+  };
+}
+
+/** Docs at least this big (in positions) get their search text warmed in
+ *  idle time after they open, before Find is ever used: on a 10 MB
+ *  masterfile (~10M positions) the cold fill made the first query a
+ *  ~400 ms freeze; below this a cold first query is a few tens of ms. */
+export const FIND_IDLE_WARM_MIN_SIZE = 500_000;
+
+/** Quiet period after the doc opens or changes before warming starts, so
+ *  it never competes with opening or a typing burst. */
+const FIND_IDLE_WARM_DELAY_MS = 1500;
+
+/** Per-view idle warmer: once the doc has been quiet for a moment, warm the
+ *  default (case-insensitive) search text in idle slices — only while this
+ *  window has focus (a background window waits for focus), and only for a
+ *  doc of at least `minSize`. Edits re-arm it; the re-warm skips every
+ *  top-level child still warm, so after an edit only the edited cards are
+ *  filled. Cache correctness never depends on it: entries are keyed by
+ *  node identity, so an edited block is simply a new, cold node. */
+function idleFindWarmer(view: EditorView, minSize: number): { update(): void; destroy(): void } {
+  let destroyed = false;
+  let generation = 0;
+  let pending: IdleHandle | null = null;
+  let warmedDoc: PMNode | null = null;
+  let onFocus: (() => void) | null = null;
+  const stopWaitingForFocus = (): void => {
+    if (onFocus) window.removeEventListener('focus', onFocus);
+    onFocus = null;
+  };
+  const arm = (): void => {
+    generation++;
+    if (pending) cancelIdle(pending);
+    pending = null;
+    stopWaitingForFocus();
+    if (destroyed || typeof document === 'undefined') return;
+    const doc = view.state.doc;
+    if (doc === warmedDoc || doc.content.size < minSize) return;
+    const gen = generation;
+    pending = scheduleIdle(() => {
+      pending = null;
+      if (destroyed || gen !== generation) return;
+      if (!document.hasFocus()) {
+        onFocus = (): void => {
+          stopWaitingForFocus();
+          arm();
+        };
+        window.addEventListener('focus', onFocus);
+        return;
+      }
+      warmInSlices(
+        () => view.state.doc,
+        false,
+        () => {
+          if (destroyed || gen !== generation) return false;
+          if (document.hasFocus()) return true;
+          // Focus left mid-warm: pause, and pick up (skipping what's
+          // already warm) when the window is focused again.
+          generation++;
+          onFocus = (): void => {
+            stopWaitingForFocus();
+            arm();
+          };
+          window.addEventListener('focus', onFocus);
+          return false;
+        },
+        () => {
+          warmedDoc = doc;
+        },
+      );
+    }, FIND_IDLE_WARM_DELAY_MS);
+  };
+  arm();
+  return {
+    update: arm,
+    destroy(): void {
+      destroyed = true;
+      generation++;
+      if (pending) cancelIdle(pending);
+      pending = null;
+      stopWaitingForFocus();
+    },
   };
 }
 
@@ -495,7 +618,10 @@ function rescanIncrementalAfterDocChange(
   return { ...prev, matches, currentIndex: nextIndex };
 }
 
-export function findReplacePlugin(): Plugin<FindReplaceState> {
+export function findReplacePlugin(
+  opts: { idleWarmMinSize?: number } = {},
+): Plugin<FindReplaceState> {
+  const idleWarmMinSize = opts.idleWarmMinSize ?? FIND_IDLE_WARM_MIN_SIZE;
   // Per-instance memo of the BASE decoration set — the scope band + every match
   // with the base class. Keyed on (doc, matches, scope) but NOT currentIndex, so
   // navigating between results doesn't rebuild all N highlights: the current-match
@@ -627,6 +753,15 @@ export function findReplacePlugin(): Plugin<FindReplaceState> {
         }
         return next;
       },
+    },
+    view(editorView) {
+      const warmer = idleFindWarmer(editorView, idleWarmMinSize);
+      return {
+        update(v, prevState): void {
+          if (v.state.doc !== prevState.doc) warmer.update();
+        },
+        destroy: warmer.destroy,
+      };
     },
     props: {
       decorations(state) {
