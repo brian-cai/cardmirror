@@ -131,6 +131,11 @@ export interface TextPromptOptions {
    *  this session"). `onChange` reports each toggle; read the final value
    *  from it once the prompt resolves with a value. */
   checkbox?: { label: string; checked?: boolean; onChange: (checked: boolean) => void };
+  /** The app opened this on its own (the daily name reminder): the
+   *  caret stays out of the text field (Cancel holds the focus), keys are
+   *  ignored for UNSOLICITED_KEY_GUARD_MS, and Enter submits only from
+   *  inside the field. See ConfirmDialogOptions.unsolicited. */
+  unsolicited?: boolean;
 }
 
 export function promptForText(opts: TextPromptOptions): Promise<string | null> {
@@ -221,13 +226,21 @@ export function promptForText(opts: TextPromptOptions): Promise<string | null> {
       }
     });
 
+    const guardUntil = opts.unsolicited ? Date.now() + UNSOLICITED_KEY_GUARD_MS : 0;
     removeKeys = installModalKeys(dialog, overlayToken, (e) => {
       if (e.key === 'Escape') {
         cleanup();
         resolve(null);
         return true;
       }
+      // Keys typed into the editor as it popped up: swallowed.
+      if (Date.now() < guardUntil) return true;
       if (e.key === 'Enter') {
+        // Unsolicited: Enter on a button is that button's own click (the
+        // focus starts on Cancel); only Enter in the field submits.
+        if (opts.unsolicited && e.target !== input) {
+          return !(e.target instanceof HTMLButtonElement && dialog.contains(e.target));
+        }
         // Multiline: Enter inserts a newline (falls through to the
         // input's native behavior); Ctrl/Cmd+Enter submits.
         if (opts.multiline && !(e.ctrlKey || e.metaKey)) return false;
@@ -240,6 +253,11 @@ export function promptForText(opts: TextPromptOptions): Promise<string | null> {
 
     document.body.appendChild(overlay);
     armDialogFocus(dialog, 'dialog', opts.message);
+    if (opts.unsolicited) {
+      // Nobody asked for this dialog: don't take the caret into the field.
+      cancelBtn.focus();
+      return;
+    }
     // Focus + select so users can immediately type a replacement
     // when an initial value is supplied.
     setTimeout(() => {
@@ -585,13 +603,36 @@ export function alertDialog(message: string, opts?: { title?: string }): Promise
   });
 }
 
+/** How long an UNSOLICITED dialog (one the app popped up on its own: the
+ *  update reminder, the name reminder, an invite link arriving from
+ *  another app) ignores the keyboard after it appears. Someone typing in
+ *  the editor when it pops keeps typing for a moment; their Enter, Space
+ *  or letters must not answer a question they haven't read. */
+export const UNSOLICITED_KEY_GUARD_MS = 1000;
+
+/** Options shared by the confirm-style dialogs. */
+export interface ConfirmDialogOptions {
+  title?: string;
+  okLabel?: string;
+  cancelLabel?: string;
+  link?: { label: string; url: string };
+  /** Style the OK button as a destructive action. */
+  danger?: boolean;
+  /** The app opened this on its own, not in answer to a click or key:
+   *  Cancel gets the focus (Enter on it cancels), and keys are ignored for
+   *  UNSOLICITED_KEY_GUARD_MS (Escape still cancels). Enter confirms only
+   *  once the user has moved focus to OK or into `field`. */
+  unsolicited?: boolean;
+  /** One text field under the message (e.g. "Your name"). Never focused
+   *  on open; Enter inside it confirms. Read the value via `onInput`. */
+  field?: { label: string; placeholder?: string; initial?: string; onInput: (value: string) => void };
+}
+
 /** In-DOM replacement for `window.confirm` (see alertDialog's warning about
  *  the native dialogs). Resolves true on OK / Enter, false on Cancel / Esc /
- *  overlay click. */
-export function confirmDialog(
-  message: string,
-  opts?: { title?: string; okLabel?: string; cancelLabel?: string; link?: { label: string; url: string } },
-): Promise<boolean> {
+ *  overlay click. The one confirm style in the app: `showConfirm`
+ *  (confirm-dialog.ts) renders through here too. */
+export function confirmDialog(message: string, opts?: ConfirmDialogOptions): Promise<boolean> {
   return new Promise((resolve) => {
     const restoreFocus = captureFocusForDialog();
     const overlayToken = pushOverlay();
@@ -630,6 +671,26 @@ export function confirmDialog(
       });
       body.append(' ', a);
     }
+    let input: HTMLInputElement | null = null;
+    if (opts?.field) {
+      const f = opts.field;
+      const label = document.createElement('label');
+      label.className = 'pmd-text-prompt-field';
+      const caption = document.createElement('span');
+      caption.className = 'pmd-text-prompt-field-label';
+      caption.textContent = f.label;
+      input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'pmd-text-prompt-input';
+      input.value = f.initial ?? '';
+      if (f.placeholder) input.placeholder = f.placeholder;
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      const field = input;
+      field.addEventListener('input', () => f.onInput(field.value));
+      label.append(caption, field);
+      dialog.appendChild(label);
+    }
 
     const buttons = document.createElement('div');
     buttons.className = 'pmd-text-prompt-buttons';
@@ -652,7 +713,7 @@ export function confirmDialog(
     buttons.appendChild(cancelBtn);
     const okBtn = document.createElement('button');
     okBtn.type = 'button';
-    okBtn.className = 'pmd-text-prompt-ok';
+    okBtn.className = `pmd-text-prompt-ok${opts?.danger ? ' pmd-text-prompt-danger' : ''}`;
     okBtn.textContent = opts?.okLabel ?? 'OK';
     okBtn.addEventListener('click', () => finish(true));
     buttons.appendChild(okBtn);
@@ -662,12 +723,26 @@ export function confirmDialog(
     overlay.addEventListener('click', (e) => {
       if (isBackdropClick(e, overlay)) finish(false);
     });
+    const unsolicited = !!opts?.unsolicited;
+    const guardUntil = unsolicited ? Date.now() + UNSOLICITED_KEY_GUARD_MS : 0;
     removeKeys = installModalKeys(dialog, overlayToken, (e) => {
       if (e.key === 'Escape') {
         finish(false);
         return true;
       }
+      // Keys typed into the editor as it popped up: swallowed.
+      if (Date.now() < guardUntil) return true;
       if (e.key === 'Enter') {
+        if (input && e.target === input) {
+          finish(true);
+          return true;
+        }
+        // Unsolicited: Enter answers with whichever button has focus
+        // (Cancel to start with) — the browser's own button activation.
+        if (unsolicited && dialog.contains(e.target as Node) && e.target instanceof HTMLButtonElement) {
+          return false;
+        }
+        if (unsolicited) return true;
         finish(true);
         return true;
       }
@@ -675,5 +750,7 @@ export function confirmDialog(
     });
     document.body.appendChild(overlay);
     armDialogFocus(dialog, 'alertdialog', opts?.title ?? message);
+    // The safe answer holds the focus, so an Enter after the guard cancels.
+    if (unsolicited) cancelBtn.focus();
   });
 }

@@ -156,7 +156,7 @@ describe('showConfirm modal hardening', () => {
     expect(isAnyOverlayOpen()).toBe(false);
     const p = showConfirm({ message: 'Sure?' });
     expect(isAnyOverlayOpen()).toBe(true);
-    document.querySelector<HTMLButtonElement>('.pmd-confirm-ok')!.click();
+    document.querySelector<HTMLButtonElement>('.pmd-text-prompt-ok')!.click();
     await expect(p).resolves.toBe(true);
     expect(isAnyOverlayOpen()).toBe(false);
   });

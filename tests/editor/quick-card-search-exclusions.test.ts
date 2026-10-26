@@ -109,7 +109,7 @@ describe('palette file-search exclusions', () => {
     negRow.querySelector<HTMLElement>('.pmd-qcs-exclude')!.click();
 
     // Confirm dialog is up; nothing changed yet.
-    const dialog = document.querySelector('.pmd-confirm');
+    const dialog = document.querySelector('.pmd-route-dialog');
     expect(dialog).not.toBeNull();
     expect(settings.get('fileSearchExclusions')).toEqual([]);
     expect(rowNames()).toHaveLength(3);
@@ -130,7 +130,7 @@ describe('palette file-search exclusions', () => {
     type('f ');
     await settle();
     document.querySelector<HTMLElement>('.pmd-qcs-exclude')!.click();
-    const cancelBtn = [...document.querySelectorAll('.pmd-confirm button')].find(
+    const cancelBtn = [...document.querySelectorAll('.pmd-route-dialog button')].find(
       (b) => b.textContent === 'Cancel',
     ) as HTMLElement;
     cancelBtn.click();
