@@ -96,6 +96,14 @@ export class RoomsError extends Error {
   }
 }
 
+/** The relay's own explanation folded into a RoomsError's message
+ *  (errorDetail: "rooms request failed: 401 — <detail>"), '' when none. */
+export function roomsErrorDetail(err: unknown): string {
+  if (!(err instanceof RoomsError)) return '';
+  const m = /^rooms request failed: \d+ — ([\s\S]+)$/.exec(err.message);
+  return m ? m[1]!.trim() : '';
+}
+
 export interface RoomUpdate {
   seq: number;
   blob: Uint8Array;
@@ -616,8 +624,10 @@ export interface RoomStreamCallbacks {
    *  caller: a guest-pass session ends (the pass can't heal), a member
    *  session notifies and keeps retrying (entitlements renew). The
    *  stream itself keeps its backoff retry unless the callback stops
-   *  it. May fire again on later consecutive refusals. */
-  onAuthDead?: () => void;
+   *  it. May fire again on later consecutive refusals. `detail`: the
+   *  relay's own explanation (its JSON `detail`, e.g. a custom relay's
+   *  install limit), '' when it sent none. */
+  onAuthDead?: (detail: string) => void;
 }
 
 export interface RoomStreamOptions {
@@ -872,7 +882,7 @@ export class RoomStream {
       // An absent credential is unambiguously local — no need to burn
       // two round trips proving it. Signal auth-dead now; keep the
       // backoff so a renewal (or re-link) reconnects.
-      this.opts.callbacks.onAuthDead?.();
+      this.opts.callbacks.onAuthDead?.('');
       if (this.stopped) return;
       this.scheduleRetry();
       return;
@@ -939,14 +949,17 @@ export class RoomStream {
         // (i.e. after a full backoff interval) fires onAuthDead, and
         // the wifi-login case self-heals through the ordinary retry.
         let relayShaped = false;
+        let detail = '';
         try {
-          const parsed = JSON.parse(await res.text()) as unknown;
+          const parsed = JSON.parse((await res.text()).slice(0, 4096)) as unknown;
           relayShaped = !!parsed && typeof parsed === 'object';
+          const d = relayShaped ? (parsed as { detail?: unknown }).detail : undefined;
+          if (typeof d === 'string') detail = d.trim();
         } catch {
           /* HTML / empty / opaque body — not the relay speaking */
         }
         if (relayShaped && ++this.authFails >= 2) {
-          this.opts.callbacks.onAuthDead?.();
+          this.opts.callbacks.onAuthDead?.(detail);
           if (this.stopped) return; // the callback ended the session
         }
         this.scheduleRetry();

@@ -36,3 +36,13 @@ export function relayDeclined(lead: string): string {
   if (isCustomRelay()) return CUSTOM_RELAY_DECLINED + operatorContact();
   return `${lead} ${RELAY_FIX_PATH}`;
 }
+
+/** relayDeclined, except that a custom relay's own explanation (`detail`
+ *  — its install limit says how many computers are in use and whom to
+ *  ask) is shown whole: it, not us, knows the fix. The mailbox's refusal
+ *  notice reads the same (pairing-wiring.ts). */
+export function relayDeclinedWithDetail(lead: string, detail: string): string {
+  const d = detail.trim();
+  if (d && isCustomRelay()) return `The relay refused this install: ${d}`;
+  return relayDeclined(lead);
+}

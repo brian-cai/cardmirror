@@ -69,6 +69,7 @@ import {
   RoomsClient,
   RoomsError,
   RoomStream,
+  roomsErrorDetail,
   type RoomUpdate,
   type StreamStats,
   type TransportStats,
@@ -110,8 +111,10 @@ export interface CollabSessionCallbacks {
   /** The relay rejected our credentials (401/403) MID-SESSION — fired once
    *  per session so the UI can say so (otherwise the retry loop is
    *  indistinguishable from being offline). Retrying continues at the
-   *  backoff ceiling in case the entitlement returns. */
-  onAuthRejected?: () => void;
+   *  backoff ceiling in case the entitlement returns. `detail`: the
+   *  relay's own explanation ('' = none), e.g. a custom relay's install
+   *  limit — shown whole there instead of "credentials rejected". */
+  onAuthRejected?: (detail: string) => void;
   /** A GUEST-PASS session's pass was refused by the relay (twice,
    *  portal-checked — see RoomStream.onAuthDead). Terminal cause
    *  notice: the pass is immutable and guests cannot re-mint, so the
@@ -794,7 +797,7 @@ export class CollabSession {
           })();
         },
         onEnded: () => this.handleEnded(),
-        onAuthDead: () => this.handleAuthDead(),
+        onAuthDead: (detail) => this.handleAuthDead(detail),
         onFull: () => {
           this.callbacks.onFull?.();
         },
@@ -1175,7 +1178,7 @@ export class CollabSession {
             // offline (audit find, 2026-07-10): tell the user once and back
             // off to the ceiling in case the entitlement comes back.
             this.sendRetryMs = 30_000;
-            this.notifyAuthRejected();
+            this.notifyAuthRejected(roomsErrorDetail(err));
           }
           if (err instanceof RoomsError && err.status === 413 && entry.blob.length > 1024) {
             // Server-side cap disagreement (backstop for the proactive
@@ -1619,7 +1622,7 @@ export class CollabSession {
         return;
       }
       if (err instanceof RoomsError && (err.status === 401 || err.status === 403)) {
-        this.notifyAuthRejected();
+        this.notifyAuthRejected(roomsErrorDetail(err));
       }
       this.lastCatchUpError = (err as Error)?.message ?? String(err);
       console.warn('[collab] catch-up failed:', this.lastCatchUpError);
@@ -1900,10 +1903,10 @@ export class CollabSession {
 
   private authNotified = false;
 
-  private notifyAuthRejected(): void {
+  private notifyAuthRejected(detail = ''): void {
     if (this.authNotified) return;
     this.authNotified = true;
-    this.callbacks.onAuthRejected?.();
+    this.callbacks.onAuthRejected?.(detail);
   }
 
   /** The stream saw two consecutive relay-confirmed 401/403s. For a
@@ -1915,13 +1918,13 @@ export class CollabSession {
    *  observation 2026-08-28). Members keep today's behavior: notify
    *  once and let the stream retry at its ceiling, because an expired
    *  entitlement can quietly renew and heal the session. */
-  private handleAuthDead(): void {
+  private handleAuthDead(detail = ''): void {
     if (this.client.opts.guestAuth === true) {
       this.callbacks.onGuestAuthExpired?.();
       this.handleEnded();
       return;
     }
-    this.notifyAuthRejected();
+    this.notifyAuthRejected(detail);
   }
 
   private emitStatus(): void {

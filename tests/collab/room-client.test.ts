@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { RoomsClient, RoomsError, RoomStream, type RoomUpdate } from '../../src/editor/collab/room-client.js';
+import { RoomsClient, RoomsError, RoomStream, roomsErrorDetail, type RoomUpdate } from '../../src/editor/collab/room-client.js';
 import { startRoomsMock, type RoomsMock } from './_rooms-mock.js';
 
 let mock: RoomsMock;
@@ -744,5 +744,37 @@ describe('RoomStream.restartIfStale — tab return (web audit 2026-09-04)', () =
       mock.resume();
       stream.stop();
     }
+  });
+});
+
+describe('a relay\u2019s own 401 reason (install limit, 1.15.46 review)', () => {
+  it('onAuthDead carries the relay\u2019s JSON detail; a RoomsError keeps it for the message', async () => {
+    const detail = '3 of 3 computers are in use on this team. Ask coach@team.example.';
+    const got: string[] = [];
+    const stream = new RoomStream({
+      baseUrl: () => 'https://team.example/relay',
+      token: () => 'tok',
+      roomId: 'r1',
+      minBackoffMs: 5,
+      maxBackoffMs: 10,
+      fetchImpl: async () => new Response(JSON.stringify({ detail }), { status: 401 }),
+      callbacks: {
+        onHello: () => {},
+        onUpdate: () => {},
+        onPresence: () => {},
+        onEnded: () => {},
+        onFull: () => {},
+        onAuthDead: (d) => {
+          got.push(d);
+          stream.stop();
+        },
+      },
+    });
+    stream.start();
+    await sleep(120);
+    stream.stop();
+    expect(got).toEqual([detail]);
+    expect(roomsErrorDetail(new RoomsError(401, `rooms request failed: 401 — ${detail}`))).toBe(detail);
+    expect(roomsErrorDetail(new RoomsError(401, 'rooms request failed: 401'))).toBe('');
   });
 });

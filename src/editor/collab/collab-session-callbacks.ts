@@ -4,7 +4,8 @@
 
 import { showToast } from '../toast.js';
 import { surfaceError } from '../error-surface.js';
-import { relayDeclined } from '../relay-decline.js';
+import { relayDeclinedWithDetail } from '../relay-decline.js';
+import { isCustomRelay } from './relay-info.js';
 import { clearNotice, postNotice } from '../status-notices.js';
 import { notifyCollabCopresenceChange } from './collab-hooks.js';
 import { type ActiveSession, type CollabUiDeps, sessions } from './collab-ui-state.js';
@@ -105,17 +106,20 @@ export function sessionCallbacks(deps: CollabUiDeps, getSess: () => ActiveSessio
         key: 'collab-guest-expired',
       });
     },
-    onAuthRejected: () => {
+    onAuthRejected: (detail: string) => {
       // Mid-session 401/403 — without this the endless retry loop reads
       // exactly like being offline (audit find, 2026-07-10). Fired once
-      // per session by CollabSession.
+      // per session by CollabSession. A custom relay's own reason (its
+      // install limit) is shown whole: the credentials are fine.
+      const own = !!detail.trim() && isCustomRelay();
       postNotice({
         severity: 'error',
-        title: 'Session credentials rejected',
+        title: own ? 'Your relay refused this install' : 'Session credentials rejected',
         body:
-          relayDeclined('The session relay rejected your credentials.') +
+          relayDeclinedWithDetail('The session relay rejected your credentials.', detail) +
           ' Your edits are saved locally and keep retrying.',
         key: 'collab-401',
+        ...(own ? { full: true } : {}),
       });
     },
     onSendStuck: (n: number) => {

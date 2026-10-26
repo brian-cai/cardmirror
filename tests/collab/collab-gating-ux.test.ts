@@ -59,4 +59,20 @@ describe('relay failure messaging (gating 401 UX)', () => {
       settings.set('pairingRelayUrl', '');
     }
   });
+
+  it('on a custom relay a 401 with the relay\u2019s own reason (install limit) shows that reason, not "credentials"', () => {
+    const detail = '3 of 3 computers are in use on this team. Ask coach@team.example.';
+    const err = new RoomsError(401, `rooms request failed: 401 — ${detail}`);
+    settings.set('pairingRelayUrl', 'https://team.example/relay');
+    try {
+      for (const initiating of [true, false]) {
+        const msg = relayFailureMessage(err, { initiating, verb: 'join' });
+        expect(msg).toBe(`The relay refused this install: ${detail}`);
+      }
+    } finally {
+      settings.set('pairingRelayUrl', '');
+    }
+    // The built-in relay keeps its own sentence.
+    expect(relayFailureMessage(err, { initiating: false, verb: 'join' })).toMatch(/rejected your credentials/);
+  });
 });

@@ -5,8 +5,8 @@
  * collab-ui.ts so they can be unit-tested.
  */
 
-import { relayDeclined } from '../relay-decline.js';
-import { RoomsError } from './room-client.js';
+import { relayDeclinedWithDetail } from '../relay-decline.js';
+import { RoomsError, roomsErrorDetail } from './room-client.js';
 
 /** The plain sentence for a relay that didn't answer (network error,
  *  timeout, 5xx, rate limit). */
@@ -28,9 +28,12 @@ const RAW_ROOMS_MESSAGE = /^rooms request failed: \d+$/;
  *  status stays in the console. */
 export function relayFailureMessage(err: unknown, opts: { initiating: boolean; verb: string }): string {
   if (err instanceof RoomsError && err.status === 401) {
+    // A custom relay's own reason (its install limit, refusing a room
+    // create or stream) is shown whole rather than "credentials rejected".
+    const detail = roomsErrorDetail(err);
     return opts.initiating
-      ? relayDeclined('Starting a collaboration session requires a relay.')
-      : relayDeclined('The session relay rejected your credentials.');
+      ? relayDeclinedWithDetail('Starting a collaboration session requires a relay.', detail)
+      : relayDeclinedWithDetail('The session relay rejected your credentials.', detail);
   }
   // 410 = the room was ended (host); 404 = the room itself is gone (relay
   // idle GC). Not errors the user can retry into — tell them the session is
