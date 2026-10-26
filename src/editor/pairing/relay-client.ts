@@ -47,7 +47,7 @@ export function sendOutcomeToast(label: string, res: SendResult): string {
   if (res.fail === 0) return `Sent to ${label} ✓`;
   if (res.authFail > 0) {
     const scope = res.ok === 0 && res.authFail === res.fail ? '' : ` for ${res.authFail} recipient(s)`;
-    return relayDeclined(`The relay declined your credentials${scope}.`);
+    return relayDeclined(`The relay declined your credentials${scope}.`, { partial: scope !== '' });
   }
   if (res.ok === 0) return `Couldn't reach ${label}`;
   return `Sent to ${label} (${res.fail} failed)`;
@@ -90,8 +90,12 @@ class RelayClient {
             minReceiverVersion: opts?.minReceiverVersion,
           });
           if (res.ok > 0) recordSend(targets, opts?.via);
+          // Nothing got through and the relay didn't refuse it: unreachable
+          // (the relay-down bar, as on desktop).
+          else if (res.fail > 0 && !res.authFail) notifyRelaySendFailed();
           return res;
         } catch {
+          notifyRelaySendFailed();
           return { ok: 0, fail: targets.length, authFail: 0 };
         }
       }

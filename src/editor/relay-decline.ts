@@ -31,9 +31,13 @@ function operatorContact(): string {
 
 /** The whole message for a credential decline. `lead` is the built-in
  *  relay's opening ("The session relay rejected your credentials."); a
- *  custom relay gets its own sentence instead. */
-export function relayDeclined(lead: string): string {
-  if (isCustomRelay()) return CUSTOM_RELAY_DECLINED + operatorContact();
+ *  custom relay gets its own sentence instead — unless `partial` (the
+ *  relay declined only some of a send's recipients: the lead's count is
+ *  the news, and "didn't accept this computer" would overstate it). */
+export function relayDeclined(lead: string, opts: { partial?: boolean } = {}): string {
+  if (isCustomRelay()) {
+    return (opts.partial ? `${lead} If it keeps happening, ask your coach for a new invite link.` : CUSTOM_RELAY_DECLINED) + operatorContact();
+  }
   return `${lead} ${RELAY_FIX_PATH}`;
 }
 
