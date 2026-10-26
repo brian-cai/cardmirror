@@ -141,6 +141,30 @@ describe('RoomsClient mailbox proof', () => {
     await mk(undefined).putTeamDirectoryMe('cmk1.x', 'Sam');
     expect(seen.map((s) => s[2])).toEqual(['v1.p.1.m', 'v1.p.1.m', 'v1.p.1.m', null]);
   });
+
+  it('asks for a PUT proof over the exact body it then sends (proof v2 signs its hash)', async () => {
+    const asked: Array<[string, string | undefined]> = [];
+    const bodies: unknown[] = [];
+    const c = new RoomsClient({
+      baseUrl: () => 'https://relay.example',
+      token: () => 't',
+      mailboxProof: async (method, _code, body) => (asked.push([method, body]), { 'X-Mailbox-Proof': 'v2.p.1.m' }),
+      fetchImpl: async (_url: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(init?.body);
+        return new Response(init?.method === 'DELETE' ? null : '{"revision":3}', { status: init?.method === 'DELETE' ? 204 : 200,
+          headers: { 'content-type': 'application/json' } });
+      },
+    });
+    await c.putTeamDirectoryMe('cmk1.x', 'Sam');
+    await c.putTeamDirectoryGroups('cmk1.x', [{ label: 'V', members: ['cmk1.y'] }]);
+    await c.deleteTeamDirectoryMe('cmk1.x');
+    expect(asked).toEqual([
+      ['PUT', '{"code":"cmk1.x","name":"Sam"}'],
+      ['PUT', '{"code":"cmk1.x","groups":[{"label":"V","members":["cmk1.y"]}]}'],
+      ['DELETE', undefined],
+    ]);
+    expect(bodies.slice(0, 2)).toEqual([asked[0]![1], asked[1]![1]]);
+  });
 });
 
 describe('RoomStream', () => {

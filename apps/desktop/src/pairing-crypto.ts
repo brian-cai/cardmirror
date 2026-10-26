@@ -62,9 +62,13 @@ export interface PairingKeystore {
    *  call to a relay advertising `relayKey` (mailbox proof v1; see
    *  mailboxProofMac). */
   mailboxProof(relayKey: string, method: string, ts: number): string;
+  /** The v2 header (mailboxProofMacV2): also binds the relay's origin and,
+   *  for a PUT, the exact body bytes. */
+  mailboxProofV2(relayKey: string, origin: string, method: string, ts: number, body?: string | Uint8Array): string;
 }
 
 const PROOF_INFO = Buffer.from('xtgg-mailbox-proof-v1');
+const PROOF_INFO_V2 = Buffer.from('xtgg-mailbox-proof-v2');
 
 /** Mailbox proof v1 (xtgg relay docs/mailbox-proof-v1.md): HMAC-SHA256 over
  *  `v1|METHOD|routing|ts`, keyed by HKDF-SHA256 of X25519(own key, relay key)
@@ -73,6 +77,46 @@ const PROOF_INFO = Buffer.from('xtgg-mailbox-proof-v1');
 export function mailboxProofMac(shared: Buffer, ownPubRaw: Buffer, relayPubRaw: Buffer, method: string, routing: string, ts: number): Buffer {
   const key = Buffer.from(hkdfSync('sha256', shared, Buffer.concat([ownPubRaw, relayPubRaw]), PROOF_INFO, 32));
   return createHmac('sha256', key).update(`v1|${method}|${routing}|${ts}`).digest();
+}
+
+/** Mailbox proof v2 (xtgg relay docs/mailbox-proof-v2.md): like v1, but the
+ *  MAC also covers the relay's origin (so a proof made for one relay can't
+ *  be replayed at another sharing its key) and the request body's hash
+ *  (so a PUT's proof can't carry a different body):
+ *  `v2|ORIGIN|METHOD|rcp|ts|BODYHASH`, keyed by HKDF-SHA256 of the same
+ *  shared secret with info "xtgg-mailbox-proof-v2". */
+export function mailboxProofMacV2(
+  shared: Buffer,
+  ownPubRaw: Buffer,
+  relayPubRaw: Buffer,
+  origin: string,
+  method: string,
+  routing: string,
+  ts: number,
+  bodyHash: string,
+): Buffer {
+  const key = Buffer.from(hkdfSync('sha256', shared, Buffer.concat([ownPubRaw, relayPubRaw]), PROOF_INFO_V2, 32));
+  return createHmac('sha256', key).update(`v2|${origin}|${method}|${routing}|${ts}|${bodyHash}`).digest();
+}
+
+/** BODYHASH for v2: base64url(sha256(body bytes)) for a PUT, '' otherwise. */
+export function mailboxProofBodyHash(method: string, body?: string | Uint8Array): string {
+  if (method !== 'PUT') return '';
+  const bytes = typeof body === 'string' ? Buffer.from(body, 'utf8') : Buffer.from(body ?? new Uint8Array(0));
+  return createHash('sha256').update(bytes).digest('base64url');
+}
+
+/** ORIGIN for v2: lowercase `scheme://host[:port]` of a relay URL, default
+ *  port left out ('' when it isn't an http(s) URL). Always from the URL
+ *  this client is configured with — never from anything the relay says. */
+export function mailboxProofOrigin(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return '';
+    return `${u.protocol}//${u.host}`.toLowerCase();
+  } catch {
+    return '';
+  }
 }
 
 function rawPub(key: KeyObject): Buffer {
@@ -202,6 +246,14 @@ export function createPairingKeystore(keysFilePath: string): PairingKeystore {
       const routing = routingId(CODE_PREFIX + pubRawCache!.toString('base64url'));
       const mac = mailboxProofMac(shared, pubRawCache!, relayRaw, method, routing, ts);
       return `v1.${pubRawCache!.toString('base64url')}.${ts}.${mac.toString('base64url')}`;
+    },
+    mailboxProofV2(relayKey: string, origin: string, method: string, ts: number, body?: string | Uint8Array): string {
+      ensure();
+      const relayRaw = Buffer.from(relayKey, 'base64url');
+      const shared = diffieHellman({ privateKey: priv!, publicKey: pubObjectFromRaw(relayRaw) });
+      const routing = routingId(CODE_PREFIX + pubRawCache!.toString('base64url'));
+      const mac = mailboxProofMacV2(shared, pubRawCache!, relayRaw, origin, method, routing, ts, mailboxProofBodyHash(method, body));
+      return `v2.${pubRawCache!.toString('base64url')}.${ts}.${mac.toString('base64url')}`;
     },
   };
 }

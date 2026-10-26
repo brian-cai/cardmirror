@@ -607,7 +607,7 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
   };
 }
 
-/** Mailbox proof v1, on relays that offer it (mailbox-proof.ts). */
+/** Mailbox proof v2 / v1, on relays that offer it (mailbox-proof.ts). */
 const proofs = createMailboxProofs({ signer: () => ks() });
 
 function deleteMessage(msgId: string): void {
@@ -1023,18 +1023,20 @@ export function registerPairingIpc(): void {
       return connectAccount(payload.connectCode, !!payload.confirmEvict, evict);
     },
   );
-  // Mailbox proof v1 for the renderer's team-list writes (its own entry
+  // Mailbox proof (v2, else v1) for the renderer's team-list writes (its own entry
   // only): the private key stays here. The renderer names the relay and
   // token its (pinned) client uses; {} when that relay has no proofs.
   ipcMain.handle(
     'host:mailbox-proof',
-    async (_e, payload: { baseUrl?: unknown; token?: unknown; method?: unknown; code?: unknown }) => {
+    async (_e, payload: { baseUrl?: unknown; token?: unknown; method?: unknown; code?: unknown; body?: unknown }) => {
       const base = typeof payload?.baseUrl === 'string' ? payload.baseUrl.trim().replace(/\/+$/, '') : '';
       const token = typeof payload?.token === 'string' ? payload.token : '';
       const method = payload?.method === 'PUT' || payload?.method === 'DELETE' ? payload.method : '';
       if (!base || !token || !method || payload?.code !== ks().ownPublicCode()) return {};
+      // v2 signs the PUT's exact body: the renderer sends the string it will send.
+      const body = typeof payload?.body === 'string' ? payload.body : undefined;
       const info = await proofs.ensure(base, { Authorization: `Bearer ${token}`, [RELAY_CLIENT_VERSION_HEADER]: app.getVersion() });
-      return info ? proofs.headerFor(base, method) : {};
+      return info ? proofs.headerFor(base, method, body) : {};
     },
   );
   // Does a self-hosted relay accept us? One authenticated mailbox GET

@@ -451,7 +451,7 @@ interface ElectronAPI {
   }): Promise<{ custom: boolean; ok: boolean; status: number }>;
   /** Mailbox proof v1 header for this machine's own team-list entry on a
    *  relay that offers it ({} otherwise). Signed in main. */
-  mailboxProof?(payload: { baseUrl: string; token: string; method: 'PUT' | 'DELETE'; code: string }): Promise<Record<string, string>>;
+  mailboxProof?(payload: { baseUrl: string; token: string; method: 'PUT' | 'DELETE'; code: string; body?: string }): Promise<Record<string, string>>;
   pairingDisconnectAccount?(): Promise<PairingAccountStatusIpc>;
   onPairingEntitlementChanged?(
     handler: (status: PairingAccountStatusIpc & { evicted?: boolean; lapsed?: boolean }) => void,
@@ -1370,7 +1370,7 @@ export class ElectronHost implements Host {
     return (await api().pairingRelayCheck?.(payload)) ?? { custom: false, ok: false, status: 0 };
   }
 
-  async mailboxProof(payload: { baseUrl: string; token: string; method: 'PUT' | 'DELETE'; code: string }): Promise<Record<string, string>> {
+  async mailboxProof(payload: { baseUrl: string; token: string; method: 'PUT' | 'DELETE'; code: string; body?: string }): Promise<Record<string, string>> {
     return (await api().mailboxProof?.(payload).catch(() => ({}))) ?? {};
   }
 

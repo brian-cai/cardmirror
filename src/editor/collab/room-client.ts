@@ -133,10 +133,11 @@ export interface RoomsClientOptions {
    *  `X-Relay-Client` / `X-Relay-Install-Name` pair on a custom relay
    *  (collab/relay-info.ts). Absent or {} = none. */
   extHeaders?: () => Record<string, string>;
-  /** Mailbox proof v1 for this install's own team-list entry (`code`):
+  /** Mailbox proof for this install's own team-list entry (`code`):
    *  `X-Mailbox-Proof` from the desktop main process, {} when the relay
-   *  doesn't offer proofs or there is no desktop host. Absent = none. */
-  mailboxProof?: (method: 'PUT' | 'DELETE', code: string) => Promise<Record<string, string>>;
+   *  doesn't offer proofs or there is no desktop host. Absent = none.
+   *  `body`: a PUT's exact request body (proof v2 signs its hash). */
+  mailboxProof?: (method: 'PUT' | 'DELETE', code: string, body?: string) => Promise<Record<string, string>>;
   /** True when the bearer is a room GUEST PASS — an immutable,
    *  room-scoped credential the client can never refresh (re-minting is
    *  a host-only endpoint). Lets the session treat a relay-confirmed
@@ -176,9 +177,9 @@ export class RoomsClient {
     return this.opts.fetchImpl ?? boundFetch;
   }
 
-  private async proof(method: 'PUT' | 'DELETE', code: string): Promise<Record<string, string>> {
+  private async proof(method: 'PUT' | 'DELETE', code: string, body?: string): Promise<Record<string, string>> {
     try {
-      return (await this.opts.mailboxProof?.(method, code)) ?? {};
+      return (await this.opts.mailboxProof?.(method, code, body)) ?? {};
     } catch {
       return {};
     }
@@ -453,11 +454,12 @@ export class RoomsClient {
    *  directory's new revision (-1 when the relay didn't say). */
   async putTeamDirectoryMe(code: string, name: string): Promise<number> {
     const path = '/team-directory/me';
-    const proof = await this.proof('PUT', code);
+    const sent = JSON.stringify({ code, name });
+    const proof = await this.proof('PUT', code, sent);
     const res = await this.request(path, {
       method: 'PUT',
       headers: this.headers({ 'Content-Type': 'application/json', ...proof }),
-      body: JSON.stringify({ code, name }),
+      body: sent,
     });
     const body = await this.readJson<{ revision?: unknown }>(res, path);
     return typeof body?.revision === 'number' ? body.revision : -1;
@@ -467,11 +469,12 @@ export class RoomsClient {
    *  suggests to the team (team directory v1, optional `suggestedGroups`). */
   async putTeamDirectoryGroups(code: string, groups: { label: string; members: string[] }[]): Promise<number> {
     const path = '/team-directory/me/groups';
-    const proof = await this.proof('PUT', code);
+    const sent = JSON.stringify({ code, groups });
+    const proof = await this.proof('PUT', code, sent);
     const res = await this.request(path, {
       method: 'PUT',
       headers: this.headers({ 'Content-Type': 'application/json', ...proof }),
-      body: JSON.stringify({ code, groups }),
+      body: sent,
     });
     const body = await this.readJson<{ revision?: unknown }>(res, path);
     return typeof body?.revision === 'number' ? body.revision : -1;
