@@ -5,6 +5,23 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.52 — 2026-10-27
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Your display name comes first.** It now sits at the very top of
+  Settings → Collaboration, above Team file, and stands out with a
+  "Not set yet" note until you fill it in.
+- **Joining a relay asks for your name.** If you click Connect on an
+  invite link without typing a name, CardMirror asks once more right
+  after, so teammates don't see your computer unnamed.
+- **No more accidental "Don't ask again".** The daily name reminder
+  only offers "Stop asking on this computer" after you've said "Not now"
+  twice.
+
 ## 1.15.51 — 2026-10-26
 
 BCai's (@brian-cai) build of CardMirror, updating from
