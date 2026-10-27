@@ -1683,7 +1683,7 @@ are deleted from the relay after **three hours**.
 
 ### Co-editing
 
-Up to **10 people** can edit one document live — typing,
+Up to **30 people** can edit one document live — typing,
 cursors, and comments all sync, and simultaneous edits merge automatically. 
 The document belongs to the **host**; everyone else edits a synced copy, 
 and everyone keeps their copy when the session ends. A session is not a 
