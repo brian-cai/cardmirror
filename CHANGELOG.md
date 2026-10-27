@@ -5,6 +5,19 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.54 — 2026-10-27
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **No duplicate suggested groups.** Groups your teammates suggest on the
+  relay are merged by name: three teammates' "Varsity" groups show as one,
+  with everyone from any of them. If you already have a group with that
+  name, the suggestion only shows when it would add someone, and Add fills
+  in your group instead of making a second one.
+
 ## 1.15.53 — 2026-10-27
 
 BCai's (@brian-cai) build of CardMirror, updating from
