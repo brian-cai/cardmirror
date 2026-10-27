@@ -5,6 +5,19 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.51 — 2026-10-26
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Add a relay without leaving yours.** Settings → Collaboration →
+  Saved relays → "+ Add a relay…": paste another team's invite link (or
+  its address and token), CardMirror checks it, and you can Save it for
+  later or Save and use now. Pasting a new token for a relay you already
+  saved updates that relay instead of adding a second one.
+
 ## 1.15.50 — 2026-10-26
 
 BCai's (@brian-cai) build of CardMirror, updating from
