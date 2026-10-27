@@ -7486,64 +7486,6 @@ html.pmd-nav-flat .pmd-nav-type-analytic:hover .pmd-nav-label {
 
 /* Ephemeral toast tooltip near the cursor. Used by Create Reference
    to confirm the clipboard copy. */
-/* Undo send (send-undo.ts): "Sending to Ana… Undo" bars, bottom centre,
-   above the status bar; the line under each drains over the undo window. */
-.pmd-send-undo-stack {
-  position: fixed;
-  left: 50%;
-  bottom: 2.4rem;
-  transform: translateX(-50%);
-  z-index: 2001;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: center;
-  pointer-events: none;
-}
-.pmd-send-undo {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.4rem 0.5rem 0.45rem 0.8rem;
-  border-radius: 6px;
-  background: var(--pmd-c-shadow-opaque);
-  color: var(--pmd-c-text-on-accent);
-  font-size: 0.85rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-  overflow: hidden;
-  pointer-events: auto;
-}
-.pmd-send-undo-btn {
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  padding: 0.1rem 0.6rem;
-  cursor: pointer;
-}
-.pmd-send-undo-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-.pmd-send-undo-meter {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 2px;
-  width: 100%;
-  background: var(--pmd-c-accent);
-  transform-origin: left;
-  animation-name: pmd-send-undo-drain;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
-}
-@keyframes pmd-send-undo-drain {
-  from { transform: scaleX(1); }
-  to { transform: scaleX(0); }
-}
-
 .pmd-toast {
   position: fixed;
   z-index: 2000;

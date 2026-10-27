@@ -28,7 +28,6 @@ import { showToast } from '../toast.js';
 import { relayClient, sendOutcomeToast, type SendItem } from './relay-client.js';
 import { collabEnabled } from '../collab/collab-gate.js';
 import { offerSharingSetup, sharingReady } from './sharing-setup.js';
-import { holdForUndo } from './send-undo.js';
 import { collabSettingsAvailable, collabSettingsButton, relaySwitchButton } from './collab-settings-button.js';
 import {
   collabActiveInviteLink,
@@ -741,7 +740,6 @@ export class SendPillController {
       showToast('That does not look like a send code');
       return;
     }
-    if (!(await holdForUndo(`Sending to …${code.slice(-6)}`))) return;
     let ok = 0;
     let fail = 0;
     let authFail = 0;
@@ -1003,9 +1001,6 @@ export class SendPillController {
     }
     const sendItems = this.captureSendItems(items);
     if (sendItems.length === 0) return;
-    // Captured first, so what goes out is what was dragged even if the
-    // document changes during the undo window.
-    if (!(await holdForUndo(`Sending to ${target.label}`))) return;
 
     let ok = 0;
     let fail = 0;

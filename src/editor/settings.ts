@@ -1889,9 +1889,6 @@ export interface Settings {
    *  display name as `X-Relay-Install-Name` so whoever manages the relay
    *  access can tell your install apart. No display name = nothing sent. */
   relayShowInstallName: boolean;
-  /** Undo send (xtgg): seconds a card / document / invite send waits
-   *  behind an Undo bar before it goes to the relay. 0 = send at once. */
-  sendUndoSeconds: number;
   /** Relay info v1: notice ids the user dismissed (a dismissed notice
    *  never shows again). Newest last, capped. Not a user-facing row. */
   relayInfoDismissedNotices: string[];
@@ -2339,7 +2336,6 @@ const DEFAULTS: Settings = {
   pairingRelayUrl: '',
   pairingRelayToken: '',
   relayShowInstallName: true,
-  sendUndoSeconds: 4,
   relayInfoDismissedNotices: [],
   teamDirectoryRelays: [],
   relayProfiles: [],
@@ -4678,18 +4674,6 @@ const ALL_SETTING_METADATA: SettingMeta[] = [
     aliases: ['share', 'send card', 'recipient', 'to', 'pairing', 'card sharing', 'collaboration', 'co-edit', 'coedit', 'co-editing'],
   },
   {
-    key: 'sendUndoSeconds',
-    label: 'Undo window for sends (seconds)',
-    description:
-      'Cards, documents and session invites wait this long behind a "Sending… Undo" bar before they go out, so a send to the wrong person can be cancelled. Once sent, it can\u2019t be taken back. 0 sends at once; up to 15. Default 4.',
-    kind: 'number',
-    min: 0,
-    max: 15,
-    category: 'pairing',
-    dependsOn: 'pairingEnabled',
-    aliases: ['undo send', 'cancel send', 'unsend', 'recall', 'wrong person', 'send delay'],
-  },
-  {
     key: 'pairingOwnCode',
     label: 'Your send code',
     description:
@@ -6023,10 +6007,6 @@ function sanitize(s: Settings): Settings {
     pairingRelayToken:
       typeof s.pairingRelayToken === 'string' ? s.pairingRelayToken : DEFAULTS.pairingRelayToken,
     relayShowInstallName: s.relayShowInstallName !== false,
-    sendUndoSeconds:
-      typeof s.sendUndoSeconds === 'number' && Number.isFinite(s.sendUndoSeconds)
-        ? Math.min(15, Math.max(0, Math.round(s.sendUndoSeconds)))
-        : 4,
     relayInfoDismissedNotices: Array.isArray(s.relayInfoDismissedNotices)
       ? s.relayInfoDismissedNotices.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 200).slice(-50)
       : [],

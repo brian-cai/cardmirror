@@ -166,8 +166,6 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  // Invites go out at once here (the undo window has its own test).
-  settings.set('sendUndoSeconds', 0);
   __resetTeamSessionsForTests();
   __resetJoinRequestsUiForTests();
   ext.supported = true;

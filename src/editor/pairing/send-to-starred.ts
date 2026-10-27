@@ -5,7 +5,6 @@
  * building the same payload the Send pill builds.
  */
 
-import { holdForUndo } from './send-undo.js';
 import type { EditorView } from 'prosemirror-view';
 import { settings, type PairingPartner, type PairingGroup } from '../settings.js';
 import { takeSendPieces } from '../speech-doc-send.js';
@@ -89,7 +88,6 @@ export async function sendViewTo(
       return { slice, type, label: deriveDropzoneLabel(slice, type) };
     }),
   );
-  if (!(await holdForUndo(`Sending to ${target.label}`))) return;
   let res: SendResult = { ok: 0, fail: 0, authFail: 0 };
   for (const item of items) {
     const r = await relayClient.send(target.codes, item, { via: target.via });

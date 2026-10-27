@@ -2,7 +2,6 @@
  * Team sessions wiring for a live session (relay extension; see team-sessions.ts): listing and relisting it, the host's "who's in it" refresh, join-request approval, and the Join dialog's team section. Plus the shared invite-send tail. Split out of collab-ui.ts.
  */
 
-import { holdForUndo } from '../pairing/send-undo.js';
 import { settings } from '../settings.js';
 import { showToast } from '../toast.js';
 import { offerSharingSetup } from '../pairing/sharing-setup.js';
@@ -29,9 +28,6 @@ export async function sendInviteTo(
   ownerUid: string | null | undefined,
   mode: 'edit' | 'view' = 'edit',
 ): Promise<boolean> {
-  if (!(await holdForUndo(mode === 'view' ? `Inviting ${target.label} to watch` : `Inviting ${target.label} to the session`))) {
-    return false;
-  }
   const item = buildRoomInviteItem({
     shareCode,
     title: (() => {
