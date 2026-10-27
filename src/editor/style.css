@@ -15538,6 +15538,17 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
 .pmd-send-actions-live .pmd-send-actions-side {
   flex-direction: column;
 }
+/* With saved relays the side also holds the relay globe (xtgg): globe and
+   gear share the top row and Add contact spans under both, so the side
+   stays two rows tall beside the two-row copy grid. */
+.pmd-send-invite-mode .pmd-send-actions-live .pmd-send-actions-side:has(.pmd-pill-relay) {
+  display: grid;
+  grid-template-columns: 30px 30px;
+}
+.pmd-send-invite-mode .pmd-send-actions-live .pmd-send-actions-side:has(.pmd-pill-relay) .pmd-send-action-contact {
+  grid-column: 1 / -1;
+  width: auto;
+}
 .pmd-send-actions:not(.pmd-send-actions-live) .pmd-send-actions-grid {
   display: flex;
   /* Same zero basis as the Add contact button beside it, so the two split
