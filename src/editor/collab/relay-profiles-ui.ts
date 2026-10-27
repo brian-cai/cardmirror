@@ -1,6 +1,7 @@
 /**
  * Saved relays: what the user sees — the "Saved relays" list in Settings →
- * Collaboration (Use / Rename / Remove, plus the built-in relay), the relay
+ * Collaboration (Use / Rename / Remove, plus the built-in relay, and
+ * "+ Add a relay…", relay-add-ui.ts), the relay
  * chip in the status bar with its quick-switch menu (also the "Switch
  * relay…" command), and the wiring that saves a custom relay once it
  * connects. The logic lives in relay-profiles.ts.
@@ -276,10 +277,18 @@ export function buildSavedRelaysSection(onCleanup: (fn: () => void) => void): HT
   desc.className = 'pmd-settings-row-desc';
   desc.textContent =
     'Every custom relay you connect to is saved here with its own team key, so you can switch back in one click ' +
-    '(also from the globe in the Send and Receive popups). The Send pill shows the contacts on the relay you’re using.';
+    '(also from the globe in the Send and Receive popups). The Send pill shows the contacts on the relay you’re using. ' +
+    '+ Add a relay… saves another relay from its invite link without switching to it.';
   const list = document.createElement('div');
   list.className = 'pmd-saved-relays-list';
-  wrap.append(heading, desc, list);
+  // Below the list (Built-in relay last): add one without typing over the
+  // Custom relay fields, which stay the relay in use (relay-add-ui.ts).
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'pmd-settings-backup-btn pmd-saved-relays-add';
+  add.textContent = '+ Add a relay…';
+  add.addEventListener('click', () => void import('./relay-add-ui.js').then((m) => m.openAddRelayDialog()));
+  wrap.append(heading, desc, list, add);
 
   const button = (text: string, run: () => void, disabled = false): HTMLButtonElement => {
     const b = document.createElement('button');
@@ -317,7 +326,7 @@ export function buildSavedRelaysSection(onCleanup: (fn: () => void) => void): HT
       list.appendChild(
         row(
           p.label || relayHostPath(p.url),
-          `${relayHostPath(p.url)} · ${current ? 'in use' : `last used ${when(p.lastUsed)}`}`,
+          `${relayHostPath(p.url)} · ${current ? 'in use' : p.lastUsed > 0 ? `last used ${when(p.lastUsed)}` : 'saved, not used yet'}`,
           [
             button(current ? 'In use' : 'Use', () => void switchRelayNow(p.id), current),
             button('Rename', () => void rename(p)),

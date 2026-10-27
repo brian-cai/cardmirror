@@ -149,17 +149,102 @@ export function rememberConnectedRelay(opts: { info?: RelayInfo | null; now?: nu
     lastUsed: now,
   };
   save(hit ? list.map((p) => (p.id === hit.id ? next : p)) : [...list, next]);
-  // Same team under the new token: its team directory state (imported,
-  // dismissed) moves along, so syncing carries on without a new offer.
-  if (hit && profileKey(hit) !== profileKey(next)) {
-    const from = profileKey(hit);
-    const to = profileKey(next);
-    const dirs = settings.get('teamDirectoryRelays');
-    if (dirs.some((d) => d.key === from) && !dirs.some((d) => d.key === to)) {
-      settings.set('teamDirectoryRelays', dirs.map((d) => (d.key === from ? { ...d, key: to } : d)));
+  if (hit) moveDirectoryState(hit, next);
+  return next;
+}
+
+/** Same team under a new token: its team directory state (imported,
+ *  dismissed) moves along, so syncing carries on without a new offer. */
+function moveDirectoryState(from: RelayProfile, to: RelayProfile): void {
+  const a = profileKey(from);
+  const b = profileKey(to);
+  if (a === b) return;
+  const dirs = settings.get('teamDirectoryRelays');
+  if (dirs.some((d) => d.key === a) && !dirs.some((d) => d.key === b)) {
+    settings.set('teamDirectoryRelays', dirs.map((d) => (d.key === a ? { ...d, key: b } : d)));
+  }
+}
+
+// --- adding a relay without switching ("+ Add a relay…") -----------------
+
+/** What saving `url` + `token` from "+ Add a relay…" would do:
+ *  - `new`: a relay not saved yet (saved, not used yet; no team key).
+ *  - `update`: a saved relay at the same per-team address with another
+ *    token (rotated): that relay's token is replaced, nothing is added.
+ *  - `exists`: saved already with this token.
+ *  - `current` / `current-update`: the relay in use now, with this token
+ *    or a rotated one (saving the rotated one moves the relay in use to it).
+ *  - `full`: the list is at its cap; remove one first. */
+export type AddRelayPlan =
+  | { kind: 'new' }
+  | { kind: 'update' | 'exists'; profile: RelayProfile }
+  | { kind: 'current' | 'current-update'; profile: RelayProfile | null }
+  | { kind: 'full' };
+
+export function addRelayPlan(url: string, token: string): AddRelayPlan {
+  const target = { url: normUrl(url), token: token.trim() };
+  const cur = { url: settings.get('pairingRelayUrl'), token: settings.get('pairingRelayToken') };
+  if (normUrl(cur.url) && sameTeam(cur, target)) {
+    const same = relayMatchKey(cur.url, cur.token) === relayMatchKey(target.url, target.token);
+    return { kind: same ? 'current' : 'current-update', profile: activeProfile() };
+  }
+  const list = settings.get('relayProfiles');
+  const exact = findProfile(list, target.url, target.token);
+  if (exact) return { kind: 'exists', profile: exact };
+  // The same rule as a connect (rememberConnectedRelay): a new token at a
+  // saved per-team address is that relay's new token; at a shared address
+  // the token is the team, so it is another relay.
+  const rotated = list.find((p) => sameTeam(p, target));
+  if (rotated) return { kind: 'update', profile: rotated };
+  return list.length >= MAX_RELAY_PROFILES ? { kind: 'full' } : { kind: 'new' };
+}
+
+export type AddRelayResult =
+  | { kind: 'added' | 'updated' | 'exists'; profile: RelayProfile; current: boolean }
+  | { kind: 'full' };
+
+/** Save a checked relay from "+ Add a relay…" WITHOUT switching to it: a
+ *  new one is saved as never used (lastUsed 0) with no team key, exactly as
+ *  a relay saved but not yet connected would be, so it gets a key only on
+ *  first use. A rotated token updates the saved relay instead of adding a
+ *  second one. Only the relay in use with a rotated token touches the
+ *  relay settings (adoptRelay: the same team, the key kept). */
+export function addSavedRelay(url: string, token: string, opts: { info?: RelayInfo | null; now?: number } = {}): AddRelayResult {
+  const target = { url: normUrl(url), token: token.trim() };
+  const now = opts.now ?? Date.now();
+  const plan = addRelayPlan(target.url, target.token);
+  switch (plan.kind) {
+    case 'full':
+      return plan;
+    case 'exists':
+      return { kind: 'exists', profile: plan.profile, current: false };
+    case 'current':
+    case 'current-update': {
+      if (plan.kind === 'current-update') adoptRelay(target.url, target.token, now);
+      const profile = rememberConnectedRelay({ info: opts.info ?? null, now });
+      if (!profile) return { kind: 'full' }; // unreachable: a custom relay is set
+      return { kind: plan.kind === 'current-update' ? 'updated' : plan.profile ? 'exists' : 'added', profile, current: true };
+    }
+    case 'update': {
+      const next: RelayProfile = { ...plan.profile, url: target.url, token: target.token };
+      save(settings.get('relayProfiles').map((p) => (p.id === next.id ? next : p)));
+      moveDirectoryState(plan.profile, next);
+      return { kind: 'updated', profile: next, current: false };
+    }
+    case 'new': {
+      const profile: RelayProfile = {
+        id: newId(),
+        label: defaultRelayLabel(target.url, opts.info ?? null),
+        labelCustom: false,
+        url: target.url,
+        token: target.token,
+        teamKey: '',
+        lastUsed: 0,
+      };
+      save([...settings.get('relayProfiles'), profile]);
+      return { kind: 'added', profile, current: false };
     }
   }
-  return next;
 }
 
 /** The relay's info arrived: a saved relay the user hasn't renamed takes

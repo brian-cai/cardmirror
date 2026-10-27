@@ -17359,6 +17359,37 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+.pmd-saved-relays-add {
+  margin-top: 0.5rem;
+}
+/* "+ Add a relay…" dialog (collab/relay-add-ui.ts). */
+.pmd-add-relay-dialog {
+  max-width: min(32rem, 94vw);
+}
+/* Its fields and buttons set a display (flex): keep [hidden] hiding them. */
+.pmd-add-relay-dialog [hidden] { display: none !important; }
+.pmd-add-relay-manual:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pmd-add-relay-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--pmd-c-accent);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.pmd-add-relay-toggle:hover { text-decoration: underline; }
+.pmd-add-relay-status {
+  margin: 0;
+  white-space: pre-line;
+}
+.pmd-add-relay-status[data-kind='ok'] { color: var(--pmd-c-text); }
+.pmd-add-relay-status[data-kind='error'] { color: var(--pmd-c-danger); }
 
 /* Contact ↔ relay (Settings → Collaboration recipients). */
 .pmd-pairing-relays { font-size: 11px; padding: 2px 6px; border-radius: 10px; border: 1px solid var(--pmd-c-border);

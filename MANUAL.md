@@ -1734,6 +1734,11 @@ To run your own relay: the `relay/` folder of the repo deploys standalone
 collaborating must point at the same relay; leave both fields empty to use
 the official relay.
 
+**Saved relays** (just above those fields) lists every custom relay you have
+connected to, to switch between in one click; **+ Add a relay…** there saves
+another one from its invite link (or address and token) after checking it,
+without leaving the relay you're on, and **Save and use now** switches to it.
+
 ---
 
 ## 10. Live views and linked copies
