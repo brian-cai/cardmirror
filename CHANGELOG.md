@@ -5,6 +5,54 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.53 — 2026-10-27
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror. Brings in Truf's 1.16.0 changes.
+
+### Collaboration
+
+- **Spectators.** A session now has a view code and a view link next to
+  its edit code and link (Send pill, once the document is in a session),
+  and each contact gets **Invite to spectate**. A spectator sees every
+  edit live and can't change anything; editors see "· N watching". If a
+  session is full, you're offered to watch instead. Works on the built-in
+  relay and, once it's updated, on your team's own relay. Relays without
+  it just don't show the view options.
+- **Up to 30 people** can co-edit one document (on relays that allow it).
+- **Undo survives a partner's typing.** A burst of your partner's edits
+  no longer wipes your undo history, so deleting their text and pressing
+  Ctrl+Z brings it back. The burst still lands as one quick update.
+- **Copy link** for a live session sits beside Copy code in the Send pill.
+
+### Editing
+
+- **Extract Card** (Alt+Shift+F8): copies the selected body text into a
+  new card below.
+- **Alphabetize Selected Headings** in the navigation pane.
+- **Ctrl/Cmd-click a selected word** to deselect just that range, as in
+  Word.
+- **Insert at cursor** snaps forward to the next outline slot.
+- **Highlight underlined text only** now paints tags, cites, analytics and
+  headings whole.
+- **Reading markers**: the marker role makes a marker (not red text), and
+  there's one marker per card.
+- **AI cite-creator prompt presets**: save up to ten named prompts and
+  switch between them (Settings, or the Use Prompt Preset commands).
+- **Shrink** skips cite lines; an AI cite that returns nothing says so.
+
+### Read mode and navigation
+
+- **Read mode**: copying copies what read mode shows, comments can be
+  added and deleted, and bare-key shortcuts (like the backtick) keep
+  working.
+- **Navigation pane can follow scrolling** (opt-in setting).
+- **Folder search (`/`)** finds matching folders at any depth, and across
+  every search folder at the top level.
+- **Document previews** read as paper in dark-chrome / light-document
+  mode.
+- **macOS: File → Open Recent and Rejoin Recent Session.**
+
 ## 1.15.52 — 2026-10-27
 
 BCai's (@brian-cai) build of CardMirror, updating from
