@@ -246,8 +246,10 @@ export function buildSuggestedGroupsSection(onCleanup: (fn: () => void) => void)
       add.type = 'button';
       add.textContent = 'Add';
       add.addEventListener('click', () => {
-        if (addSuggestedGroup(g)) showToast(`Added the group ${g.label}.`);
-        else showToast('None of its people are in your contacts yet.');
+        const key = g.label.trim().replace(/\s+/g, ' ').toLowerCase();
+        const had = settings.get('pairingGroups').find((x) => x.label.trim().replace(/\s+/g, ' ').toLowerCase() === key);
+        if (addSuggestedGroup(g)) showToast(had ? `Added the missing people to your group ${had.label}.` : `Added the group ${g.label}.`);
+        else showToast(had ? `Your group ${had.label} already has everyone in your contacts.` : 'None of its people are in your contacts yet.');
       });
       row.append(label, by, add);
       wrap.appendChild(row);

@@ -50,6 +50,7 @@ import {
   missingPeople,
   myTeamGroups,
   suggestionsToShow,
+  addSuggestedGroup,
   onTeamDirectoryOffer,
   parseTeamDirectory,
   parseTeamDirectorySupport,
@@ -716,6 +717,33 @@ describe('suggested groups', () => {
     ]);
     expect(suggestionsToShow(d, [], 'Sam').map((g) => g.label)).toEqual(['Varsity']);
     expect(suggestionsToShow(d, [{ id: 'x', label: 'VARSITY', memberCodes: [BEN, ANA] }], 'Sam')).toEqual([]);
+  });
+
+  it('merges suggestions with the same name into one (members and suggesters combined)', () => {
+    const d = parseTeamDirectory({
+      ...DOC,
+      people: [...DOC.people, { code: CAL, name: 'Cal Reyes' }],
+      suggestedGroups: [
+        { label: 'Varsity', members: [ANA, BEN], by: ['Ana'] },
+        { label: ' varsity ', members: [BEN, CAL], by: ['Ben'] },
+        { label: 'Novice', members: [ANA, CAL], by: ['Cal'] },
+      ],
+    })!;
+    expect(suggestionsToShow(d, [], 'Sam')).toEqual([
+      { label: 'Varsity', memberCodes: [ANA, BEN, CAL], by: ['Ana', 'Ben'] },
+      { label: 'Novice', memberCodes: [ANA, CAL], by: ['Cal'] },
+    ]);
+    // Your own Varsity hides it only once it has everyone.
+    expect(suggestionsToShow(d, [{ id: 'x', label: 'Varsity', memberCodes: [ANA, BEN] }], 'Sam').map((g) => g.label)).toEqual(['Varsity', 'Novice']);
+    expect(suggestionsToShow(d, [{ id: 'x', label: 'Varsity', memberCodes: [ANA, BEN, CAL] }], 'Sam').map((g) => g.label)).toEqual(['Novice']);
+  });
+
+  it('adding a suggestion you have by name fills your group in instead of making a second', () => {
+    settings.set('pairingPartners', [{ code: ANA, name: 'Ana' }, { code: BEN, name: 'Ben' }, { code: CAL, name: 'Cal' }]);
+    settings.set('pairingGroups', [{ id: 'g1', label: 'Varsity', memberCodes: [ANA, BEN] }]);
+    expect(addSuggestedGroup({ label: 'varsity', memberCodes: [ANA, BEN, CAL] })).toBe(true);
+    expect(settings.get('pairingGroups')).toEqual([{ id: 'g1', label: 'Varsity', memberCodes: [ANA, BEN, CAL] }]);
+    expect(addSuggestedGroup({ label: 'Varsity', memberCodes: [ANA, CAL] })).toBe(false);
   });
 });
 

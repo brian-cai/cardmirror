@@ -622,10 +622,39 @@ export async function syncMyGroups(ctx: TeamDirectoryContext, key: string, dir: 
 /** The suggestions worth showing: not one of your groups already, and not
  *  only your own. */
 export function suggestionsToShow(dir: TeamDirectory, groups: readonly PairingGroup[], ownName: string): TeamDirectory['suggestedGroups'] {
-  const have = new Set(groups.map((g) => groupSig(g.label, g.memberCodes)));
   const me = ownName.trim();
-  return dir.suggestedGroups.filter((g) => !have.has(groupSig(g.label, g.memberCodes)) && !(g.by.length === 1 && g.by[0] === me));
+  // One suggestion per name: teammates who each made a "Varsity" with
+  // slightly different people get one Varsity with everyone in any of them,
+  // suggested by all of them (first spelling of the name kept).
+  const merged = new Map<string, TeamDirectory['suggestedGroups'][number]>();
+  for (const g of dir.suggestedGroups) {
+    const k = groupNameKey(g.label);
+    const cur = merged.get(k);
+    if (!cur) {
+      merged.set(k, { label: g.label.trim(), memberCodes: [...new Set(g.memberCodes)], by: [...new Set(g.by)] });
+      continue;
+    }
+    for (const c of g.memberCodes) if (!cur.memberCodes.includes(c)) cur.memberCodes.push(c);
+    for (const b of g.by) if (!cur.by.includes(b)) cur.by.push(b);
+  }
+  // A group you already have under that name hides the suggestion unless
+  // it would add someone (Add then fills your group in, see addSuggestedGroup).
+  const mine = new Map<string, Set<string>>();
+  for (const g of groups) {
+    const k = groupNameKey(g.label);
+    const set = mine.get(k) ?? new Set<string>();
+    for (const c of g.memberCodes) set.add(normalizePairingCode(c));
+    mine.set(k, set);
+  }
+  return [...merged.values()].filter((g) => {
+    if (g.by.length === 1 && g.by[0] === me) return false;
+    const have = mine.get(groupNameKey(g.label));
+    return !have || g.memberCodes.some((c) => !have.has(normalizePairingCode(c)));
+  });
 }
+
+/** Group names compare without case or extra spaces. */
+const groupNameKey = (label: string): string => label.trim().replace(/\s+/g, ' ').toLowerCase();
 
 let suggestions: { key: string; groups: TeamDirectory['suggestedGroups'] } | null = null;
 const suggestionListeners = new Set<() => void>();
@@ -663,10 +692,17 @@ export function addSuggestedGroup(g: { label: string; memberCodes: string[] }): 
   const members = g.memberCodes.filter((c) => partners.has(c) && c !== own);
   if (members.length === 0) return false;
   const groups = settings.get('pairingGroups');
-  const taken = new Set(groups.map((x) => x.label.trim().toLowerCase()));
-  let label = g.label.trim();
-  for (let n = 2; taken.has(label.toLowerCase()); n++) label = `${g.label.trim()} (${n})`;
-  settings.set('pairingGroups', [...groups, { id: `grp-${Math.random().toString(36).slice(2, 10)}`, label, memberCodes: members }]);
+  // You already have a group by this name: add the people it's missing
+  // to it rather than making a second one.
+  const same = groups.find((x) => groupNameKey(x.label) === groupNameKey(g.label));
+  if (same) {
+    const have = new Set(same.memberCodes.map(normalizePairingCode));
+    const added = members.filter((c) => !have.has(c));
+    if (added.length === 0) return false;
+    settings.set('pairingGroups', groups.map((x) => (x === same ? { ...x, memberCodes: [...x.memberCodes, ...added] } : x)));
+  } else {
+    settings.set('pairingGroups', [...groups, { id: `grp-${Math.random().toString(36).slice(2, 10)}`, label: g.label.trim(), memberCodes: members }]);
+  }
   if (suggestions) publishSuggestions(suggestions.key, memory.get(suggestions.key) ?? null);
   return true;
 }
