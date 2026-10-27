@@ -31,7 +31,10 @@ and it updates itself from here.
 >
 > **Desktop builds aren't signed with a paid certificate**, so Windows and
 > macOS warn you the first time you launch. The one-time workaround for
-> each is in the install steps below.
+> each is in the install steps below, and
+> **[extinction.gg/cardmirror](https://extinction.gg/cardmirror#install)**
+> walks through it with pictures, including making CardMirror open your
+> `.docx` files.
 
 See [`MANUAL.md`](./MANUAL.md) for the full user
 manual; [`PRIVACY.md`](./PRIVACY.md) for how CardMirror handles your data;
@@ -105,7 +108,9 @@ Desktop builds live on this repo's
 (the direct download links are at the top of each release). Pick the
 file for your operating system, run the installer, and launch
 CardMirror like any other app. Installing over an existing CardMirror
-replaces it and keeps your settings.
+replaces it and keeps your settings. If a warning blocks you, the
+[step-by-step guide with pictures](https://extinction.gg/cardmirror#install)
+covers each one (Gatekeeper, SmartScreen, Smart App Control).
 
 ### macOS
 
@@ -114,6 +119,11 @@ replaces it and keeps your settings.
 2. Open the `.dmg`, drag **CardMirror** to your Applications folder.
 3. **First launch only.** Gatekeeper refuses to open unsigned apps.
    You'll see one of two messages depending on your macOS version:
+
+   - **"CardMirror" Not Opened** (macOS 15 and later) → click **Done**,
+     open **System Settings → Privacy & Security**, scroll to
+     **Security** and click **Open Anyway**, then confirm with your Mac
+     password.
 
    - **"can't be opened because Apple cannot check it for malicious
      software"** → Open Finder → Applications, **right-click** (or
@@ -134,7 +144,10 @@ replaces it and keeps your settings.
 1. Download `CardMirror-Setup-x.x.x.exe`.
 2. Run the installer (Next → Install → Finish).
 3. **First launch only.** SmartScreen shows "Windows protected your
-   PC." Click **More info** → **Run anyway**.
+   PC." Click **More info** → **Run anyway**. If instead **Smart App
+   Control** blocks it with no More info, turn Smart App Control off in
+   Windows Security → App & browser control, then run the installer
+   again.
 
 ### Linux
 

@@ -116,7 +116,7 @@ jobs:
             echo "- **Mac:** [CardMirror-${VERSION}-universal.dmg](${BASE}/CardMirror-${VERSION}-universal.dmg) (Apple Silicon and Intel)"
             echo "- **Windows:** [CardMirror-Setup-${VERSION}.exe](${BASE}/CardMirror-Setup-${VERSION}.exe)"
             echo
-            echo "Linux builds are under Assets below."
+            echo "Linux builds are under Assets below. Install help with pictures (first-launch warnings, opening .docx files): [extinction.gg/cardmirror](https://extinction.gg/cardmirror#install)"
             echo
             cat release-notes.md
           } > release-notes.tmp && mv release-notes.tmp release-notes.md
