@@ -166,10 +166,26 @@ async function handleRelayJoin(link: { relayUrl: string; token: string }, opts: 
   adoptRelay(link.relayUrl, link.token);
   const name = typedName.trim().slice(0, 80);
   settings.setMany({ pairingEnabled: true, ...(name && needName ? { pairingDisplayName: name } : {}) });
+  // Connected with the name field left blank: ask once more, now that the
+  // relay is set (the user just clicked Connect, so the field takes focus).
+  if (!settings.get('pairingDisplayName').trim()) {
+    const { promptForText } = await import('../text-prompt.js');
+    const again = await promptForText({
+      message: 'Add your name so teammates can find you',
+      detail:
+        'You’re connected. Without a name, this computer shows up unnamed on your team’s list, on cards you send, ' +
+        'and on your cursor when co-editing. You can change it any time at the top of Settings → Collaboration.',
+      placeholder: 'e.g. Ana Lopez',
+      okLabel: 'Save',
+      cancelLabel: 'Later',
+    }).catch(() => null);
+    const n = again?.trim().slice(0, 80) ?? '';
+    if (n && !settings.get('pairingDisplayName').trim()) settings.set('pairingDisplayName', n);
+  }
   showToast(
     settings.get('pairingDisplayName').trim()
       ? `Connected to ${hostOf(link.relayUrl)}. Adding your teammates…`
-      : `Connected to ${hostOf(link.relayUrl)}. Add your name in Settings → Collaboration so teammates can find you.`,
+      : `Connected to ${hostOf(link.relayUrl)}. Add your name at the top of Settings → Collaboration so teammates can find you.`,
   );
   void import('../collab/team-directory-ui.js').then((m) => m.importTeamAfterConnect()).catch(() => {});
 }

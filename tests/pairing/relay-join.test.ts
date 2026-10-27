@@ -36,6 +36,14 @@ vi.mock('../../src/editor/confirm-dialog.js', () => ({
     return confirm.answer;
   },
 }));
+// The follow-up name ask after a Connect with the field left blank.
+const ask = vi.hoisted(() => ({ answer: null as string | null, calls: 0 }));
+vi.mock('../../src/editor/text-prompt.js', () => ({
+  promptForText: async () => {
+    ask.calls++;
+    return ask.answer;
+  },
+}));
 vi.mock('../../src/editor/collab/team-directory-ui.js', () => ({ importTeamAfterConnect: async () => {} }));
 
 import { connectDialogText, describeRelay, initRelayJoin, joinRelayFromText, BAD_INVITE_LINK } from '../../src/editor/pairing/relay-join.js';
@@ -59,6 +67,8 @@ beforeEach(() => {
   confirm.answer = true;
   confirm.name = '';
   confirm.opts = null;
+  ask.answer = null;
+  ask.calls = 0;
   host.parse.mockReset();
   vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
   settings.set('relayProfiles', []);
@@ -119,6 +129,23 @@ describe('the Connect dialog', () => {
     expect(String(confirm.opts!['message'])).not.toContain('new-toke');
     expect(confirm.opts!['unsolicited']).toBe(true);
     expect(confirm.opts!['field']).toBeTruthy();
+  });
+
+  it('Connect with the name left blank asks once more, and saves that answer', async () => {
+    initRelayJoin();
+    ask.answer = ' Cam Diaz ';
+    host.handler!(NEW);
+    await vi.waitFor(() => expect(settings.get('pairingDisplayName')).toBe('Cam Diaz'));
+    expect(ask.calls).toBe(1);
+    expect(toasts.at(-1)).toContain('Adding your teammates');
+  });
+
+  it('no follow-up ask when the Connect dialog got a name', async () => {
+    initRelayJoin();
+    confirm.name = 'Ana Lopez';
+    host.handler!(NEW);
+    await vi.waitFor(() => expect(toasts.length).toBe(1));
+    expect(ask.calls).toBe(0);
   });
 
   it('no name field when the name is already set', async () => {

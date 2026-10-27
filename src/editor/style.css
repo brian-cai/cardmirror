@@ -6951,6 +6951,19 @@ html.pmd-nav-flat .pmd-nav-type-analytic:hover .pmd-nav-label {
   white-space: pre-line;
 }
 
+/* Collaboration → Your display name while it's empty. */
+.pmd-settings-row-needs-name {
+  border-left: 3px solid var(--pmd-c-accent);
+  padding-left: 0.6rem;
+}
+.pmd-settings-row-needs-name .pmd-settings-text {
+  border-color: var(--pmd-c-accent);
+}
+.pmd-settings-name-missing {
+  color: var(--pmd-c-accent);
+  font-weight: 500;
+}
+
 .pmd-settings-toggle {
   flex: 0 0 auto;
   margin-top: 0.2rem;

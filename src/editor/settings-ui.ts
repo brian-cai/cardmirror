@@ -753,11 +753,11 @@ class SettingsModal {
           (!m.webOnly || hostKind === 'browser') &&
           !hiddenInLite(m),
       );
-      // Team file first on Collaboration: importing one sets up everything
-      // else on this tab (send codes, groups, relay, sessions) at once.
-      if (id === 'pairing' && getElectronHost()) {
-        panel.appendChild(buildTeamFileSection(() => this.render()));
-      }
+      // Team file near the top of Collaboration (right under your display
+      // name): importing one sets up everything else on this tab (send
+      // codes, groups, relay, sessions) at once.
+      const teamFile = id === 'pairing' && getElectronHost() ? buildTeamFileSection(() => this.render()) : null;
+      if (teamFile && entries[0]?.key !== 'pairingDisplayName') panel.appendChild(teamFile);
       let lastSection: string | undefined;
       for (const meta of entries) {
         // Section headers: emitted when consecutive entries' `section`
@@ -782,6 +782,10 @@ class SettingsModal {
           panel.appendChild(saved);
         }
         panel.appendChild(row);
+        if (meta.key === 'pairingDisplayName') {
+          markEmptyDisplayName(row);
+          if (teamFile) panel.appendChild(teamFile);
+        }
         // Team list: groups teammates suggest, right under your own groups.
         if (meta.key === 'pairingGroups' && !isLiteBuild()) panel.appendChild(buildSuggestedGroupsSlot());
         // Relay info v1: "About this relay" under the custom relay fields
@@ -2571,6 +2575,24 @@ export function buildEarlierVersionsRow(
   controls.append(showBtn, select, goBtn, pageBtn);
   row.append(title, desc, controls, status);
   return row;
+}
+
+/** Settings → Collaboration → Your display name: stands out (and says why)
+ *  while it's empty, since an unnamed computer shows up unnamed to the
+ *  whole team. Follows the setting, so typing a name clears it. */
+function markEmptyDisplayName(row: HTMLElement): void {
+  const note = document.createElement('span');
+  note.className = 'pmd-settings-row-desc pmd-settings-name-missing';
+  note.textContent = 'Not set yet: teammates see this computer without a name. Type one here.';
+  row.querySelector('.pmd-settings-row-text')?.appendChild(note);
+  const sync = (): void => {
+    const empty = !settings.get('pairingDisplayName').trim();
+    row.classList.toggle('pmd-settings-row-needs-name', empty);
+    note.hidden = !empty;
+  };
+  sync();
+  const unsub = settings.subscribe(sync);
+  registerRowCleanup(row, () => unsub());
 }
 
 /** Settings → Collaboration → Team file: export everyone's send codes,

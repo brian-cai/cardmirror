@@ -3,7 +3,10 @@
  * up unnamed everywhere it matters (teammates' contact lists, co-editing
  * cursors, and the relay admin's list of installs), and the setting is easy
  * to never find. So once a day, while the name is empty, a dialog asks for
- * it. "Don't ask again" turns the reminder off for good on this computer.
+ * it. Turning it off for good is offered only after the user has said
+ * "Not now" NOT_NOW_BEFORE_NEVER times, spelled out ("Stop asking on this
+ * computer"): a first glance at the dialog, or wanting to get on with
+ * something else, shouldn't switch it off — only being tired of it should.
  *
  * Nothing is shown in tournament mode, while the round timer runs (or ran
  * in the last 30 minutes), while a co-editing session is live in any
@@ -21,6 +24,10 @@ import { localDayKey } from './update-nudge.js';
 const LAST_DAY_KEY = 'cm.nameNudge.lastDay';
 const NEVER_KEY = 'cm.nameNudge.never';
 const ANSWER_KEY = 'cm.nameNudge.answer';
+const NOT_NOW_COUNT_KEY = 'cm.nameNudge.notNowCount';
+
+/** "Not now" answers before the reminder offers to stop for good. */
+export const NOT_NOW_BEFORE_NEVER = 2;
 
 /** How the user last answered the reminder while they still have no name:
  *  'later' (Not now), 'never' (Don't ask again), or null (never asked, or
@@ -96,7 +103,7 @@ export function initNameNudge(deps: {
     placeholder: string;
     okLabel: string;
     cancelLabel: string;
-    checkbox: { label: string; onChange: (checked: boolean) => void };
+    checkbox?: { label: string; onChange: (checked: boolean) => void };
     unsolicited: boolean;
   }) => Promise<string | null>;
   /** After an answer: lets the relay hear about it. */
@@ -126,15 +133,18 @@ export function initNameNudge(deps: {
       if (!shouldAskName({ ...inputs, name: deps.name(), lastDay: read(LAST_DAY_KEY), overlayOpen: deps.overlayOpen() })) return;
       write(LAST_DAY_KEY, localDayKey(at)); // before the dialog, so other windows don't show it too
       let never = false;
+      const notNows = Number(read(NOT_NOW_COUNT_KEY)) || 0;
       const typed = await deps.prompt({
         message: 'What should teammates call you?',
         detail:
           'Your display name goes on cards you send, on your cursor when co-editing, and on your team’s relay, ' +
-          'so your coach can tell this computer apart from the others. You can change it later in Settings → Collaboration.',
+          'so your coach can tell this computer apart from the others. You can change it later at the top of Settings → Collaboration.',
         placeholder: 'e.g. Ana Lopez',
         okLabel: 'Save',
         cancelLabel: 'Not now',
-        checkbox: { label: 'Don’t ask again', onChange: (c) => (never = c) },
+        ...(notNows >= NOT_NOW_BEFORE_NEVER
+          ? { checkbox: { label: 'Stop asking on this computer (teammates will see it without a name)', onChange: (c: boolean) => (never = c) } }
+          : {}),
         unsolicited: true,
       });
       if (never) write(NEVER_KEY, '1');
@@ -144,6 +154,7 @@ export function initNameNudge(deps: {
         if (!deps.name().trim()) deps.setName(name.slice(0, 80));
       } else {
         write(ANSWER_KEY, 'later');
+        write(NOT_NOW_COUNT_KEY, String(notNows + 1));
         deps.onAnswered?.();
       }
     } catch (err) {

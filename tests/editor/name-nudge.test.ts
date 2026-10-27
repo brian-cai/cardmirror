@@ -47,6 +47,7 @@ describe('initNameNudge', () => {
     vi.stubGlobal('localStorage', {
       getItem: (k: string) => m.get(k) ?? null,
       setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
       clear: () => m.clear(),
     });
     vi.useFakeTimers();
@@ -59,8 +60,8 @@ describe('initNameNudge', () => {
   function setup(answer: string | null, tick = false) {
     let name = '';
     const answered = vi.fn();
-    const prompt = vi.fn(async (opts: { checkbox: { onChange: (c: boolean) => void } }) => {
-      if (tick) opts.checkbox.onChange(true);
+    const prompt = vi.fn(async (opts: { checkbox?: { onChange: (c: boolean) => void } }) => {
+      if (tick) opts.checkbox?.onChange(true);
       return answer;
     });
     const stop = initNameNudge({
@@ -99,10 +100,28 @@ describe('initNameNudge', () => {
     expect(s.answered).toHaveBeenCalledTimes(1);
 
     localStorage.clear();
+    localStorage.setItem('cm.nameNudge.notNowCount', '2');
     const t = setup(null, true);
     await vi.advanceTimersByTimeAsync(5000);
     t.stop();
     expect(localStorage.getItem('cm.nameNudge.never')).toBe('1');
     expect(nameNudgeAnswer()).toBe('never');
+  });
+
+  it('offers to stop asking only after two "Not now"s', async () => {
+    for (let day = 0; day < 3; day++) {
+      localStorage.removeItem('cm.nameNudge.lastDay');
+      const s = setup(null, true);
+      await vi.advanceTimersByTimeAsync(5000);
+      s.stop();
+      const opts = s.prompt.mock.calls[0]![0] as { checkbox?: { label: string } };
+      if (day < 2) {
+        expect(opts.checkbox).toBeUndefined();
+        expect(localStorage.getItem('cm.nameNudge.never')).toBeNull();
+      } else {
+        expect(opts.checkbox?.label).toMatch(/^Stop asking on this computer/);
+        expect(localStorage.getItem('cm.nameNudge.never')).toBe('1');
+      }
+    }
   });
 });
