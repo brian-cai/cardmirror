@@ -619,9 +619,15 @@ export async function syncMyGroups(ctx: TeamDirectoryContext, key: string, dir: 
   }
 }
 
-/** The suggestions worth showing: not one of your groups already, and not
- *  only your own. */
-export function suggestionsToShow(dir: TeamDirectory, groups: readonly PairingGroup[], ownName: string): TeamDirectory['suggestedGroups'] {
+/** The suggestions worth showing: not one of your groups already, not
+ *  only your own, and not one Add can't do anything with. `addable` is who
+ *  Add can put in a group (your contacts, never you); default anyone. */
+export function suggestionsToShow(
+  dir: TeamDirectory,
+  groups: readonly PairingGroup[],
+  ownName: string,
+  addable: (code: string) => boolean = () => true,
+): TeamDirectory['suggestedGroups'] {
   const me = ownName.trim();
   // One suggestion per name: teammates who each made a "Varsity" with
   // slightly different people get one Varsity with everyone in any of them,
@@ -639,6 +645,8 @@ export function suggestionsToShow(dir: TeamDirectory, groups: readonly PairingGr
   }
   // A group you already have under that name hides the suggestion unless
   // it would add someone (Add then fills your group in, see addSuggestedGroup).
+  // Only people Add can add count: a teammate's Varsity that lists you, or
+  // someone not in your contacts yet, would otherwise stay up for good.
   const mine = new Map<string, Set<string>>();
   for (const g of groups) {
     const k = groupNameKey(g.label);
@@ -649,7 +657,7 @@ export function suggestionsToShow(dir: TeamDirectory, groups: readonly PairingGr
   return [...merged.values()].filter((g) => {
     if (g.by.length === 1 && g.by[0] === me) return false;
     const have = mine.get(groupNameKey(g.label));
-    return !have || g.memberCodes.some((c) => !have.has(normalizePairingCode(c)));
+    return g.memberCodes.some((c) => addable(c) && !have?.has(normalizePairingCode(c)));
   });
 }
 
@@ -668,8 +676,24 @@ export function onSuggestions(fn: () => void): () => void {
   return () => suggestionListeners.delete(fn);
 }
 
+/** A suggestion as its dismissal remembers it: name and people, so one
+ *  that gains someone comes back. */
+export const suggestionSig = (g: { label: string; memberCodes: readonly string[] }): string =>
+  `${groupNameKey(g.label)}\n${[...new Set(g.memberCodes.map(normalizePairingCode))].sort().join(',')}`;
+
+/** Who addSuggestedGroup can put in a group: your contacts, never you. */
+function addableCode(): (code: string) => boolean {
+  const partners = new Set(settings.get('pairingPartners').map((p) => normalizePairingCode(p.code)));
+  const own = normalizePairingCode(settings.get('pairingOwnCode'));
+  return (c) => partners.has(c) && c !== own;
+}
+
 function publishSuggestions(key: string, dir: TeamDirectory | null): void {
-  const next = dir ? suggestionsToShow(dir, settings.get('pairingGroups'), settings.get('pairingDisplayName')) : [];
+  const dismissed = new Set(directoryState(key).dismissedSuggestions ?? []);
+  const next = dir
+    ? suggestionsToShow(dir, settings.get('pairingGroups'), settings.get('pairingDisplayName'), addableCode())
+        .filter((g) => !dismissed.has(suggestionSig(g)))
+    : [];
   const same = suggestions?.key === key && JSON.stringify(suggestions.groups) === JSON.stringify(next);
   suggestions = { key, groups: next };
   if (!same) for (const fn of suggestionListeners) fn();
@@ -685,11 +709,20 @@ export async function groupsChanged(ctx: TeamDirectoryContext | null): Promise<v
   publishSuggestions(key, dir);
 }
 
+/** Dismiss suggested groups (every one shown, when none are given) for
+ *  this relay + team, until their people change. */
+export function dismissSuggestions(groups: readonly { label: string; memberCodes: readonly string[] }[] = currentSuggestions()): void {
+  if (!suggestions || groups.length === 0) return;
+  const key = suggestions.key;
+  const prev = directoryState(key).dismissedSuggestions ?? [];
+  const add = groups.map(suggestionSig).filter((s) => !prev.includes(s));
+  if (add.length) patchState(key, { dismissedSuggestions: [...prev, ...add].slice(-100) });
+  publishSuggestions(key, memory.get(key) ?? null);
+}
+
 /** Add a suggested group as your own (members you have as contacts). */
 export function addSuggestedGroup(g: { label: string; memberCodes: string[] }): boolean {
-  const partners = new Set(settings.get('pairingPartners').map((p) => normalizePairingCode(p.code)));
-  const own = normalizePairingCode(settings.get('pairingOwnCode'));
-  const members = g.memberCodes.filter((c) => partners.has(c) && c !== own);
+  const members = g.memberCodes.filter(addableCode());
   if (members.length === 0) return false;
   const groups = settings.get('pairingGroups');
   // You already have a group by this name: add the people it's missing

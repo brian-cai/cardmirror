@@ -11,6 +11,7 @@
 
 import {
   addSuggestedGroup,
+  dismissSuggestions,
   currentSuggestions,
   groupsChanged,
   onSuggestions,
@@ -211,7 +212,17 @@ function renderSuggestionsLine(el: HTMLElement, n: number): void {
     e.stopPropagation();
     void import('../settings-ui.js').then((m) => m.openSettings({ category: 'pairing', anchor: 'suggested-groups' }));
   });
-  el.append(text, b);
+  // Dismiss: hides these until their people change (dismissSuggestions).
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'pmd-team-join-requests-btn';
+  x.textContent = 'Dismiss';
+  x.title = 'Hide these suggestions. One comes back only if its people change.';
+  x.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dismissSuggestions();
+  });
+  el.append(text, b, x);
 }
 
 /** Settings → Collaboration: the groups teammates suggest, each with Add. */
@@ -251,7 +262,12 @@ export function buildSuggestedGroupsSection(onCleanup: (fn: () => void) => void)
         if (addSuggestedGroup(g)) showToast(had ? `Added the missing people to your group ${had.label}.` : `Added the group ${g.label}.`);
         else showToast(had ? `Your group ${had.label} already has everyone in your contacts.` : 'None of its people are in your contacts yet.');
       });
-      row.append(label, by, add);
+      const dismiss = document.createElement('button');
+      dismiss.type = 'button';
+      dismiss.textContent = 'Dismiss';
+      dismiss.title = 'Hide this suggestion. It comes back only if its people change.';
+      dismiss.addEventListener('click', () => dismissSuggestions([g]));
+      row.append(label, by, add, dismiss);
       wrap.appendChild(row);
     }
   };

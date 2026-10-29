@@ -5371,6 +5371,9 @@ export interface TeamDirectoryRelayState {
    *  "<group label, lower case>\n<code>", so a restart offers it again
    *  without offering members you took out of a group since. */
   heldItems?: string[];
+  /** Suggested groups you dismissed, as "<name, lower case>\n<sorted
+   *  codes>": hidden until the suggestion's people change. */
+  dismissedSuggestions?: string[];
 }
 
 /** A saved custom relay (collab/relay-profiles.ts). */
@@ -5436,6 +5439,9 @@ function sanitizeTeamDirectoryRelays(v: unknown): TeamDirectoryRelayState[] {
         : {}),
       ...(Array.isArray(r['heldItems'])
         ? { heldItems: (r['heldItems'] as unknown[]).filter((x): x is string => typeof x === 'string' && x.length <= 300).slice(0, 500) }
+        : {}),
+      ...(Array.isArray(r['dismissedSuggestions'])
+        ? { dismissedSuggestions: (r['dismissedSuggestions'] as unknown[]).filter((x): x is string => typeof x === 'string' && x.length <= 20000).slice(-100) }
         : {}),
     });
   }

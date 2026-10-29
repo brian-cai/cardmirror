@@ -51,6 +51,8 @@ import {
   myTeamGroups,
   suggestionsToShow,
   addSuggestedGroup,
+  currentSuggestions,
+  dismissSuggestions,
   onTeamDirectoryOffer,
   parseTeamDirectory,
   parseTeamDirectorySupport,
@@ -744,6 +746,45 @@ describe('suggested groups', () => {
     expect(addSuggestedGroup({ label: 'varsity', memberCodes: [ANA, BEN, CAL] })).toBe(true);
     expect(settings.get('pairingGroups')).toEqual([{ id: 'g1', label: 'Varsity', memberCodes: [ANA, BEN, CAL] }]);
     expect(addSuggestedGroup({ label: 'Varsity', memberCodes: [ANA, CAL] })).toBe(false);
+  });
+
+  it('hides a suggestion Add can do nothing with: only you, or people not in your contacts, are missing', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay({
+      directory: () => ({
+        ...DOC,
+        people: [...DOC.people, { code: CAL, name: 'Cal Reyes' }],
+        suggestedGroups: [{ label: 'Varsity', members: [ANA, BEN, ME], by: ['Ana'] }, { label: 'Novice', members: [ANA, CAL], by: ['Ana'] }],
+      }),
+    });
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    // Your Varsity has Ana and Ben; the suggestion's extra is you. Novice's Cal
+    // is a contact now (the list adds everyone), so it stays.
+    expect(currentSuggestions().map((g) => g.label)).toEqual(['Novice']);
+    // Without Cal as a contact, a Novice you already have with Ana is done.
+    const d = parseTeamDirectory({ ...DOC, people: [...DOC.people, { code: CAL, name: 'Cal Reyes' }], suggestedGroups: [{ label: 'Novice', members: [ANA, CAL], by: ['Ana'] }] })!;
+    const contactsOnly = (c: string): boolean => c === ANA || c === BEN;
+    expect(suggestionsToShow(d, [{ id: 'n', label: 'Novice', memberCodes: [ANA] }], 'Sam', contactsOnly)).toEqual([]);
+    expect(suggestionsToShow(d, [], 'Sam', contactsOnly).map((g) => g.label)).toEqual(['Novice']);
+  });
+
+  it('Dismiss hides a suggestion, also after a restart, until its people change', async () => {
+    settings.set('pairingDisplayName', 'Sam');
+    const relay = fakeRelay({ directory: () => ({ ...DOC, suggestedGroups: [{ label: 'Novice', members: [ANA, BEN], by: ['Ana'] }] }) });
+    await refreshTeamDirectory(relay.ctx, { now: clock });
+    expect(currentSuggestions().map((g) => g.label)).toEqual(['Novice']);
+    dismissSuggestions();
+    expect(currentSuggestions()).toEqual([]);
+    __resetTeamDirectoryForTests();
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(currentSuggestions()).toEqual([]);
+    // Someone new in it: it comes back.
+    relay.edit({
+      people: [...DOC.people, { code: ME, name: 'Sam', self: true }, { code: CAL, name: 'Cal Reyes' }],
+      suggestedGroups: [{ label: 'Novice', members: [ANA, BEN, CAL], by: ['Ana'] }],
+    });
+    await refreshTeamDirectory(relay.ctx, { now: later() });
+    expect(currentSuggestions().map((g) => g.label)).toEqual(['Novice']);
   });
 });
 
