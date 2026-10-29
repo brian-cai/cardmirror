@@ -5,6 +5,22 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.57 — 2026-10-29
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Dismiss suggested groups.** "Teammates suggest N groups" in the Send
+  popup now has **Dismiss**, and each suggestion in Settings →
+  Collaboration has its own. A dismissed suggestion stays hidden (also
+  after a restart) and only comes back if its people change.
+- **Suggestions that can't be added no longer stick.** A suggested group
+  whose only extra people were you, or teammates not in your contacts,
+  kept showing even though Add said your group already had everyone. It
+  now shows only when Add would add someone.
+
 ## 1.15.56 — 2026-10-27
 
 BCai's (@brian-cai) build of CardMirror, updating from
