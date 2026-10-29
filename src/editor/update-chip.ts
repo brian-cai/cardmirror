@@ -2,8 +2,11 @@
  * Status-bar update chip — install-on-confirm (adopted 2026-07-16,
  * modeled on ebb's update UX): auto-updates never dialog. The desktop
  * main process stages downloads silently and reports chip state; this
- * module renders the chip and forwards clicks. Two states:
+ * module renders the chip and forwards clicks. Three states:
  *
+ *   'downloading' — found and being staged; shows the percent so the
+ *                 home screen and status bar say something between
+ *                 "found" and "ready" (issue #104). Click = nothing.
  *   'ready'     — the update is downloaded and staged (Windows/Linux).
  *                 Click = confirm, then restart and install (one stray
  *                 click must not restart mid-round). Users who never
@@ -20,12 +23,14 @@
  * outside the index.ts app shell.
  */
 
-export interface UpdateChipState {
-  state: 'available' | 'ready';
-  version: string;
-  /** Why a Mac 'available' update can't install itself (see above). */
-  reason?: 'move' | 'admin';
-}
+export type UpdateChipState =
+  | {
+      state: 'available' | 'ready';
+      version: string;
+      /** Why a Mac 'available' update can't install itself (see above). */
+      reason?: 'move' | 'admin';
+    }
+  | { state: 'downloading'; version: string; percent: number };
 
 export interface UpdateChipHost {
   getUpdateChipState(): Promise<UpdateChipState | null>;
@@ -51,6 +56,9 @@ export function renderUpdateChip(el: HTMLButtonElement, s: UpdateChipState | nul
   if (s.state === 'ready') {
     el.textContent = `Update ${s.version} ready — restart to install`;
     el.title = 'Restart CardMirror now to finish installing the update';
+  } else if (s.state === 'downloading') {
+    el.textContent = `Downloading update ${s.version}… ${s.percent}%`;
+    el.title = 'The update is downloading in the background; keep working';
   } else if (s.reason === 'move') {
     el.textContent = `Update ${s.version} — move to Applications to install`;
     el.title = 'CardMirror can only update itself from the Applications folder. Click to move it there.';

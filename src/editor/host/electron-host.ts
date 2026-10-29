@@ -10,6 +10,7 @@
 
 import type { LearnOp } from '../learn-store.js';
 import type { MenuRecentsPayload } from '../menu-recents.js';
+import type { UpdateChipState } from '../update-chip.js';
 import type { DiskBase, CloudProvider } from './types.js';
 export type ClaimResult = 'fresh' | 'journaled' | 'changed' | 'unknown';
 import type {
@@ -569,7 +570,7 @@ interface ElectronAPI {
    *  state (null = none), a subscription for changes, and the chip's
    *  click action (ready → restart-install; available → release page).
    *  See main.ts "Update chip" for the model. */
-  getUpdateChipState(): Promise<{ state: 'available' | 'ready'; version: string; reason?: 'move' | 'admin' } | null>;
+  getUpdateChipState(): Promise<UpdateChipState | null>;
   /** Past releases this install can go back to (older than the running
    *  one, built for this platform, signed for the stream). `supported` is
    *  false, with a `reason`, when this install can't replace itself. */
@@ -581,7 +582,7 @@ interface ElectronAPI {
   ): Promise<{ ok: true } | { ok: false; error: string; cancelled?: boolean }>;
   updateChipAction(): Promise<void>;
   onUpdateChip(
-    handler: (payload: { state: 'available' | 'ready'; version: string; reason?: 'move' | 'admin' } | null) => void,
+    handler: (payload: UpdateChipState | null) => void,
   ): () => void;
   /** Floating always-on-top timer pop-out window. Optional so a
    *  renderer against an older packaged shell (preload without the
@@ -1663,7 +1664,7 @@ export class ElectronHost implements Host {
     return api().installEarlierVersion(version);
   }
 
-  async getUpdateChipState(): Promise<{ state: 'available' | 'ready'; version: string; reason?: 'move' | 'admin' } | null> {
+  async getUpdateChipState(): Promise<UpdateChipState | null> {
     return api().getUpdateChipState();
   }
 
@@ -1672,7 +1673,7 @@ export class ElectronHost implements Host {
   }
 
   onUpdateChip(
-    handler: (payload: { state: 'available' | 'ready'; version: string; reason?: 'move' | 'admin' } | null) => void,
+    handler: (payload: UpdateChipState | null) => void,
   ): () => void {
     // Optional-chained: an older packaged shell (preload without the
     // chip API) just never shows the chip.

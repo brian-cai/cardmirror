@@ -111,6 +111,24 @@ is something to paint); select just the highlighted text to remove it.
 Tests cover the plain-word strip, over-selection, a different pen color,
 the null pen, shading, and the paint-wins mix.
 
+### Fixed: update chip reports the download (issue #104)
+
+The main process's single chip state had two values, `available` and
+`ready`, and nothing was set between electron-updater's `update-available`
+(where Windows/Linux auto-download and the mac swap path call
+`downloadUpdate()`) and `update-downloaded`, so both chip surfaces
+(status bar and the home-screen button, one renderer module) were blank
+for the length of the download. A third state `downloading` with a
+`percent` is now set when the download starts, advanced from the
+updater's `download-progress` event (forwarded only on whole-percent
+changes, since each push is an IPC to every window), cleared on a
+download error so a dead download never leaves a stuck chip, and
+superseded by `ready` as before. Clicking a downloading chip does
+nothing. The host interface imports the chip state type from
+`update-chip.ts` instead of spelling it out inline in three places. Dev
+aid: `CM_FAKE_UPDATE=downloading[:version]` animates 0→100% over ~30 s, shows `ready` for 10 s,
+and repeats in an unpackaged build.
+
 ### Fixed: inserting a received card marks it read
 
 `read` on an inbox item meant "the user has opened the Receive pill since
