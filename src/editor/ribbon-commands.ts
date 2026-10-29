@@ -1825,8 +1825,10 @@ const UNDERLINED_MARKS = new Set(['underline_mark', 'underline_direct', 'emphasi
 /**
  * "Highlight underlined text only" (Settings → Editing): narrow the ranges a
  * highlight / shading paint touches to the text that is underlined or
- * emphasized. Two rules, per word (a maximal run of non-whitespace in one
- * textblock):
+ * emphasized. Two rules, per word — the SAME word a double-click selects
+ * (`word-break.ts`: a maximal run of letters, digits and apostrophes;
+ * punctuation, dashes, spaces and inline leaves all end a word, so
+ * "nuclear—armed" is two words and "weapons," is a word plus a comma):
  *
  *   1. A word with no emphasis keeps its underlined characters.
  *   2. A word with ANY emphasis keeps only its emphasized characters — so
@@ -1834,11 +1836,17 @@ const UNDERLINED_MARKS = new Set(['underline_mark', 'underline_direct', 'emphasi
  *      weapons", painting the words highlights just the emphasized part.
  *      The whole word decides, even the part outside the selection.
  *
- * Whitespace and other non-word gap characters are never kept: the gap
- * bridger (when on) fills the gaps between two painted neighbors, which is
- * how the setting composes with "Bridge formatting across gaps". Returns
- * the kept pieces clipped to the input ranges, merged where contiguous; an
- * empty list when nothing in the selection qualifies.
+ * Non-word characters — spaces, punctuation, dashes — are gap content and
+ * are not kept on their own: the gap bridger (when on) fills the gaps
+ * between two painted neighbors, which is how the setting composes with
+ * "Bridge formatting across gaps". One exception: an underlined
+ * punctuation run with no whitespace that JOINS two kept words
+ * ("nuclear—armed") is kept with them, because the bridger never bridges
+ * dashes and a hole there would be wrong. (Before 2026-10-29 a word was
+ * any run of non-whitespace, so an em-dash-joined pair counted as one
+ * word and emphasis in one half suppressed the plain underline in the
+ * other.) Returns the kept pieces clipped to the input ranges, merged
+ * where contiguous; an empty list when nothing in the selection qualifies.
  *
  * Only BODY text is filtered. Headings (pocket / hat / block / tag), cites
  * and analytics are painted whole — their text is read in full, so there's
@@ -1868,7 +1876,8 @@ export function restrictToUnderlinedText(
         return false;
       }
       // Per-position character and style maps for the textblock; inline
-      // leaves read as whitespace so they end a word.
+      // leaves read as whitespace so they end a word (non-word, like
+      // punctuation, under `isWordChar`).
       const ch = new Array<string>(size).fill(' ');
       const underlined = new Array<boolean>(size).fill(false);
       const emphasized = new Array<boolean>(size).fill(false);
@@ -1888,21 +1897,45 @@ export function restrictToUnderlinedText(
       });
       const lo = Math.max(0, from - base);
       const hi = Math.min(size, to - base);
+      // Pass 1 — words. `kept` is decided for the WHOLE textblock (the
+      // join rule below needs neighbors outside the range); the emit at
+      // the end clips to [lo, hi).
+      const kept = new Array<boolean>(size).fill(false);
       let i = 0;
       while (i < size) {
-        if (/\s/.test(ch[i]!)) { i++; continue; }
+        if (!isWordChar(ch[i]!)) { i++; continue; }
         let j = i;
-        while (j < size && !/\s/.test(ch[j]!)) j++;
-        // Word is [i, j). Only words touching the range matter.
-        if (j > lo && i < hi) {
-          const useEmphasis = emphasized.slice(i, j).some(Boolean);
-          const keep = useEmphasis ? emphasized : underlined;
-          for (let k = Math.max(i, lo); k < Math.min(j, hi); k++) {
-            if (keep[k]) push(base + k, base + k + 1);
-          }
+        while (j < size && isWordChar(ch[j]!)) j++;
+        // Word is [i, j).
+        const useEmphasis = emphasized.slice(i, j).some(Boolean);
+        const keep = useEmphasis ? emphasized : underlined;
+        for (let k = i; k < j; k++) if (keep[k]) kept[k] = true;
+        i = j;
+      }
+      // Pass 2 — joins. A run of punctuation with NO whitespace that sits
+      // between two kept characters ("nuclear—armed", "well-known",
+      // "x/y") is kept when it is underlined itself: the gap bridger
+      // deliberately never bridges dashes (a dash is a seam the user
+      // chose, see formatting-gaps.ts), so leaving it out would punch a
+      // hole in the paint that nothing fills. Any run touching whitespace
+      // is left to the bridger, like the space itself.
+      i = 0;
+      while (i < size) {
+        if (isWordChar(ch[i]!)) { i++; continue; }
+        let j = i;
+        let hasSpace = false;
+        let allUnderlined = true;
+        while (j < size && !isWordChar(ch[j]!)) {
+          if (/\s/.test(ch[j]!) || ch[j] === '\0') hasSpace = true;
+          if (!underlined[j]) allUnderlined = false;
+          j++;
+        }
+        if (!hasSpace && allUnderlined && i > 0 && j < size && kept[i - 1] && kept[j]) {
+          for (let k = i; k < j; k++) kept[k] = true;
         }
         i = j;
       }
+      for (let k = lo; k < hi; k++) if (kept[k]) push(base + k, base + k + 1);
       return false;
     });
   }

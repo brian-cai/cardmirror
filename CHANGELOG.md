@@ -537,6 +537,13 @@ github.com/brian-cai/cardmirror.
   selection carries, in any color, instead of doing nothing — so a highlight
   sitting on plain text, from an import or a paint made with the setting
   off, comes off with the same key. Painting is unchanged.
+- **Highlight underlined text only:** a "word" is now the same unit a
+  double-click selects (letters, digits, apostrophes). Dashes, hyphens and
+  punctuation split words instead of joining them, so in `nuclear—armed`
+  with only `nuclear` emphasized, `armed` keeps its underline paint instead
+  of being dropped as part of one emphasized word. A dash that joins two
+  painted words is painted with them; punctuation beside a space is left to
+  the gap bridging.
 
 ### Fixed
 

@@ -38,6 +38,31 @@ Settings is scanned before the palette is next opened. Covered by new
 core tests (cached/cold/missing/pruned roots) and a flow test with an
 injected client.
 
+### Changed: "Highlight underlined text only" words follow the double-click spec
+
+`restrictToUnderlinedText` segmented words as maximal runs of
+non-whitespace, independently of `word-break.ts`, the Word-compatible
+spec every selection gesture uses. The two disagreed on punctuation:
+`nuclear—armed`, `weapons,`, `U.S.` and `1,234` were one word to the
+filter and several units to a double-click. Because the emphasis rule
+is decided per whole word, an em-dash-joined pair with emphasis in one
+half dropped the plain underline in the other half, and an underlined
+comma attached to an emphasized word was dropped with it. The filter now
+uses `isWordChar` from the spec: a word is a maximal run of letters,
+digits and apostrophes; punctuation, dashes, spaces, tabs and inline
+leaves are non-word and are gap content. Gap content is not kept on its
+own — the gap bridger fills spaces and the punctuation beside them
+between two painted words — with one exception the bridger forces: it
+deliberately never bridges dashes (`formatting-gaps.ts` treats a dash as
+a seam the user chose), so an underlined punctuation run with no
+whitespace that joins two kept words (`nuclear—armed`, `well-known`) is
+kept with them, or the paint would have a hole nothing fills. The join
+rule looks at the whole textblock, so a neighbor outside the selection
+still counts. Tests cover the em dash under emphasis, the hyphen, the
+attached comma, apostrophes staying inside a word, an underlined spaced
+dash (left to the bridger), and the command level with bridging on and
+off.
+
 ### Changed: "Highlight underlined text only" never blocks removal
 
 With the setting on, `applyHighlight` / `applyShading` narrowed the

@@ -681,9 +681,14 @@ by default) makes every highlight and background-color paint — F11,
 Mod-F11, the paintbrush, and the color pickers — land only on text that
 is underlined or emphasized, so you can sweep across a whole paragraph
 and have just the underlined parts light up. In a word that mixes
-emphasis and plain underline, only the emphasized part is painted. The
-spaces between two painted words fill in when "Bridge formatting across
-gaps automatically" is on. Only card body text is filtered this way:
+emphasis and plain underline, only the emphasized part is painted. A
+"word" here is the same thing a double-click selects — letters, digits
+and apostrophes — so an em dash, hyphen or comma splits words rather than
+joining them: in `nuclear—armed` with only `nuclear` emphasized, `armed`
+keeps its own underline paint. A dash that joins two painted words with
+no space is painted with them; punctuation beside a space, and the space
+itself, fill in when "Bridge formatting across gaps automatically" is
+on. Only card body text is filtered this way:
 tags, cites, analytics, and the pocket / hat / block headings always
 paint whole, since a highlight there is deliberate emphasis rather than
 a reading pass. Toggling a highlight off and the "no color" pen still
@@ -3195,7 +3200,10 @@ Typing helpers and the behavior of the cutting and condense commands
   color paints (F11, Mod-F11, the paintbrush, and the color pickers) only
   land on body text that is underlined or emphasized; in a word that
   mixes emphasis and plain underline, only the emphasized part is
-  painted. Tags, cites, analytics and the pocket / hat / block headings
+  painted (a word is what a double-click selects, so a dash or comma
+  splits words; a dash joining two painted words is painted with them,
+  and punctuation beside a space is left to the gap bridging). Tags,
+  cites, analytics and the pocket / hat / block headings
   always paint whole. Toggling off and the "no color" pen still clear
   the whole selection, and when nothing in the selection is underlined
   the key removes whatever highlight is there, so removal is never

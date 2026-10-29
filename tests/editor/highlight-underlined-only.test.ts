@@ -81,6 +81,63 @@ describe('restrictToUnderlinedText', () => {
     expect(restrictToUnderlinedText(doc, [{ from: 4, to: 8 }])).toEqual([]);
   });
 
+  // Words follow the double-click spec (word-break.ts): letters, digits,
+  // apostrophes. Punctuation and dashes split words and are never kept.
+  it('an em dash splits words: emphasis in one half leaves the other half its underline', () => {
+    // "nuclear—armed": "nuclear" emphasized, "—armed" underlined. Both words
+    // keep; the underlined dash joining them is kept too (one piece).
+    const doc = docOf(['nuclear', [E()]], ['—armed', [U()]]);
+    expect(restrictToUnderlinedText(doc, [{ from: 1, to: 14 }])).toEqual([{ from: 1, to: 14 }]);
+  });
+
+  it('a joining dash is dropped when a side is not kept, or when it is not underlined itself', () => {
+    // "armed" plain → nothing to join to: just "nuclear".
+    const half = docOf(['nuclear', [E()]], ['—', [U()]], ['armed']);
+    expect(restrictToUnderlinedText(half, [{ from: 1, to: 14 }])).toEqual([{ from: 1, to: 8 }]);
+    // Both words underlined but the dash is plain: a real seam, left alone.
+    const seam = docOf(['nuclear', [U()]], ['—'], ['armed', [U()]]);
+    expect(restrictToUnderlinedText(seam, [{ from: 1, to: 14 }])).toEqual([
+      { from: 1, to: 8 },
+      { from: 9, to: 14 },
+    ]);
+  });
+
+  it('the join rule sees a neighbor outside the selection', () => {
+    // Select only "—armed": the dash joins to "nuclear", which is kept though unselected.
+    const doc = docOf(['nuclear', [U()]], ['—armed', [U()]]);
+    expect(restrictToUnderlinedText(doc, [{ from: 8, to: 14 }])).toEqual([{ from: 8, to: 14 }]);
+  });
+
+  it('a hyphen behaves like the em dash', () => {
+    const doc = docOf(['nuclear', [E()]], ['-', [U()]], ['armed', [U()]]);
+    expect(restrictToUnderlinedText(doc, [{ from: 1, to: 14 }])).toEqual([{ from: 1, to: 14 }]);
+  });
+
+  it('an attached comma is not part of the word and is never kept', () => {
+    const doc = docOf(['weapons', [E()]], [',', [U()]]);
+    expect(restrictToUnderlinedText(doc, [{ from: 1, to: 9 }])).toEqual([{ from: 1, to: 8 }]);
+    const plain = docOf(['weapons,', [U()]]);
+    expect(restrictToUnderlinedText(plain, [{ from: 1, to: 9 }])).toEqual([{ from: 1, to: 8 }]);
+  });
+
+  it('apostrophes stay inside the word', () => {
+    const doc = docOf(["Smith's", [U()]]);
+    expect(restrictToUnderlinedText(doc, [{ from: 1, to: 8 }])).toEqual([{ from: 1, to: 8 }]);
+    const curly = docOf(['Smith’s', [E()]], [' plan', [U()]]);
+    expect(restrictToUnderlinedText(curly, [{ from: 1, to: 13 }])).toEqual([
+      { from: 1, to: 8 },
+      { from: 9, to: 13 },
+    ]);
+  });
+
+  it('an underlined standalone dash is never kept', () => {
+    const doc = docOf(['aa', [U()]], [' — ', [U()]], ['bb', [U()]]);
+    expect(restrictToUnderlinedText(doc, [{ from: 1, to: 8 }])).toEqual([
+      { from: 1, to: 3 },
+      { from: 6, to: 8 },
+    ]);
+  });
+
   it('never keeps whitespace, even when it is underlined', () => {
     const doc = docOf(['aa bb', [U()]]);
     expect(restrictToUnderlinedText(doc, [{ from: 1, to: 6 }])).toEqual([
@@ -181,6 +238,30 @@ describe('Highlight underlined text only — commands', () => {
     const doc = docOf(['aa '], ['bb cc', [U()]], [' dd']);
     const next = run(doc, 'aa bb cc dd', applyHighlight(yellow));
     expect(mask(next.doc, 'highlight')).toBe('   __ __   ');
+  });
+
+  it('on: an underlined em-dash pair paints whole, bridging on or off', () => {
+    const doc = docOf(['nuclear—armed', [U()]]);
+    expect(mask(run(doc, 'nuclear—armed', applyHighlight(yellow)).doc, 'highlight')).toBe('_____________');
+    settings.set('autoBridgeFormattingGaps', false);
+    expect(mask(run(doc, 'nuclear—armed', applyHighlight(yellow)).doc, 'highlight')).toBe('_____________');
+  });
+
+  it('on: an em-dash pair with emphasis in one half paints both halves and the dash', () => {
+    // The old whitespace-word rule saw one emphasized word and dropped "armed".
+    const doc = docOf(['nuclear', [E()]], ['—armed', [U()]]);
+    const next = run(doc, 'nuclear—armed', applyHighlight(yellow));
+    expect(mask(next.doc, 'highlight')).toBe('_____________');
+  });
+
+  it('on: a spaced dash is gap content — bridged when bridging is on, unpainted when off', () => {
+    const doc = docOf(['aa — bb', [U()]]);
+    settings.set('formattingGapClass', 'whitespace');
+    // Bridging on: the bridger does not bridge dashes, so the dash stays bare
+    // either way; only the filter's own output is under test here.
+    settings.set('autoBridgeFormattingGaps', false);
+    const next = run(doc, 'aa — bb', applyHighlight(yellow));
+    expect(mask(next.doc, 'highlight')).toBe('__   __');
   });
 
   it('on: a word mixing emphasis and underline gets only the emphasized part', () => {
