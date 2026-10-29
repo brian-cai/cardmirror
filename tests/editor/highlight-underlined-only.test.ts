@@ -254,6 +254,31 @@ describe('Highlight underlined text only — commands', () => {
     expect(m.slice(6)).toBe('  ');
   });
 
+  it('on: inside a real card, F11 over highlighted body text with no underline anywhere strips it', () => {
+    const doc = schema.nodes['doc']!.createChecked(null, [
+      schema.nodes['card']!.createChecked(null, [
+        schema.nodes['tag']!.create({ id: 't1' }, schema.text('Tag text')),
+        schema.nodes['cite_paragraph']!.create(null, schema.text('Smith 24', [C()])),
+        schema.nodes['card_body']!.create(null, [
+          schema.text('plain lead '),
+          schema.text('painted words here', [HL()]),
+          schema.text(' plain tail'),
+        ]),
+      ]),
+    ]);
+    // `select()` assumes one paragraph; find the text node's real position.
+    let from = -1;
+    doc.descendants((n, pos) => {
+      if (from < 0 && n.isText && n.text === 'painted words here') from = pos;
+      return from < 0;
+    });
+    const state = EditorState.create({ doc });
+    const sel = state.apply(state.tr.setSelection(TextSelection.create(doc, from, from + 'painted words here'.length)));
+    expect(mask(sel.doc, 'highlight')).toContain('_');
+    const next = apply(sel, applyHighlight(yellow));
+    expect(mask(next.doc, 'highlight')).not.toContain('_');
+  });
+
   it('on: Mod-F11 over plain shaded text with nothing underlined strips the shading', () => {
     const doc = docOf(['aa bb cc', [schema.marks['shading']!.create({ color: 'FFFF00' })]]);
     const next = run(doc, 'aa bb cc', applyShading(() => '00FF00'));
