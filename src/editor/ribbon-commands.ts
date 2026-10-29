@@ -1925,6 +1925,25 @@ function notePainted(tr: Transaction, paint: ReturnType<typeof paintRanges>): vo
   if (paint.narrowed) tr.setMeta(META_PAINTED_RANGES, paint.ranges);
 }
 
+/** Does any text in `ranges` carry `markName` (any attrs)? The
+ *  "remove-only" test for a paint whose filter left nothing to paint. */
+function anyMarkInRanges(
+  doc: PMNode,
+  ranges: { from: number; to: number }[],
+  markName: string,
+): boolean {
+  for (const { from, to } of ranges) {
+    let found = false;
+    doc.nodesBetween(from, to, (node) => {
+      if (found) return false;
+      if (node.isText && node.marks.some((m) => m.type.name === markName)) found = true;
+      return !found;
+    });
+    if (found) return true;
+  }
+  return false;
+}
+
 
 /**
  * F9 / Mod-U — toggle Verbatim's "Underline" style on the selection.
@@ -2174,9 +2193,16 @@ export function applyHighlight(activeColor: () => string | null): Command {
     // pieces; a strip still clears the whole selection, so painting the
     // same swath twice leaves it clean.
     const paint = paintRanges(state.doc, op.ranges);
-    if (paint.ranges.length === 0) return false;
+    // The filter left nothing to paint (no underline / emphasis in the
+    // selection): the only thing F11 can mean here is "remove", so strip
+    // whatever highlight the selection carries — any color, filter
+    // ignored. Removal must never be stuck behind the filter: a highlight
+    // sitting on plain text (an import, a paint made with the setting
+    // off) has to come off with the same key. No highlight at all → no-op.
+    const removeOnly = paint.ranges.length === 0;
+    if (removeOnly && !anyMarkInRanges(state.doc, op.ranges, 'highlight')) return false;
     let allInActiveColor = true;
-    let anyText = false;
+    let anyText = removeOnly;
     for (const { from, to } of paint.ranges) {
       const scan = toggleScanRange(state.doc, from, to);
       const r = scanTextMarkPresence(
@@ -2196,8 +2222,9 @@ export function applyHighlight(activeColor: () => string | null): Command {
     // Toggle off only when the whole range already wears THIS color —
     // a different color repaints instead of erasing (field report
     // 2026-08-05: green over yellow used to strip everything). A null
-    // pen ("No highlight") always strips, no toggle branch.
-    if (allInActiveColor || color === null) {
+    // pen ("No highlight") always strips, no toggle branch. So does a
+    // remove-only press (above).
+    if (removeOnly || allInActiveColor || color === null) {
       for (const { from, to } of op.ranges) tr.removeMark(from, to, highlightType);
     } else {
       // Replace any existing highlight color with the active one
@@ -2233,11 +2260,13 @@ export function applyShading(activeColor: () => string | null): Command {
     if (op.ranges.length === 0) return false;
 
     const color = activeColor();
-    // Same underlined-only narrowing as highlight (see applyHighlight).
+    // Same underlined-only narrowing as highlight (see applyHighlight),
+    // including the remove-only fallback when the filter leaves nothing.
     const paint = paintRanges(state.doc, op.ranges);
-    if (paint.ranges.length === 0) return false;
+    const removeOnly = paint.ranges.length === 0;
+    if (removeOnly && !anyMarkInRanges(state.doc, op.ranges, 'shading')) return false;
     let allInActiveColor = true;
-    let anyText = false;
+    let anyText = removeOnly;
     for (const { from, to } of paint.ranges) {
       const scan = toggleScanRange(state.doc, from, to);
       const r = scanTextMarkPresence(
@@ -2256,8 +2285,8 @@ export function applyShading(activeColor: () => string | null): Command {
     const tr = state.tr;
     // Same-color-only toggle, mirroring highlight: a different active
     // color repaints; only repeating the exact color strips. Null pen
-    // ("No background color") — strip.
-    if (allInActiveColor || color === null) {
+    // ("No background color") — strip. So does a remove-only press.
+    if (removeOnly || allInActiveColor || color === null) {
       for (const { from, to } of op.ranges) tr.removeMark(from, to, shadingType);
     } else {
       for (const { from, to } of paint.ranges) {

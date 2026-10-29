@@ -529,6 +529,15 @@ github.com/brian-cai/cardmirror.
   Changing the file search folders in Settings now re-scans right away too,
   instead of waiting for the next palette open.
 
+### Changed
+
+- **Highlight underlined text only:** removing a highlight is never blocked
+  by the filter. When nothing in the selection is underlined or emphasized,
+  F11 (and Mod-F11 for background color) now removes whatever highlight the
+  selection carries, in any color, instead of doing nothing — so a highlight
+  sitting on plain text, from an import or a paint made with the setting
+  off, comes off with the same key. Painting is unchanged.
+
 ### Fixed
 
 - **Only you can clear your waiting cards.** On relays that support

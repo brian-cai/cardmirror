@@ -216,6 +216,50 @@ describe('Highlight underlined text only — commands', () => {
     expect(mask(next.doc, 'highlight')).toBe('        ');
   });
 
+  // Removal is never stuck behind the filter: a highlight sitting on text
+  // with no underline / emphasis under it comes off with the same key.
+  it('on: a highlighted plain word with nothing underlined is stripped by F11', () => {
+    const doc = docOf(['aa '], ['bb', [HL()]], [' cc']);
+    const next = run(doc, 'bb', applyHighlight(yellow));
+    expect(mask(next.doc, 'highlight')).toBe('        ');
+  });
+
+  it('on: over-selecting around a plain highlighted word still strips it', () => {
+    const doc = docOf(['aa '], ['bb', [HL()]], [' cc']);
+    const next = run(doc, 'aa bb cc', applyHighlight(yellow));
+    expect(mask(next.doc, 'highlight')).toBe('        ');
+  });
+
+  it('on: a different pen color over plain highlighted text strips (nothing to repaint)', () => {
+    const doc = docOf(['aa bb cc', [HL('yellow')]]);
+    const next = run(doc, 'aa bb cc', applyHighlight(() => 'green'));
+    expect(mask(next.doc, 'highlight')).toBe('        ');
+  });
+
+  it('on: "No highlight" over plain highlighted text with nothing underlined strips the selection', () => {
+    const doc = docOf(['aa bb cc', [HL()]]);
+    const next = run(doc, 'bb', applyHighlight(() => null));
+    const m = mask(next.doc, 'highlight');
+    expect(m.slice(3, 5)).toBe('  ');
+    expect(m[0]).toBe('_');
+    expect(m[7]).toBe('_');
+  });
+
+  it('on: a highlighted plain word beside an unhighlighted underlined word — paint still wins', () => {
+    const doc = docOf(['aa ', [HL()]], ['bb', [U()]], [' cc']);
+    const next = run(doc, 'aa bb cc', applyHighlight(yellow));
+    const m = mask(next.doc, 'highlight');
+    expect(m.slice(0, 3)).toBe('___');
+    expect(m.slice(3, 5)).toBe('__');
+    expect(m.slice(6)).toBe('  ');
+  });
+
+  it('on: Mod-F11 over plain shaded text with nothing underlined strips the shading', () => {
+    const doc = docOf(['aa bb cc', [schema.marks['shading']!.create({ color: 'FFFF00' })]]);
+    const next = run(doc, 'aa bb cc', applyShading(() => '00FF00'));
+    expect(mask(next.doc, 'shading')).toBe('        ');
+  });
+
   it('on: a different color repaints only the underlined part', () => {
     const doc = docOf(['aa '], ['bb', [U(), HL('yellow')]], [' cc']);
     const next = run(doc, 'aa bb cc', applyHighlight(() => 'green'));

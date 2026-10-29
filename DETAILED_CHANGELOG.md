@@ -38,6 +38,26 @@ Settings is scanned before the palette is next opened. Covered by new
 core tests (cached/cold/missing/pruned roots) and a flow test with an
 injected client.
 
+### Changed: "Highlight underlined text only" never blocks removal
+
+With the setting on, `applyHighlight` / `applyShading` narrowed the
+operating ranges through `restrictToUnderlinedText` and returned false
+when nothing survived, BEFORE reaching the toggle-off / null-pen branch.
+So a highlight on text with no underline or emphasis under it (imported
+documents, paints made before the setting was turned on) could not be
+removed with F11, Mod-F11 or even the "No highlight" pen while the setting
+was on; the user had to turn the setting off first. Now a press whose
+filter leaves nothing to paint is a remove-only press: if the selection
+carries the mark anywhere (any color), the whole selection is stripped,
+filter ignored; if it carries none, it stays a no-op. The paint path and
+the existing same-color toggle over the narrowed pieces are unchanged, so
+repainting a swath still toggles it off and a different pen still
+repaints only the underlined parts. When the selection mixes a highlighted
+plain word with an unhighlighted underlined word, paint still wins (there
+is something to paint); select just the highlighted text to remove it.
+Tests cover the plain-word strip, over-selection, a different pen color,
+the null pen, shading, and the paint-wins mix.
+
 ### Fixed: inserting a received card marks it read
 
 `read` on an inbox item meant "the user has opened the Receive pill since

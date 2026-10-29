@@ -687,7 +687,10 @@ gaps automatically" is on. Only card body text is filtered this way:
 tags, cites, analytics, and the pocket / hat / block headings always
 paint whole, since a highlight there is deliberate emphasis rather than
 a reading pass. Toggling a highlight off and the "no color" pen still
-clear the whole selection.
+clear the whole selection, and when nothing in the selection is underlined
+or emphasized, F11 removes whatever highlight is there instead of doing
+nothing — so a highlight sitting on plain text (from an import, or painted
+with the setting off) always comes off with the same key.
 
 **Paintbrush mode** (the way Word's highlighter works): click a main
 color button with *nothing* selected to arm it. The cursor changes, and
@@ -3194,7 +3197,9 @@ Typing helpers and the behavior of the cutting and condense commands
   mixes emphasis and plain underline, only the emphasized part is
   painted. Tags, cites, analytics and the pocket / hat / block headings
   always paint whole. Toggling off and the "no color" pen still clear
-  the whole selection. Composes with the automatic gap bridging. Off by
+  the whole selection, and when nothing in the selection is underlined
+  the key removes whatever highlight is there, so removal is never
+  blocked by the filter. Composes with the automatic gap bridging. Off by
   default.
 
 **Standardize exceptions**
