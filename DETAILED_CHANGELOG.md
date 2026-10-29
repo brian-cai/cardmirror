@@ -5,6 +5,26 @@ behavior, rationale, and (where useful) the implementation context
 behind a change. For a shorter, jargon-free summary of what's new
 in each release, see `CHANGELOG.md`.
 
+## Unreleased
+
+### Fixed: Self-hosted relay starts under SQLAlchemy 2.1
+
+`relay/requirements.txt` pinned `sqlalchemy>=2.0` with no upper bound
+and installed only `psycopg2-binary`. SQLAlchemy 2.1 (released
+2026-09-25) changed the default DBAPI for plain `postgresql://` URLs
+from psycopg2 to psycopg 3, so every fresh image build since then
+failed at `create_engine` with `ModuleNotFoundError: No module named
+'psycopg'`. PR #114 (Cora) swaps the driver to `psycopg[binary]`. On
+top of that, `server.py` now rewrites `postgresql://` and `postgres://`
+URLs to `postgresql+psycopg://` before building the engine: with
+psycopg2 gone, a host that resolves SQLAlchemy 2.0 (Python 3.10 cannot
+install 2.1) would otherwise fail the opposite way, and the explicit
+scheme makes the pair consistent regardless of which SQLAlchemy pip
+picks. Verified locally against Postgres 16: the mailbox and room
+endpoints return byte-identical responses on psycopg 3 and on the old
+psycopg2 build. The hosted relay inside the scouting backend pins
+SQLAlchemy 2.0 and was never affected.
+
 ## 1.16.0 — 2026-10-24
 
 ### Added: Spectators (view-only sessions)

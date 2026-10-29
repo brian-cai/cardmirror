@@ -112,6 +112,16 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL environment variable is required")
 
+# SQLAlchemy 2.1 made psycopg (3) the default driver for plain
+# `postgresql://` URLs; 2.0 still reads them as psycopg2. Only psycopg
+# is installed (requirements.txt), so name the driver explicitly and the
+# same URL works under either SQLAlchemy. `postgres://` (the Heroku-era
+# spelling some hosts still hand out) is folded in too.
+for _scheme in ("postgresql://", "postgres://"):
+    if DATABASE_URL.startswith(_scheme):
+        DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL[len(_scheme):]
+        break
+
 # Pool sized to Starlette's sync-handler threadpool (AnyIO default: 40
 # tokens) so worker threads never convoy behind connection checkout. A
 # short pool_timeout turns exhaustion into a clean 503 (see the
