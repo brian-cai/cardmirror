@@ -38,6 +38,27 @@ Settings is scanned before the palette is next opened. Covered by new
 core tests (cached/cold/missing/pruned roots) and a flow test with an
 injected client.
 
+### Fixed: inserting a received card marks it read
+
+`read` on an inbox item meant "the user has opened the Receive pill since
+this arrived" and was only ever set wholesale by `markAllRead` on pill
+open. The keyboard insert commands (`insertReceivedAtCursor` Mod-P,
+`insertReceivedAtEnd` Mod-Alt-P) bypass the pill, so a card inserted that
+way stayed unread: the badge kept saying "N new" and the keep-flashing
+reminder continued until the pill was opened. The shared insert path
+(`inbox-insert.ts` → `insertReceivedItem`) now calls a new
+`inboxStore.markRead(id)` after a successful dispatch, so every insert
+surface (keyboard commands, pill rows) marks the card read while leaving
+it in the inbox. Per-item persistence is a new IPC
+(`host:pairing-inbox-mark-read-one`, preload `pairingInboxMarkRead`,
+host `pairingInboxMarkRead`) mirroring the mark-all handler: no change →
+no broadcast, no write; on the web backend it writes localStorage. On an
+older preload without the IPC the in-window state still updates and the
+next backend snapshot wins. Covered by a jsdom test that inserts the
+newest of two unread items and checks the store, the unread count, the
+doc, the persisted state, and that an undecodable item is neither
+inserted nor marked read.
+
 ### Fixed: Self-hosted relay starts under SQLAlchemy 2.1
 
 `relay/requirements.txt` pinned `sqlalchemy>=2.0` with no upper bound

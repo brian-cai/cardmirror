@@ -1688,6 +1688,8 @@ row:
   instead of arriving fully expanded.
 - **Mod-P** inserts the most recently received card at the cursor, and
   **Mod-Alt-P** appends it, without opening the pill (both rebindable).
+  Either way the card is marked read — it is in your document now — so
+  the badge and the arrival flash stop counting it; it stays in the list.
 - **Preview Received Card** opens the most recent one in the preview
   without inserting it — unbound by default; give it a key under
   Settings → Keyboard shortcuts. The preview's **Read mode** button shows

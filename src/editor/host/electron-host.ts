@@ -411,6 +411,8 @@ interface ElectronAPI {
   pairingInboxRemove?(id: string): Promise<void>;
   pairingInboxClear?(): Promise<void>;
   pairingInboxMarkAllRead?(): Promise<void>;
+  /** Mark one inbox card read (absent on preloads older than this). */
+  pairingInboxMarkRead?(id: string): Promise<void>;
   /** Baked relay endpoint from the main process (same base + shared
    *  token card sharing uses) — the renderer-side rooms client falls
    *  back to this when no settings/dev override is present. Optional so
@@ -1332,6 +1334,10 @@ export class ElectronHost implements Host {
 
   async pairingInboxMarkAllRead(): Promise<void> {
     await api().pairingInboxMarkAllRead?.();
+  }
+
+  async pairingInboxMarkRead(id: string): Promise<void> {
+    await api().pairingInboxMarkRead?.(id);
   }
 
   async collabRelayDefaults(): Promise<{ url: string; token: string; routingCode?: string; usable?: boolean }> {
