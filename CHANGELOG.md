@@ -520,6 +520,15 @@ github.com/brian-cai/cardmirror.
 BCai's (@brian-cai) build of CardMirror, updating from
 github.com/brian-cai/cardmirror.
 
+### Added
+
+- **Refresh File Search Index** *(desktop; a command, unbound by default)*
+  re-walks every file search folder immediately and reports what it found
+  (files indexed, files changed, folders missing on disk). Use it when a
+  document saved from Word or Finder is not showing up in the palette yet.
+  Changing the file search folders in Settings now re-scans right away too,
+  instead of waiting for the next palette open.
+
 ### Fixed
 
 - **Only you can clear your waiting cards.** On relays that support

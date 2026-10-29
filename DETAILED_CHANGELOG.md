@@ -7,6 +7,37 @@ in each release, see `CHANGELOG.md`.
 
 ## Unreleased
 
+### Added: Refresh File Search Index (command) + re-scan on settings change
+
+The palette's file index (the out-of-process file-index service) only
+re-walked its roots on two triggers: app boot and every palette open, the
+latter after a 3-second delay so a typing burst finishes first. Nothing
+else — not saving a document, not editing the folder list, not external
+changes — touched it, so a file saved from Word or Finder could be missing
+from the palette for the first several seconds after opening it, with no
+way to force the issue short of a restart.
+
+Two additions. (1) `refreshFileSearchIndex`, a desktop command with no
+default binding (Search group), calls a new `refresh` op on the service:
+a forced, immediate walk of every configured root, cached or not, that
+cancels a pending delayed revalidation, waits out any walk already in
+flight for that root rather than racing it, publishes and notifies per
+root whose listing changed, and answers with `{roots, files, changedFiles,
+missingRoots}` once every walk is done. A root that is not a directory at
+that moment (unmounted drive, cloud folder mid-sync) is reported in
+`missingRoots` and NOT walked, so a good cached listing is never replaced
+by an empty one. The renderer helper (`file-index-refresh.ts`) toasts a
+start notice, the result summary, the no-folders and no-desktop early
+outs, and a failure notice; a second invocation during a walk joins it.
+The refresh request uses a 10-minute timeout instead of the ordinary
+30-second one, because that ordinary timeout doubles as the service's
+crash detector and tears down the port on expiry. (2) The settings
+subscriber that already mirrors `fileSearchRoots` to main for read-scope
+now also sends `configure` to the index service, so a folder added in
+Settings is scanned before the palette is next opened. Covered by new
+core tests (cached/cold/missing/pruned roots) and a flow test with an
+injected client.
+
 ### Fixed: Self-hosted relay starts under SQLAlchemy 2.1
 
 `relay/requirements.txt` pinned `sqlalchemy>=2.0` with no upper bound

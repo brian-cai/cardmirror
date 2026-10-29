@@ -45,6 +45,7 @@ import { moveToHeadingOfType } from './word-selection-keymap.js';
 import { convertCardsToReadMode } from './convert-cards-to-read-mode.js';
 import { openFootnoteEditor } from './footnote-popover.js';
 import { flipQuoteDirection } from './flip-quote-direction.js';
+import { refreshFileSearchIndex } from './file-index-refresh.js';
 import {
   isPluginCommandId,
   pluginCommandIds,
@@ -4811,6 +4812,9 @@ export type RibbonCommandId =
   // Flip every curly quote in the selection to the opposite direction. No
   // default binding.
   | 'flipQuoteDirection'
+  // Force an immediate re-walk of every file search folder (desktop). No
+  // default binding.
+  | 'refreshFileSearchIndex'
   | 'toggleParagraphIntegrity'
   | 'selectSpeechDoc'
   | 'goHome'
@@ -5075,6 +5079,7 @@ export const RIBBON_COMMAND_IDS: RibbonCommandId[] = [
   'cycleTheme',
   'cycleTimerPreset',
   'flipQuoteDirection',
+  'refreshFileSearchIndex',
   'toggleParagraphIntegrity',
   'selectSpeechDoc',
   'goHome',
@@ -5313,6 +5318,7 @@ export const RIBBON_COMMAND_LABELS: Record<RibbonCommandId, string> = {
   cycleTheme: 'Cycle Theme (Light → Dark → System)',
   cycleTimerPreset: 'Cycle Timer Preset (College → High School → Pomodoro)',
   flipQuoteDirection: 'Flip Quote Direction',
+  refreshFileSearchIndex: 'Refresh File Search Index',
   toggleParagraphIntegrity: 'Toggle Paragraph Integrity',
   selectSpeechDoc: 'Select Speech Document',
   goHome: 'Go to Home Screen',
@@ -5506,6 +5512,7 @@ export const RIBBON_COMMAND_ALIASES: Partial<Record<RibbonCommandId, readonly st
   timerStartNegPrep: ['neg prep', 'negative prep', 'prep timer'],
   timerReset: ['reset timer', 'reset prep'],
   flipQuoteDirection: ['flip quotes', 'curly quotes', 'reverse quote direction', 'smart quote direction', 'fix apostrophe', 'quote direction'],
+  refreshFileSearchIndex: ['rescan files', 'reindex files', 'rebuild file index', 'file index', 'rescan file search folders', 'update file list', 'missing file in search'],
   deleteCurrentHeading: ['delete card', 'delete heading', 'delete current card'], // "remove …" via the delete/remove synonym group
   nextPocket: ['jump to next pocket', 'next heading', 'navigate'],
   prevPocket: ['jump to previous pocket', 'previous heading', 'navigate'],
@@ -5844,6 +5851,7 @@ export const DEFAULT_RIBBON_KEYS: Record<RibbonCommandId, string | string[]> = {
   cycleTheme: '',
   cycleTimerPreset: '',
   flipQuoteDirection: '',
+  refreshFileSearchIndex: '',
   toggleParagraphIntegrity: '',
   selectSpeechDoc: '',
   goHome: '',
@@ -7340,6 +7348,15 @@ function commandFor(id: RibbonCommandId, ctx: RibbonContext): Command {
       return timerCommand(() => resetTimer());
     case 'flipQuoteDirection':
       return flipQuoteDirection;
+    case 'refreshFileSearchIndex':
+      // Desktop only in effect: off Electron there is no index service and
+      // the helper says so in a toast. The walk runs out of process; the
+      // command returns at once and the result arrives as a toast.
+      return (_state, dispatch) => {
+        if (!dispatch) return true;
+        void refreshFileSearchIndex();
+        return true;
+      };
     case 'toggleParagraphIntegrity':
       return (_state, dispatch) => {
         if (!dispatch) return true;

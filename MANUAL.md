@@ -1085,7 +1085,14 @@ after `/c` you can wander off and keep typing without being pulled back.
 **Pinning and speed.** Press **Alt-P** to pin or unpin the selected file
 (★). Pinned files sort to the top and stay parsed for instant search;
 your pinned and recent files are warmed in the background, and the file
-list refreshes itself as files change on disk.
+list refreshes itself as files change on disk: each time the palette opens,
+CardMirror re-walks your file search folders a few seconds later, and
+changing the folder list in Settings re-scans right away. If a document you
+just saved from Word or Finder is not showing up yet, run **Refresh File
+Search Index** (a command, unbound by default; find it in Search Everything
+or give it a key in Settings → Keyboard) to re-walk every folder immediately.
+A toast reports how many files it found, how many changed, and whether any
+folder is missing on disk (a disconnected drive keeps its last listing).
 
 **Excluding files.** The **⊘** button beside the star hides a file from
 file search everywhere, after a confirmation — useful for templates,
@@ -2931,7 +2938,8 @@ file search scans, and how much version history to keep.
 **File search**
 
 - **File search folders** *(desktop)* — the roots scanned for the palette's
-  file search (the `f` prefix). Each folder row has a **Browse…** button, so
+  file search (the `f` prefix). Adding a folder scans it right away; removing
+  one drops it from the index. Each folder row has a **Browse…** button, so
   a folder that gets renamed or moved can be repointed in place instead of
   removed and re-added. Empty disables file search (see
   [The Search Everything palette](#the-search-everything-palette-mod-shift-space)).
