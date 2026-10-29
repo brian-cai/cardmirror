@@ -38,6 +38,34 @@ Settings is scanned before the palette is next opened. Covered by new
 core tests (cached/cold/missing/pruned roots) and a flow test with an
 injected client.
 
+### Added: read mode treats hand-bolded cites as cites (`readModeBoldCites`)
+
+Read mode's keep rule was purely style-driven: a cite paragraph showed
+its `cite_mark` and `highlight` runs, a body showed its highlights. A
+cite typed as bold plain text (a common import shape when the Cite
+character style was never applied) therefore showed nothing, and people
+read it as a bug. New rule, in a new pure module
+`src/editor/read-mode-rules.ts` shared by every surface: a paragraph is
+a *bold cite* when it immediately follows a tag or undertag, is a
+`cite_paragraph` or `card_body`, carries no underline / underline_direct
+/ emphasis anywhere, has some `bold` text, and — for a `card_body` only —
+some bold text contains a digit (a cite paragraph already says "cite" by
+its style; the digit test keeps a bolded statistic in a body from
+masquerading). In such a paragraph `bold` joins the paragraph's kept
+marks, so bold runs are read aloud exactly like cite-marked ones; "keep
+entire cite" treats a bold run as the run that unlocks the whole cite.
+Gated by `readModeBoldCites` (General → Editor behavior, default on);
+both shells rebuild decorations on flip like the other read-mode
+toggles. Plumbing: the per-paragraph decision needs the paragraph's
+previous sibling, so `isReadModeKeptText` gained a `prev` parameter and
+the display plugin, `AudibleInlineBuilder` (Convert Cards to Read Mode),
+read-mode copy and the read-mode DOCX export all pass it; the export's
+own mark filter now takes its list from the shared `readKeptMarks`,
+which as a side effect aligns it with the plugin on highlights inside
+cites (the plugin has kept those since 1.0; export had not). A cut copy
+judges a paragraph by the previous sibling inside the slice, so a cite
+copied without its tag is not a bold cite — matching what that cut shows.
+
 ### Changed: "Highlight underlined text only" words follow the double-click spec
 
 `restrictToUnderlinedText` segmented words as maximal runs of

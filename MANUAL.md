@@ -1240,7 +1240,12 @@ entire cite* is on. Undo restores the cards.
   undertags, and un-highlighted body text disappear. Of a cite, only
   its cite-marked and highlighted words show unless you turn on
   *Read mode: keep entire cite* (Settings → General), which shows the
-  whole citation; *Read mode: show undertags* (same place) brings the
+  whole citation. Cites that were **bolded by hand** instead of styled as
+  cites still show: in the paragraph right after a tag or undertag, if
+  nothing is underlined or emphasized and some text is bold, the bold
+  reads as the cite (in a body paragraph the bold has to include a
+  number, like a date). *Read mode: treat bold as a cite* (same place,
+  on by default) turns that off; *Read mode: show undertags* (same place) brings the
   undertags back, whole; and *Read mode: show background color* (same
   place) keeps background-colored text visible beside the highlighting —
   handy after [Lock Highlighting](#colors-highlight-background-and-font-color)
@@ -2826,6 +2831,14 @@ headers shown inside each tab.
   and all — instead of only its cite-marked and highlighted words. A cite
   with nothing marked stays hidden. Off by default. Display-only, and
   Convert Cards to Read Mode follows it too.
+- **Read mode: treat bold as a cite** — when on, read mode shows
+  hand-bolded text in the cite slot as if it were cite-marked: in the
+  paragraph right after a tag or undertag, if nothing is underlined or
+  emphasized and some text is bold, the bold runs are read aloud (in a
+  body paragraph the bold must include a number, like a date). Catches
+  imported files whose cites are bold plain text instead of the Cite
+  style. On by default. Display-only, and Convert Cards to Read Mode,
+  read-mode copy and read-mode export follow it.
 - **Read mode: show undertags** — when on, read mode shows undertags, the
   whole of each one, instead of hiding them. Off by default. Display-only,
   and Convert Cards to Read Mode follows it too. Undertag text still does

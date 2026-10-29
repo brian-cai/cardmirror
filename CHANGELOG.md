@@ -529,6 +529,15 @@ github.com/brian-cai/cardmirror.
   Changing the file search folders in Settings now re-scans right away too,
   instead of waiting for the next palette open.
 
+- **Read mode shows hand-bolded cites.** A cite that was bolded instead
+  of styled as a cite used to vanish in read mode. Now, in the paragraph
+  right after a tag or undertag, if nothing is underlined or emphasized
+  and some text is bold, the bold reads as the cite (in a body paragraph
+  the bold has to include a number, like a date). Convert Cards to Read
+  Mode, read-mode copy and read-mode export follow the same rule. New
+  setting **Read mode: treat bold as a cite** (Settings → General, on by
+  default) turns it off.
+
 ### Changed
 
 - **Highlight underlined text only:** removing a highlight is never blocked
