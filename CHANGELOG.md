@@ -5,6 +5,17 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.59 — 2026-11-02
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Get a hosted relay.** Settings → Collaboration → Custom relay URL,
+  and the Add a relay dialog, now link to extinction.gg/relay, where a
+  team without its own relay can get a hosted one with nothing to set up.
+
 ## 1.15.58 — 2026-11-02
 
 BCai's (@brian-cai) build of CardMirror, updating from
