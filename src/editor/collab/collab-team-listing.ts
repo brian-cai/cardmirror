@@ -15,6 +15,7 @@ import { looksLikePairingCode, normalizePairingCode } from '../pairing/pairing-i
 import { relayClient as pairingRelayClient } from '../pairing/relay-client.js';
 import { buildRoomInviteItem, roomInviteFloor } from '../pairing/room-invite.js';
 import { collabEnabled } from './collab-gate.js';
+import { joinWhenApproved } from './approved-invite-join.js';
 import { CollabSession } from './collab-session.js';
 import { actionSession, roomLiveInWindow, sessionFor, sessions } from './collab-ui-state.js';
 import { sessionDocTitle, sessionLabel } from './collab-titles.js';
@@ -173,7 +174,10 @@ export function teamJoinSource(): TeamSessionsSource | undefined {
       }
       const name = settings.get('pairingDisplayName').trim() || 'A teammate';
       const res = await requestToJoin(ctx, row.roomId, { name, publicCode: code });
-      if (res === 'sent') return { ok: true, message: TEAM_REQUEST_SENT_MESSAGE };
+      if (res === 'sent') {
+        joinWhenApproved(row.roomId);
+        return { ok: true, message: TEAM_REQUEST_SENT_MESSAGE };
+      }
       if (res === 'gone') return { ok: false, message: 'That session has ended or isn\u2019t listed anymore.' };
       return { ok: false, message: 'Couldn\u2019t send the request. Check your connection and try again.' };
     },

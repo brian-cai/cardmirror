@@ -22,6 +22,7 @@
  */
 
 import { relativeTime } from '../disk-conflict.js';
+import { getElectronHost } from '../host/index.js';
 import { pushOverlay, popOverlay } from '../overlay-stack.js';
 import { isBackdropClick } from '../backdrop-click.js';
 import { installModalKeys, captureFocusForDialog, armDialogFocus } from '../text-prompt.js';
@@ -71,7 +72,7 @@ export interface TeamSessionsSource {
   refreshMs?: number;
 }
 
-export const TEAM_REQUEST_SENT_MESSAGE = 'Request sent; you\u2019ll get an invite when someone approves';
+export const TEAM_REQUEST_SENT_MESSAGE = 'Request sent; you\u2019ll join as soon as someone approves';
 
 /** "Ana, Ben and 2 others", or the head count when the listing names nobody. */
 export function whoIsIn(row: Pick<TeamSessionRow, 'participants' | 'people'>): string {
@@ -404,5 +405,34 @@ export function pickSessionToJoin(
     // The box takes focus: paste, Enter. (After the dialog's own focus, as
     // the text prompt does.)
     setTimeout(() => input.focus(), 0);
+    // A session code or invite link already on the clipboard (the host just
+    // sent it in a chat) fills the box, selected, so Enter joins and any
+    // typing replaces it. Desktop only: a browser would ask for clipboard
+    // permission.
+    void getElectronHost()
+      ?.clipboardReadText()
+      .then((clip) => {
+        const text = looksLikeSessionCode(clip);
+        if (!text || settled || input.value) return;
+        input.value = text;
+        input.select();
+      })
+      .catch(() => {});
   });
+}
+
+/** The clipboard text when it is exactly one session code or join link
+ *  (cmshare1/2, cmview1, or an https link with #join=…), else null. */
+export function looksLikeSessionCode(clip: unknown): string | null {
+  if (typeof clip !== 'string') return null;
+  const t = clip.trim();
+  if (!t || t.length > 2048 || /\s/.test(t)) return null;
+  const code = /^(?:cmshare[12]|cmview1)\./;
+  if (code.test(t)) return t;
+  const hash = t.indexOf('#');
+  if (/^https?:\/\//.test(t) && hash > 0) {
+    const join = new URLSearchParams(t.slice(hash + 1)).get('join') ?? '';
+    if (code.test(join)) return t;
+  }
+  return null;
 }
