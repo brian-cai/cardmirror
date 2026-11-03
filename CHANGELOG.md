@@ -5,6 +5,31 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.58 — 2026-11-02
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Approved join requests join on their own.** After you ask to join a
+  team session, the invite that comes back when someone approves now
+  joins straight away. You no longer have to open Receive and click
+  Join. If the join can't finish, the invite stays in Receive as before.
+- **Join pastes for you.** If a session code or invite link is already
+  on your clipboard, the Join dialog fills it in, so Enter joins.
+
+### Settings
+
+- **Sections fold.** Click a section heading to fold or open it. Tabs
+  with lots of settings open as a short list of headings, each showing
+  how many settings it holds, and the app remembers which ones you
+  opened. Search still finds settings inside folded sections.
+- **Shorter descriptions.** Long explanations show their first sentence,
+  with the rest behind **More**.
+- **Send Doc, Read Doc and Marked Cards** each have their own section
+  on the Files tab instead of sharing one long list.
+
 ## 1.15.57 — 2026-10-29
 
 BCai's (@brian-cai) build of CardMirror, updating from
