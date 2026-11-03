@@ -7,6 +7,7 @@
  * settings store immediately.
  */
 
+import { displaySection, orderByDisplaySection, splitDescription } from './settings-layout.js';
 import { setTournamentMode, tournamentModeEndText, tournamentModeOn, TOURNAMENT_MODE_SILENCES } from './tournament-mode.js';
 import { WORD_COUNT_ORDERS, type WordCountOrder } from './word-count-order.js';
 import { adoptRelay, tokenFromAnotherHost } from './collab/relay-profiles.js';
@@ -360,7 +361,7 @@ function filterPanelForSearch(
       ? METADATA_BY_KEY.get(child.dataset['settingKey'])
       : undefined;
     if (meta) {
-      haystack = [meta.label, meta.section ?? '', ...(meta.aliases ?? []), tabLabel].join(' ');
+      haystack = [meta.label, meta.section ?? '', displaySection(meta) ?? '', ...(meta.aliases ?? []), tabLabel].join(' ');
     } else if (child.classList.contains('pmd-settings-empty')) {
       haystack = ''; // "No settings in this section yet." — never a result
     } else {
@@ -545,6 +546,7 @@ class SettingsModal {
       `[data-anchor="${CSS.escape(anchor)}"]`,
     );
     if (!el) return;
+    expandSectionOf(el);
     requestAnimationFrame(() => {
       el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       el.classList.remove('pmd-settings-row-flash');
@@ -565,6 +567,7 @@ class SettingsModal {
       `.pmd-settings-row[data-setting-key="${CSS.escape(key)}"]`,
     );
     if (!row) return;
+    expandSectionOf(row);
     requestAnimationFrame(() => {
       row.scrollIntoView({ block: 'center', behavior: 'smooth' });
       row.classList.remove('pmd-settings-row-flash');
@@ -746,13 +749,17 @@ class SettingsModal {
       searchHeading.textContent = tabLabel;
       panel.appendChild(searchHeading);
       const hostKind = getHost().kind;
-      const entries = SETTING_METADATA.filter(
-        (m) =>
-          m.category === id &&
-          (!m.electronOnly || hostKind === 'electron') &&
-          (!m.windowsOnly || isWindowsHost()) &&
-          (!m.webOnly || hostKind === 'browser') &&
-          !hiddenInLite(m),
+      // Grouped by display section (settings-layout.ts): a crowded
+      // registry section can show as several, each under its own heading.
+      const entries = orderByDisplaySection(
+        SETTING_METADATA.filter(
+          (m) =>
+            m.category === id &&
+            (!m.electronOnly || hostKind === 'electron') &&
+            (!m.windowsOnly || isWindowsHost()) &&
+            (!m.webOnly || hostKind === 'browser') &&
+            !hiddenInLite(m),
+        ),
       );
       // Team file near the top of Collaboration (right under your display
       // name): importing one sets up everything else on this tab (send
@@ -764,13 +771,14 @@ class SettingsModal {
         // Section headers: emitted when consecutive entries' `section`
         // changes (entries sharing a section are contiguous in
         // SETTING_METADATA by convention — see SettingMeta.section).
-        if (meta.section && meta.section !== lastSection) {
+        const section = displaySection(meta);
+        if (section && section !== lastSection) {
           const heading = document.createElement('h3');
           heading.className = 'pmd-settings-section-title';
-          heading.textContent = meta.section;
+          heading.textContent = section;
           panel.appendChild(heading);
         }
-        lastSection = meta.section;
+        lastSection = section;
         const row = this.renderEntry(meta);
         if (meta.dependsOn) {
           this.dependentRows.push({ row, dependsOn: meta.dependsOn });
@@ -844,6 +852,7 @@ class SettingsModal {
         moveRowToEnd('flowHostOnLaunch');
         void import('./plugins-settings-ui.js').then((m) => m.renderPluginsPanel(section)).catch(() => {}); // closed before it loaded
       }
+      makeSectionsCollapsible(panel, id);
       this.dialog.appendChild(panel);
       panels[id] = panel;
     }
@@ -926,11 +935,9 @@ class SettingsModal {
     title.textContent = 'Back up settings';
     section.appendChild(title);
 
-    const desc = document.createElement('div');
-    desc.className = 'pmd-settings-row-desc';
-    desc.textContent =
-      'Save all your settings — shortcuts, keyboard macros, ribbon buttons, file search folders, relay settings, your dictionary words, appearance, and the rest — to a file, or import one, e.g. to move your setup to another computer or start from a teammate\u2019s. Importing sets your preferences to the file\u2019s but never removes anything you have: contacts, groups, folders, macros, custom buttons and dictionary words are merged, folders that don\u2019t exist on this computer are skipped, and your own send code and name are kept. Your API keys (Anthropic, OpenRouter, Google Translate) and MyMemory email are included only if you choose to when exporting.';
-    section.appendChild(desc);
+    section.appendChild(buildRowDescription(
+      'Save all your settings — shortcuts, keyboard macros, ribbon buttons, file search folders, relay settings, your dictionary words, appearance, and the rest — to a file, or import one, e.g. to move your setup to another computer or start from a teammate\u2019s. Importing sets your preferences to the file\u2019s but never removes anything you have: contacts, groups, folders, macros, custom buttons and dictionary words are merged, folders that don\u2019t exist on this computer are skipped, and your own send code and name are kept. Your API keys (Anthropic, OpenRouter, Google Translate) and MyMemory email are included only if you choose to when exporting.',
+    ));
 
     const actions = document.createElement('div');
     actions.className = 'pmd-settings-backup-actions';
@@ -1120,12 +1127,7 @@ class SettingsModal {
     head.textContent = meta.label;
     text.appendChild(head);
     const descText = meta.descriptionFn ? meta.descriptionFn() : meta.description;
-    if (descText) {
-      const desc = document.createElement('span');
-      desc.className = 'pmd-settings-row-desc';
-      desc.textContent = descText;
-      text.appendChild(desc);
-    }
+    if (descText) text.appendChild(buildRowDescription(descText));
     label.appendChild(text);
 
     if (meta.kind === 'toggle') {
@@ -8685,4 +8687,137 @@ export function openSettings(target?: SettingsTarget): void {
  *  over the workspace — not over the Settings pane the toggle was flipped in. */
 export function closeSettings(): void {
   singleton?.close();
+}
+
+// ── Shorter descriptions, folding sections ──────────────────────────────
+// Display only (see settings-layout.ts): the registry and stored settings
+// are untouched.
+
+/** A row description: its first sentence, with the rest behind More. The
+ *  toggle sits inside the row's <label>, so its click must not reach the
+ *  control (a toggle row would flip). */
+export function buildRowDescription(text: string): HTMLElement {
+  const desc = document.createElement('span');
+  desc.className = 'pmd-settings-row-desc';
+  const { summary, rest } = splitDescription(text);
+  if (!rest) {
+    desc.textContent = text;
+    return desc;
+  }
+  desc.append(summary);
+  const more = document.createElement('span');
+  more.className = 'pmd-settings-desc-rest';
+  // Line-broken descriptions (token tables) keep their breaks.
+  more.textContent = (text.includes('\n') ? '\n' : ' ') + rest;
+  more.hidden = true;
+  desc.appendChild(more);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'pmd-settings-desc-toggle';
+  btn.textContent = 'More';
+  btn.setAttribute('aria-expanded', 'false');
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    more.hidden = !more.hidden;
+    btn.textContent = more.hidden ? 'More' : 'Less';
+    btn.setAttribute('aria-expanded', String(!more.hidden));
+  });
+  desc.append(' ', btn);
+  return desc;
+}
+
+const FOLDED_SECTIONS_KEY = 'pmd-settings-folded-sections';
+/** A tab with more rows than this starts with its sections folded, so it
+ *  opens as a list of headings; smaller tabs start open. */
+const FOLD_TABS_OVER_ROWS = 10;
+
+function readFolded(): Record<string, boolean> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FOLDED_SECTIONS_KEY) ?? '{}') as unknown;
+    return raw && typeof raw === 'object' ? (raw as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeFolded(key: string, folded: boolean): void {
+  try {
+    const all = readFolded();
+    all[key] = folded;
+    localStorage.setItem(FOLDED_SECTIONS_KEY, JSON.stringify(all));
+  } catch {
+    // Storage unavailable: folding still works for this open.
+  }
+}
+
+/** Element → opens the section it sits in (deep links, palette jumps). */
+const sectionOpeners = new WeakMap<HTMLElement, () => void>();
+
+/** Open the folded section holding `el`, if any. */
+function expandSectionOf(el: HTMLElement): void {
+  let cur: HTMLElement | null = el;
+  while (cur && !sectionOpeners.has(cur)) cur = cur.parentElement;
+  if (cur) sectionOpeners.get(cur)!();
+}
+
+/** Turn a panel's section headings into fold toggles. A heading owns the
+ *  siblings after it up to the next heading, or a block with its own
+ *  heading (About this install, Back up settings, …) — the same rule the
+ *  search filter uses. Folding hides those siblings with a class that the
+ *  search layout ignores, so a search still finds rows in folded sections.
+ *  Each section's open / folded choice is remembered per tab. */
+function makeSectionsCollapsible(panel: HTMLElement, tab: string): void {
+  type Section = { heading: HTMLElement; owned: HTMLElement[] };
+  const found: Section[] = [];
+  let current: Section | null = null;
+  for (const child of Array.from(panel.children) as HTMLElement[]) {
+    if (child.classList.contains('pmd-settings-search-category')) continue;
+    if (child.classList.contains('pmd-settings-section-title')) {
+      current = { heading: child, owned: [] };
+      found.push(current);
+      continue;
+    }
+    if (child.querySelector('.pmd-settings-section-title, .pmd-install-info-heading')) {
+      current = null;
+      continue;
+    }
+    current?.owned.push(child);
+  }
+  if (found.length < 2) return;
+  const rowCount = panel.querySelectorAll(':scope > .pmd-settings-row').length;
+  const foldByDefault = rowCount > FOLD_TABS_OVER_ROWS;
+  const stored = readFolded();
+  for (const { heading, owned } of found) {
+    if (owned.length === 0) continue;
+    const name = heading.textContent ?? '';
+    const storeKey = `${tab}::${name}`;
+    heading.classList.add('pmd-settings-section-foldable');
+    heading.tabIndex = 0;
+    heading.setAttribute('role', 'button');
+    const rows = owned.filter((el) => el.classList.contains('pmd-settings-row')).length;
+    // Shown by CSS (::after) while folded, so the heading's text stays
+    // just the section name (search and tests read it).
+    if (rows > 1) heading.dataset['rows'] = String(rows);
+    const apply = (folded: boolean): void => {
+      heading.classList.toggle('pmd-settings-section-folded', folded);
+      heading.setAttribute('aria-expanded', String(!folded));
+      for (const el of owned) el.classList.toggle('pmd-settings-folded-row', folded);
+    };
+    apply(stored[storeKey] ?? foldByDefault);
+    const toggle = (): void => {
+      const folded = !heading.classList.contains('pmd-settings-section-folded');
+      apply(folded);
+      writeFolded(storeKey, folded);
+    };
+    heading.addEventListener('click', toggle);
+    heading.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      toggle();
+    });
+    // A deep link into a folded section opens it for this visit only.
+    const open = (): void => apply(false);
+    for (const el of owned) sectionOpeners.set(el, open);
+  }
 }

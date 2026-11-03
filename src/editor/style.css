@@ -6952,6 +6952,76 @@ html.pmd-nav-flat .pmd-nav-type-analytic:hover .pmd-nav-label {
   font-size: 0.95rem;
 }
 
+/* Long descriptions: first sentence, the rest behind More
+   (settings-layout.ts splitDescription). */
+.pmd-settings-dialog .pmd-settings-desc-toggle {
+  border: none;
+  background: none;
+  box-shadow: none;
+  min-height: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--pmd-c-accent);
+  cursor: pointer;
+}
+.pmd-settings-dialog .pmd-settings-desc-toggle:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+/* Folding sections: the heading toggles the rows under it. A search shows
+   matches whether or not their section is folded. */
+.pmd-settings-section-foldable {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pmd-settings-section-foldable::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  margin: 0 0.15rem 0.2rem 0.1rem;
+  transition: transform 0.12s ease;
+}
+.pmd-settings-section-folded::before {
+  transform: rotate(-45deg);
+  margin-bottom: 0;
+}
+.pmd-settings-section-foldable:hover {
+  color: var(--pmd-c-text);
+}
+.pmd-settings-section-foldable:focus-visible {
+  outline: 2px solid var(--pmd-c-accent);
+  outline-offset: 2px;
+}
+.pmd-settings-section-folded[data-rows]::after {
+  content: attr(data-rows);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--pmd-c-text-faint);
+}
+.pmd-settings-searching .pmd-settings-section-folded[data-rows]::after {
+  content: none;
+}
+.pmd-settings-searching .pmd-settings-section-foldable {
+  pointer-events: none;
+}
+.pmd-settings-searching .pmd-settings-section-foldable::before {
+  display: none;
+}
+.pmd-settings-dialog:not(.pmd-settings-searching) .pmd-settings-folded-row {
+  display: none !important;
+}
+/* A folded heading followed by another heading: no extra gap. */
+.pmd-settings-section-folded {
+  margin-bottom: 0.6rem;
+}
+
 .pmd-settings-row-desc {
   font-size: 0.85rem;
   color: var(--pmd-c-text-muted);
