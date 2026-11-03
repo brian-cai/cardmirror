@@ -7022,6 +7022,16 @@ html.pmd-nav-flat .pmd-nav-type-analytic:hover .pmd-nav-label {
   margin-bottom: 0.6rem;
 }
 
+.pmd-hosted-relay-link {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--pmd-c-text-muted);
+}
+.pmd-hosted-relay-link a {
+  color: var(--pmd-c-accent);
+}
+
 .pmd-settings-row-desc {
   font-size: 0.85rem;
   color: var(--pmd-c-text-muted);

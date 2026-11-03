@@ -19,6 +19,7 @@ import { showToast } from '../toast.js';
 import { addRelayPlan, addSavedRelay, currentRelayLabel, relayHostPath, type AddRelayPlan } from './relay-profiles.js';
 import { checkNewRelay, checkSummary, readAddRelayInput, type RelayCandidate, type RelayCheckResult } from './relay-add.js';
 import { switchRelayNow } from './relay-profiles-ui.js';
+import { buildHostedRelayLink } from '../relay-link.js';
 
 type Checked = { link: RelayCandidate; result: Extract<RelayCheckResult, { ok: true }>; plan: AddRelayPlan };
 
@@ -245,7 +246,9 @@ export function openAddRelayDialog(): Promise<void> {
       });
     }
 
-    dialog.append(header, detail, inviteField, manual, toggle, status, buttons);
+    // No invite link yet: where a team can get a hosted relay.
+    const hosted = buildHostedRelayLink('pmd-text-prompt-detail pmd-hosted-relay-link');
+    dialog.append(header, detail, inviteField, manual, toggle, hosted, status, buttons);
     overlay.appendChild(dialog);
     overlay.addEventListener('click', (e) => {
       if (isBackdropClick(e, overlay)) close();

@@ -84,6 +84,7 @@ import { buildKeybindingsEditor } from './keybindings-editor.js';
 import { TRANSLATION_LANGUAGES } from './translate.js';
 import { getHost, getElectronHost, isWindowsHost } from './host/index.js';
 import { buildWpmTestLink } from './wpm-link.js';
+import { buildHostedRelayLink } from './relay-link.js';
 import { pushOverlay, popOverlay } from './overlay-stack.js';
 import {
   installModalKeys,
@@ -790,6 +791,8 @@ class SettingsModal {
           this.dependentRows.push({ row: saved, dependsOn: 'pairingEnabled' });
           panel.appendChild(saved);
         }
+        // Custom relay URL: where to get one if the team has none.
+        if (meta.key === 'pairingRelayUrl') row.querySelector('.pmd-settings-row-text')?.appendChild(buildHostedRelayLink());
         panel.appendChild(row);
         if (meta.key === 'pairingDisplayName') {
           markEmptyDisplayName(row);
