@@ -9,8 +9,12 @@
  *                 click must not restart mid-round). Users who never
  *                 click still get it on next quit (install-on-quit
  *                 stays on as the fallback).
- *   'available' — detected but not stageable (macOS until the swap
- *                 updater lands). Click = open the release page.
+ *   'available' — detected but not stageable. On a Mac whose copy can't
+ *                 replace itself (`reason`): 'move' = it runs outside
+ *                 Applications, and the click offers to move it there;
+ *                 'admin' = it's in Applications but this account can't
+ *                 change it, and the click says an administrator has to
+ *                 install it. Otherwise the click opens the release page.
  *
  * Pure DOM + host-interface module so the chip logic is testable
  * outside the index.ts app shell.
@@ -19,6 +23,8 @@
 export interface UpdateChipState {
   state: 'available' | 'ready';
   version: string;
+  /** Why a Mac 'available' update can't install itself (see above). */
+  reason?: 'move' | 'admin';
 }
 
 export interface UpdateChipHost {
@@ -45,6 +51,12 @@ export function renderUpdateChip(el: HTMLButtonElement, s: UpdateChipState | nul
   if (s.state === 'ready') {
     el.textContent = `Update ${s.version} ready — restart to install`;
     el.title = 'Restart CardMirror now to finish installing the update';
+  } else if (s.reason === 'move') {
+    el.textContent = `Update ${s.version} — move to Applications to install`;
+    el.title = 'CardMirror can only update itself from the Applications folder. Click to move it there.';
+  } else if (s.reason === 'admin') {
+    el.textContent = `Update ${s.version} — needs an administrator to install`;
+    el.title = "This Mac account can't change CardMirror in Applications. Click for what to do.";
   } else {
     el.textContent = `Update ${s.version} available`;
     el.title = 'Open the release page to download the update';

@@ -73,10 +73,10 @@ describe('CardMirror Lite', () => {
       const version = getInstallInfo().find((e) => e.label === 'Version');
       expect(version?.value).toBe(`${appVersion} (CardMirror Lite)`);
     });
-    // Standard builds keep the bare version — no edition suffix.
+    // Standard builds name the fork instead.
     vi.resetModules();
     const { getInstallInfo, appVersion } = await import('../../src/editor/install-info.js');
-    expect(getInstallInfo().find((e) => e.label === 'Version')?.value).toBe(appVersion);
+    expect(getInstallInfo().find((e) => e.label === 'Version')?.value).toBe(`${appVersion} (BCai's build)`);
   });
 
   it('hides AI + pairing rows and force-sanitizes the masters off', async () => {

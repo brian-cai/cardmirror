@@ -4503,6 +4503,13 @@ html.pmd-home-active #speech-doc-banner {
   color: var(--pmd-c-text-muted);
   font-size: 0.95rem;
 }
+/* Which build this is (BCai's build): small and quiet, under the title. */
+.pmd-home-build {
+  margin: 0.1rem 0 0;
+  color: var(--pmd-c-text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
 /* Home screen's copy of the update chip (styled with #update-chip). */
 .pmd-home-update {
   margin-top: 0.75rem;

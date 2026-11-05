@@ -172,8 +172,8 @@ interface PairingInboxItemIpc {
     >,
   getUpdateChipState: () => ipcRenderer.invoke('host:update-chip-state'),
   updateChipAction: () => ipcRenderer.invoke('host:update-chip-action'),
-  onUpdateChip(handler: (payload: { state: 'available' | 'ready'; version: string } | null) => void): () => void {
-    const listener = (_evt: unknown, payload: { state: 'available' | 'ready'; version: string } | null): void =>
+  onUpdateChip(handler: (payload: { state: 'available' | 'ready'; version: string; reason?: 'move' | 'admin' } | null) => void): () => void {
+    const listener = (_evt: unknown, payload: { state: 'available' | 'ready'; version: string; reason?: 'move' | 'admin' } | null): void =>
       handler(payload);
     ipcRenderer.on('update:chip', listener);
     return () => ipcRenderer.removeListener('update:chip', listener);

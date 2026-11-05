@@ -5,6 +5,37 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.60 — 2026-11-05
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Updates (Mac)
+
+- **Move to Applications.** A copy running from Downloads or the .dmg
+  window can't install updates, so at launch (at most once a day)
+  CardMirror asks to move itself into Applications. If a CardMirror is
+  already there (the original CardMirror, or an older copy), it asks
+  before replacing it. On an account that can't change Applications, it
+  says an administrator has to drag CardMirror in.
+- **The update button installs.** On such a copy the update chip and the
+  home screen's update button now read "move to Applications to install"
+  and offer the move instead of opening the release page. A copy that is
+  in Applications but can't be changed by this account says an
+  administrator has to install the update.
+
+### Collaboration
+
+- **A name adds your team.** Setting your display name after connecting
+  to a team relay adds your teammates right away, instead of at the next
+  check a few minutes later.
+
+### This build
+
+- **Which CardMirror is this?** The home screen shows "BCai's build" under
+  its title, and Settings → About this install reads e.g. "1.15.60
+  (BCai's build)", so it can be told apart from the original CardMirror.
+
 ## 1.15.59 — 2026-11-02
 
 BCai's (@brian-cai) build of CardMirror, updating from

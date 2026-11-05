@@ -150,3 +150,27 @@ export function launchSwapHelper(a: SwapArgs): void {
   });
   child.unref();
 }
+
+/** Why a Mac update can't install itself, for the chip and its click:
+ *  'move' when the copy runs outside Applications (Downloads, a .dmg
+ *  window, a translocated copy), so moving it fixes it; 'admin' when it is
+ *  in Applications but this account can't change it (a Standard account);
+ *  null when it can update itself. */
+export function macUpdateBlockReason(exePath: string, inApplicationsFolder: boolean): 'move' | 'admin' | null {
+  if (macBundleSelfUpdatable(exePath)) return null;
+  return inApplicationsFolder ? 'admin' : 'move';
+}
+
+/** The at-launch "Move CardMirror to Applications?" question: a packaged
+ *  full build (Lite never updates) outside Applications, asked at most
+ *  once a day (`lastAskedDay` is the local day it was last asked). */
+export function shouldOfferMoveAtLaunch(i: {
+  platform: string;
+  packaged: boolean;
+  lite: boolean;
+  inApplicationsFolder: boolean;
+  lastAskedDay: string | null;
+  today: string;
+}): boolean {
+  return i.platform === 'darwin' && i.packaged && !i.lite && !i.inApplicationsFolder && i.lastAskedDay !== i.today;
+}

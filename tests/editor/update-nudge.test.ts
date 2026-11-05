@@ -43,6 +43,7 @@ describe('nudgeText', () => {
   it('restart for a staged update, download page otherwise', () => {
     expect(nudgeText(READY).okLabel).toBe('Restart and update');
     expect(nudgeText({ state: 'available', version: '1.15.40' }).okLabel).toBe('Get the update');
+    expect(nudgeText({ state: 'available', version: '1.15.60', reason: 'move' }).okLabel).toBe('Move to Applications');
   });
 });
 

@@ -58,13 +58,21 @@ export function nudgeText(s: UpdateChipState): { title: string; message: string;
           'Restarting installs it and takes a few seconds; save your work first.',
         okLabel: 'Restart and update',
       }
-    : {
-        title: `CardMirror ${s.version} is out`,
-        message:
-          `A new version of CardMirror (${s.version}) is available. Wednesday is update day, since it's the quietest day for tournaments. ` +
-          'Open the download page to get it?',
-        okLabel: 'Get the update',
-      };
+    : s.reason === 'move'
+      ? {
+          title: `CardMirror ${s.version} is out`,
+          message:
+            `A new version of CardMirror (${s.version}) is available. Wednesday is update day, since it's the quietest day for tournaments. ` +
+            'CardMirror can only install updates from the Applications folder. Move it there now?',
+          okLabel: 'Move to Applications',
+        }
+      : {
+          title: `CardMirror ${s.version} is out`,
+          message:
+            `A new version of CardMirror (${s.version}) is available. Wednesday is update day, since it's the quietest day for tournaments. ` +
+            'Open the download page to get it?',
+          okLabel: 'Get the update',
+        };
 }
 
 function readLastDay(): string | null {

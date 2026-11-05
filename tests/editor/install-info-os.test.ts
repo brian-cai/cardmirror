@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { detectOS } from '../../src/editor/install-info.js';
+import { detectOS, versionLabel } from '../../src/editor/install-info.js';
 
 const UA = {
   chromeOS:
@@ -64,5 +64,12 @@ describe('detectOS', () => {
   it('reports Unknown for an empty or unrecognized agent', () => {
     expect(detectOS('')).toBe('Unknown');
     expect(detectOS('Some/1.0 (unknown platform)')).toBe('Unknown');
+  });
+});
+
+describe('versionLabel', () => {
+  it("names the fork in the Version row, and keeps Lite's own label", () => {
+    expect(versionLabel('1.15.60', false)).toBe("1.15.60 (BCai's build)");
+    expect(versionLabel('1.15.60', true)).toBe('1.15.60 (CardMirror Lite)');
   });
 });

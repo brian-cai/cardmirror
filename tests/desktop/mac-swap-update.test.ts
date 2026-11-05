@@ -15,6 +15,8 @@ import {
   buildSwapScript,
   bundlePathFromExe,
   macBundleSelfUpdatable,
+  macUpdateBlockReason,
+  shouldOfferMoveAtLaunch,
 } from '../../apps/desktop/src/mac-swap-update.js';
 
 // The module is darwin-only. POSIX assertions hold on the mac and linux
@@ -109,5 +111,35 @@ describePosix('buildSwapScript', () => {
     const backupIdx = script.indexOf('mv "$APP" "$STAGE/previous.app"');
     expect(extractIdx).toBeGreaterThan(0);
     expect(backupIdx).toBeGreaterThan(extractIdx);
+  });
+});
+
+describePosix('macUpdateBlockReason', () => {
+  it('says move outside Applications and admin inside it', () => {
+    const exe = '/private/var/folders/x/AppTranslocation/ABC/d/CardMirror.app/Contents/MacOS/cardmirror';
+    expect(macUpdateBlockReason(exe, false)).toBe('move');
+    expect(macUpdateBlockReason(exe, true)).toBe('admin');
+  });
+});
+
+describe('shouldOfferMoveAtLaunch', () => {
+  const base = {
+    platform: 'darwin',
+    packaged: true,
+    lite: false,
+    inApplicationsFolder: false,
+    lastAskedDay: null as string | null,
+    today: '2026-11-05',
+  };
+  it('asks a packaged Mac copy outside Applications, once a day', () => {
+    expect(shouldOfferMoveAtLaunch(base)).toBe(true);
+    expect(shouldOfferMoveAtLaunch({ ...base, lastAskedDay: '2026-11-04' })).toBe(true);
+    expect(shouldOfferMoveAtLaunch({ ...base, lastAskedDay: '2026-11-05' })).toBe(false);
+  });
+  it('never asks in Applications, in Lite, unpackaged, or off the Mac', () => {
+    expect(shouldOfferMoveAtLaunch({ ...base, inApplicationsFolder: true })).toBe(false);
+    expect(shouldOfferMoveAtLaunch({ ...base, lite: true })).toBe(false);
+    expect(shouldOfferMoveAtLaunch({ ...base, packaged: false })).toBe(false);
+    expect(shouldOfferMoveAtLaunch({ ...base, platform: 'win32' })).toBe(false);
   });
 });

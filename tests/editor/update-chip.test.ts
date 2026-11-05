@@ -54,6 +54,11 @@ describe('update chip', () => {
     expect(el.textContent).toBe('Update 0.1.0-beta.15 ready — restart to install');
     renderUpdateChip(el, { state: 'available', version: '0.1.0-beta.15' });
     expect(el.textContent).toBe('Update 0.1.0-beta.15 available');
+    renderUpdateChip(el, { state: 'available', version: '1.15.60', reason: 'move' });
+    expect(el.textContent).toBe('Update 1.15.60 — move to Applications to install');
+    expect(el.dataset['state']).toBe('available');
+    renderUpdateChip(el, { state: 'available', version: '1.15.60', reason: 'admin' });
+    expect(el.textContent).toBe('Update 1.15.60 — needs an administrator to install');
     renderUpdateChip(el, null);
     expect(el.hidden).toBe(true);
   });

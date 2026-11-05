@@ -84,6 +84,8 @@ export function startTeamDirectory(): void {
   };
   let relayTimer: ReturnType<typeof setTimeout> | null = null;
   let nameTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The name went from empty to set since the last settled send. */
+  let firstName = false;
   let groupsTimer: ReturnType<typeof setTimeout> | null = null;
   let prevGroups = settings.get('pairingGroups');
   settings.subscribe((st) => {
@@ -95,6 +97,9 @@ export function startTeamDirectory(): void {
     const relayChanged =
       st.pairingRelayUrl !== prev.url || st.pairingRelayToken !== prev.token || st.pairingEnabled !== prev.enabled;
     const meChanged = st.pairingDisplayName !== prev.name || st.pairingOwnCode !== prev.code;
+    // A first display name is what the auto-add waits for: look at the
+    // team list again right away instead of at the next 5-minute refresh.
+    if (!prev.name.trim() && st.pairingDisplayName.trim()) firstName = true;
     prev = {
       url: st.pairingRelayUrl,
       token: st.pairingRelayToken,
@@ -111,6 +116,8 @@ export function startTeamDirectory(): void {
       if (nameTimer) clearTimeout(nameTimer);
       nameTimer = setTimeout(() => {
         void teamDirectoryContext().then((ctx) => (ctx ? updateOwnEntry(ctx, registerRetry) : false)).catch(() => {});
+        if (firstName) void refreshTeamDirectoryNow(true);
+        firstName = false;
       }, 1500);
     }
   });

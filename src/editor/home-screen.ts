@@ -38,6 +38,8 @@ import { openLearnSession } from './learn-session-ui.js';
 import { openLearnManage } from './learn-manage-ui.js';
 import type { Scope } from './learn-store.js';
 import { isAnyOverlayOpen } from './overlay-stack.js';
+import { BUILD_LABEL } from './install-info.js';
+import { isLiteBuild } from './lite.js';
 import { isEditableTarget } from './editable-target.js';
 import { collabEnabled } from './collab/collab-gate.js';
 import {
@@ -168,6 +170,14 @@ class HomeScreen {
     title.className = 'pmd-home-title';
     title.textContent = 'CardMirror';
     header.appendChild(title);
+    // Which CardMirror this is: the fork's 1.15.x reads as older than the
+    // original's, so say so quietly under the title. Lite has its own name.
+    if (!isLiteBuild()) {
+      const build = document.createElement('p');
+      build.className = 'pmd-home-build';
+      build.textContent = BUILD_LABEL;
+      header.appendChild(build);
+    }
     const tagline = document.createElement('p');
     tagline.className = 'pmd-home-tagline';
     tagline.textContent = 'Open a document to start, or pick up where you left off.';

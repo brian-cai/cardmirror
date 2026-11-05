@@ -35,7 +35,13 @@ import {
 import { decideNavigation, decideWindowOpen } from './navigation-guard.js';
 import { existsSync } from 'node:fs';
 import { autoUpdater } from 'electron-updater';
-import { bundlePathFromExe, launchSwapHelper, macBundleSelfUpdatable } from './mac-swap-update.js';
+import {
+  bundlePathFromExe,
+  launchSwapHelper,
+  macBundleSelfUpdatable,
+  macUpdateBlockReason,
+  shouldOfferMoveAtLaunch,
+} from './mac-swap-update.js';
 import { registerVoiceIpc } from './voice/ipc';
 import { registerFlowIpc } from './flow-bridge.js';
 import { registerDocCacheIpc } from './doc-cache-ipc.js';
@@ -3952,6 +3958,11 @@ function showUpdateAvailableDialog(info: { version: string }): void {
   // the background and installs from the status-bar chip.
   const macManual =
     process.platform === 'darwin' && !macBundleSelfUpdatable(app.getPath('exe'));
+  // Not in Applications: the fix is moving it there, so offer that.
+  if (macManual && !LITE_BUILD && !app.isInApplicationsFolder()) {
+    void offerMoveToApplications(info.version);
+    return;
+  }
   // Self-installing platforms lead with OK — the chip owns the install
   // (install-on-confirm); the release page is a secondary escape hatch.
   // Only the can't-self-update mac case leads with the release page,
@@ -4309,7 +4320,7 @@ ipcMain.handle('host:timer-popout-exists', () =>
 // surface, and nothing installs until the user clicks it (install-on-quit
 // stays as the fallback for users who never do). macOS (until the swap
 // updater lands) shows an "available" chip that opens the release page.
-type UpdateChipState = { state: 'available' | 'ready'; version: string } | null;
+type UpdateChipState = { state: 'available' | 'ready'; version: string; reason?: 'move' | 'admin' } | null;
 let updateChip: UpdateChipState = null;
 /** The verified update zip electron-updater staged (mac swap path). */
 let macStagedUpdateZip: string | null = null;
@@ -4368,10 +4379,136 @@ ipcMain.handle('host:update-chip-action', () => {
     // install", not "watch an installer wizard". Matches ebb's passive
     // install feel.
     autoUpdater.quitAndInstall(true, true);
+  } else if (updateChip.reason) {
+    void offerMacManualInstall(updateChip.version);
   } else {
     void shell.openExternal(`${releasesUrl()}/tag/v${updateChip.version}`);
   }
 });
+
+// ─── Move to Applications (macOS) ────────────────────────────────────
+// Students run CardMirror from Downloads or straight from the .dmg window,
+// where it can't replace itself, so updates never install. At launch (once
+// a day) and from the update chip, CardMirror offers to move itself into
+// Applications with Electron's bundle mover, which copies it there, trashes
+// the old copy (ejecting a .dmg), and relaunches from Applications.
+
+/** Local calendar day, e.g. "2026-11-05". */
+function localDay(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const moveAskedFile = (): string => path.join(app.getPath('userData'), 'move-to-applications-asked.txt');
+
+function syncBox(win: BrowserWindow | null, opts: Electron.MessageBoxSyncOptions): number {
+  return win && !win.isDestroyed() ? dialog.showMessageBoxSync(win, opts) : dialog.showMessageBoxSync(opts);
+}
+
+/** Move this copy into Applications, asking before it replaces a
+ *  CardMirror already there (often the original CardMirror, or an older
+ *  copy). On success the app quits and relaunches from Applications. */
+function moveToApplications(win: BrowserWindow | null): boolean {
+  try {
+    return app.moveToApplicationsFolder({
+      conflictHandler: (conflict) => {
+        if (conflict === 'existsAndRunning') {
+          syncBox(win, {
+            type: 'warning',
+            buttons: ['OK'],
+            message: 'Another CardMirror is open from Applications.',
+            detail:
+              'Quit that CardMirror first (it may be the original CardMirror or an older copy of this one), then try again.',
+          });
+          return false;
+        }
+        return (
+          syncBox(win, {
+            type: 'question',
+            buttons: ['Replace', 'Cancel'],
+            defaultId: 0,
+            cancelId: 1,
+            message: 'Replace the CardMirror in Applications?',
+            detail:
+              'There is already a CardMirror in Applications (maybe the original CardMirror or an older copy of this one). ' +
+              'Replace it with this one? Your documents and settings stay as they are.',
+          }) === 0
+        );
+      },
+    });
+  } catch (err) {
+    console.warn('Move to Applications failed:', err);
+    syncBox(win, {
+      type: 'warning',
+      buttons: ['OK'],
+      message: "CardMirror couldn't move itself to Applications.",
+      detail:
+        "This Mac account isn't allowed to change the Applications folder (a Standard account). " +
+        'Someone with an administrator account has to drag CardMirror into Applications. ' +
+        "Until then CardMirror works from here, but updates can't install themselves.",
+    });
+    return false;
+  }
+}
+
+/** "Move CardMirror to Applications?" with Move / Not now. */
+async function offerMoveToApplications(version?: string): Promise<void> {
+  const win = dialogParentWindow();
+  const opts: Electron.MessageBoxOptions = {
+    type: 'question',
+    buttons: ['Move', 'Not now'],
+    defaultId: 0,
+    cancelId: 1,
+    message: 'Move CardMirror to Applications?',
+    detail:
+      'Updates can only install themselves from there. ' +
+      (version
+        ? `CardMirror restarts from Applications and then installs ${version}. Save your work first.`
+        : 'CardMirror restarts from Applications. Save your work first.'),
+  };
+  const { response } = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+  if (response === 0) moveToApplications(win);
+}
+
+/** A Mac update that can't install itself: offer the move, or (already in
+ *  Applications, but this account can't change it) say who can install it. */
+async function offerMacManualInstall(version: string): Promise<void> {
+  if (!app.isInApplicationsFolder()) {
+    await offerMoveToApplications(version);
+    return;
+  }
+  const win = dialogParentWindow();
+  const opts: Electron.MessageBoxOptions = {
+    type: 'info',
+    buttons: ['OK', 'Open release page'],
+    defaultId: 0,
+    cancelId: 0,
+    message: 'An administrator has to install this update.',
+    detail:
+      `CardMirror is in Applications, but this Mac account can't change it (a Standard account). ` +
+      `Someone with an administrator account can download CardMirror ${version} from the release page ` +
+      'and drag it into Applications, replacing the old copy.',
+  };
+  const { response } = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+  if (response === 1) void shell.openExternal(`${releasesUrl()}/tag/v${version}`);
+}
+
+/** At launch, once a day: offer the move when running outside Applications. */
+async function maybeOfferMoveAtLaunch(): Promise<void> {
+  const file = moveAskedFile();
+  const lastAskedDay = await fs.readFile(file, 'utf8').then((t) => t.trim(), () => null);
+  const today = localDay();
+  const ask = shouldOfferMoveAtLaunch({
+    platform: process.platform,
+    packaged: app.isPackaged,
+    lite: LITE_BUILD,
+    inApplicationsFolder: process.platform === 'darwin' && app.isInApplicationsFolder(),
+    lastAskedDay,
+    today,
+  });
+  if (!ask) return;
+  // Recorded before asking: "Not now" (or closing the dialog) waits a day.
+  await fs.writeFile(file, today).catch(() => {});
+  await offerMoveToApplications();
+}
 
 // ─── Earlier versions (Settings → General) ───────────────────────────
 // Going back to a past release reuses the update path end to end: the feed
@@ -4618,7 +4755,10 @@ function startAutoUpdate(): void {
         setUpdateChip({ state: 'available', version: info.version });
       });
     } else {
-      setUpdateChip({ state: 'available', version: info.version });
+      // Can't replace itself where it is: the chip says why, and its
+      // click offers the fix (move to Applications) or explains it.
+      const reason = macUpdateBlockReason(app.getPath('exe'), app.isInApplicationsFolder());
+      setUpdateChip({ state: 'available', version: info.version, ...(reason ? { reason } : {}) });
     }
   });
   autoUpdater.on('update-downloaded', (info) => {
@@ -4758,6 +4898,15 @@ void app.whenReady().then(() => {
   //   - Otherwise: empty starter window
   const launchFile = pendingLaunchFile ?? pickFileFromArgv(process.argv);
   pendingLaunchFile = null;
+  // Once the first window has loaded (and settled), offer to move a Mac
+  // copy that runs outside Applications.
+  if (process.platform === 'darwin' && app.isPackaged && !LITE_BUILD) {
+    app.once('browser-window-created', (_e, w) => {
+      w.webContents.once('did-finish-load', () => {
+        setTimeout(() => void maybeOfferMoveAtLaunch().catch((err) => console.warn('Move offer failed:', err)), 3000);
+      });
+    });
+  }
   if (launchFile) {
     void openExternalFile(launchFile);
   } else {
