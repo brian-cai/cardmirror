@@ -43,6 +43,84 @@ manual; [`PRIVACY.md`](./PRIVACY.md) for how CardMirror handles your data;
 [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design;
 [`PROJECT.md`](./PROJECT.md) for project orientation.
 
+## Learn these five things first
+
+Most of CardMirror is optimization. These five are what you use every
+round. Every step has a picture at
+**[extinction.gg/cardmirror/tips](https://extinction.gg/cardmirror/tips)**.
+Keys are written for Mac: on Windows, ⌘ is Ctrl and ⌥ is Alt.
+
+### 1. Cut cards
+
+| Key | What it does |
+|-----|--------------|
+| F2 | Paste without the website's or PDF's formatting |
+| F3 | Condense pasted text into paragraphs (⌥ F3 if the ¶ button keeps the line breaks) |
+| F4 / F5 / F6 | Pocket / Hat / Block: the headings the nav pane shows |
+| F7 | Tag |
+| F8 | Cite (just the author and year, like "Smith 24"); ⌥ F8 copies the cite from the card above |
+| F9 / F10 / F11 | Underline / emphasis / highlight |
+| F12 | Clear formatting |
+| ⌘ 8 | Shrink the text you didn't underline |
+
+On a Mac, turn on System Settings → Keyboard → Keyboard Shortcuts →
+Function Keys → "Use F1, F2, etc. keys as standard function keys", or hold
+fn.
+
+<img src="https://extinction.gg/data/cardmirror-tips/card.png" alt="A cut card: bold tag, bold cite, underlined and highlighted words" width="700" />
+
+### 2. Find any file with Search Everything (⌘ ⇧ Space)
+
+1. Once: ⚙ → Search → File search folders → **+ Add folder**, and pick your
+   Dropbox team folder (subfolders are included).
+2. Press ⌘ ⇧ Space and type `f` and part of a file's name (`f spending da`).
+   Enter opens it; **Tab** looks inside it so you can insert one card; ⌥ P
+   pins it to the top.
+3. Other letters: `/` browses your folders, `c` runs any command (and shows
+   its shortcut), `s` jumps to a setting, `w` switches to an open window,
+   `q` inserts a Quick Card.
+
+<img src="https://extinction.gg/data/cardmirror-tips/file-search.png" alt="Search Everything with f spending typed, listing the Spending DA files" width="420" />
+
+### 3. Make a speech doc and send cards to it
+
+1. Click the **microphone** button in the ribbon (next to Save) for a new
+   speech doc, or open a document and click the **pin** beside it to make
+   that one the speech doc. A red frame and a "Speech document" bar mark it.
+2. In any other file, put the cursor in a card and press **`` ` ``** (the key
+   above Tab). The card lands at the cursor in your speech doc; ⌥ `` ` `` sends it
+   to the end. No speech doc yet? `` ` `` offers to make one.
+3. **Ctrl Tab** (on a Mac too) switches between CardMirror windows.
+
+<img src="https://extinction.gg/data/cardmirror-tips/send-speech.png" alt="A speech doc with a card just sent into it, under the Speech document bar" width="700" />
+
+### 4. Use the nav pane
+
+The outline on the left. Click an entry to jump to it, double-click to fold
+it, and use **1 · 2 · 3 · 4** to set how deep it shows. Drag entries to
+reorder (hold ⌥ to copy), right-click for Cut / Copy / Delete of a whole
+section, and press ⌘ ⇧ F to search the headings.
+
+<img src="https://extinction.gg/data/cardmirror-tips/nav-pane.png" alt="The nav pane: 1NC, Spending DA, its blocks and the card tags under them" width="260" />
+
+### 5. Read, time and estimate
+
+- **Read mode:** 👁️ in the ribbon or ⌥ ⇧ R shows only what you read aloud
+  and locks typing. Space or Enter marks where you stopped.
+- **Timer:** ⏱ at the right end of the ribbon. Pick a speech length, ▶ or
+  ⌥ ⇧ T to start, ⌥ ⇧ A / ⌥ ⇧ N for Aff / Neg prep, ⇱ to float it over every
+  app.
+- **Speech time:** the status bar shows how long the document and the card
+  you're in take to read. Set your words per minute in ⚙ → General →
+  Readers for read-time estimates
+  ([measure it here](https://extinction.gg/wpm)).
+
+<img src="https://extinction.gg/data/cardmirror-tips/read-mode.png" alt="Read mode: only the tags, cites and highlighted words show" width="700" />
+
+Everything else (Quick Cards, the dropzone, extracting a card, matching
+cites, sharing) is in [`MANUAL.md`](./MANUAL.md) and on
+[extinction.gg/cardmirror/tips](https://extinction.gg/cardmirror/tips).
+
 ## How this build differs from the original
 
 The original is [CardMirror](https://github.com/ant981228/cardmirror) by
