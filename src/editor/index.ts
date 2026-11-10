@@ -5886,7 +5886,7 @@ function makeStarterDoc(): PMNode {
     ),
     blank(),
     paraText(
-      'For live co-editing, click the Send pill and press the invite button on a recipient — or run Start Collaboration Session from the command bar and share the session code it copies. Up to 30 people type in one document with live cursors, and everyone keeps their copy when the session ends.',
+      'For live co-editing, click the Send pill, press Invite on a recipient and choose Invite to edit — or run Start Collaboration Session from the command bar and share the session code it copies. Up to 30 people type in one document with live cursors, and everyone keeps their copy when the session ends.',
     ),
     blank(),
 

@@ -1635,8 +1635,8 @@ view link** below. Codes are for teammates joining from CardMirror;
 links open the session in a browser for someone without the app. *Edit*
 gives a co-editing seat; *view* makes the person a **spectator** who sees
 every edit live but cannot change anything (see
-[Spectators](#spectators)). Each contact row carries two invite buttons
-to match: **Invite to collaborate** and **Invite to spectate**. While
+[Spectators](#spectators)). Each contact row carries an **Invite**
+button that opens **Invite to edit** and **Invite to watch**. While
 **dragging**, the bottom becomes two drop zones:
 the left sends the card to a pasted send code as a one-off (no contact
 saved), and hovering the right opens a list of people who **recently sent
@@ -1663,7 +1663,10 @@ row:
   section** on (Settings → Editing). Inserting
   copies — the card stays in the pill until you ✕ it. A session invite shows
   as its own row with a **Join** button, or **Watch** when you were invited
-  to spectate. A bundled
+  to spectate (both when you got both). Each session gets one row however
+  many invites to it arrive; with three or more sessions, all but the
+  newest fold behind **N more session invites** (with **Clear these**).
+  A bundled
   multi-selection send shows a **×N** count and is taken as one piece —
   click, drag, and ✕ all act on the whole bundle.
 - **Preview** opens the card (or the whole bundle) full-size in a read-only
@@ -1704,8 +1707,9 @@ and everyone keeps their copy when the session ends. A session is not a
 permanent shared document: when the host ends it — or after about a week 
 idle — it's gone and participants retain local copies.
 
-**Invite from your recipients:** click the **Send** pill and press the
-invite button on a recipient or group row. That starts a session on the
+**Invite from your recipients:** click the **Send** pill, press **Invite**
+on a recipient or group row and choose **Invite to edit** or **Invite to
+watch**. That starts a session on the
 current document and sends the invite; the recipient
 gets a **SES** (session) row in their Receive pill and clicks **Join**.
 **Invite Starred Partner to Session** does the same for your starred target

@@ -158,8 +158,13 @@ describe('send pill actions row + hidden recipients', () => {
       'Invite to edit',
       'Invite to watch',
     ]);
-    // Opening the menu sent nothing; choosing Watch invites view-only.
+    // Opening the menu sent nothing; pressing in the menu doesn't close the
+    // pill (its outside-click handler leaves the menu alone).
     expect(invites).toEqual([]);
+    items[1]!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(root.querySelector('.pmd-send-invite-menu')).not.toBeNull();
+    expect((root.querySelector('.pmd-send-pill') as HTMLElement).dataset['open']).toBe('true');
+    // Choosing Watch invites view-only.
     (items[1] as HTMLElement).click();
     expect(invites).toEqual([{ codes: ['cmk1.aaa'], label: 'Awake', via: undefined, mode: 'view' }]);
     expect(root.querySelector('.pmd-send-invite-menu')).toBeNull();

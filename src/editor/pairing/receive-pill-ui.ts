@@ -303,16 +303,21 @@ export class ReceivePillController {
       this.listEl.appendChild(empty);
     } else {
       // Session invites gather into one row per session (an edit and a
-      // watch invite to the same room share it), newest first. With many
-      // sessions in a round, only the newest stays open and the rest fold
-      // behind one "N more session invites" line, so cards stay in reach.
+      // watch invite to the same room share it). With several sessions in
+      // a round, only the newest stays open and the rest fold behind one
+      // "N more session invites" line, so cards stay in reach. The block
+      // sits where its newest invite falls in the newest-first list.
       const rooms = groupSessionInvites(this.items);
-      const [newest, ...older] = rooms;
-      if (newest) this.listEl.appendChild(this.renderInviteRow(newest));
-      if (older.length > 0) {
-        if (older.length <= SESSION_FOLD_AFTER - 1) {
-          for (const room of older) this.listEl.appendChild(this.renderInviteRow(room));
-        } else {
+      const cards = [...this.items].reverse().filter((it) => !parseRoomInvite(it));
+      const sessionAt = rooms[0]?.newest.receivedAt ?? -Infinity;
+      let placed = rooms.length === 0;
+      const placeSessions = (): void => {
+        placed = true;
+        const [newest, ...older] = rooms;
+        this.listEl.appendChild(this.renderInviteRow(newest!));
+        if (older.length === 1) {
+          this.listEl.appendChild(this.renderInviteRow(older[0]!));
+        } else if (older.length > 1) {
           this.listEl.appendChild(this.renderSessionFold(older));
           if (this.sessionsExpanded) {
             for (const room of older) this.listEl.appendChild(this.renderInviteRow(room));
@@ -321,11 +326,12 @@ export class ReceivePillController {
             for (const room of older) prefetchRoom(room);
           }
         }
-      }
-      for (const item of [...this.items].reverse()) {
-        if (parseRoomInvite(item)) continue;
+      };
+      for (const item of cards) {
+        if (!placed && item.receivedAt < sessionAt) placeSessions();
         this.listEl.appendChild(this.renderRow(item));
       }
+      if (!placed) placeSessions();
     }
     if (this.actionsLi) {
       const canJoin = collabEnabled() && collabSessionJoinPrompt() !== null;
@@ -520,8 +526,13 @@ export class ReceivePillController {
         // prompt must not burn the share code (the host would have to
         // re-invite for every retry). A dead room (session ended) reports
         // true from the flow so the useless row still clears.
+        // Watching uses up only the watch invite: Join stays on the row.
         void joiner!(code).then((joined) => {
-          if (joined) for (const it of room.items) void inboxStore.remove(it.id);
+          if (!joined) return;
+          for (const it of room.items) {
+            const isView = parseRoomInvite(it)?.shareCode.startsWith('cmview') ?? false;
+            if (!view || isView) void inboxStore.remove(it.id);
+          }
         });
       });
       return join;
@@ -687,9 +698,6 @@ export function previewMostRecentReceived(): boolean {
 }
 
 // ---- Session invite grouping ---------------------------------------
-
-/** From the third session on, older invites fold behind one line. */
-const SESSION_FOLD_AFTER = 3;
 
 /** Every invite to one session (room), newest first. */
 export interface SessionRoom {
