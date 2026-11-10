@@ -56,6 +56,8 @@ export class ReceivePillController {
   private getFocusedView: () => EditorView | null = () => null;
   private items: InboxItem[] = [];
   private open = false;
+  /** Whether the folded older session invites are shown (this window). */
+  private sessionsExpanded = false;
   private seenIds = new Set<string>();
   private flashTimer: number | null = null;
   private pulseTimer: number | null = null;
@@ -286,8 +288,8 @@ export class ReceivePillController {
   }
 
   private render(): void {
-    const total = this.items.length;
-    const unread = inboxStore.unreadCount();
+    const total = inboxDisplayCount(this.items);
+    const unread = inboxDisplayUnread(this.items);
     this.badge.hidden = total === 0;
     this.badge.textContent = unread > 0 ? `${total} · ${unread} new` : String(total);
     this.badge.classList.toggle('pmd-receive-badge-unread', unread > 0);
@@ -300,7 +302,28 @@ export class ReceivePillController {
       empty.textContent = "You haven't received anything yet.";
       this.listEl.appendChild(empty);
     } else {
+      // Session invites gather into one row per session (an edit and a
+      // watch invite to the same room share it), newest first. With many
+      // sessions in a round, only the newest stays open and the rest fold
+      // behind one "N more session invites" line, so cards stay in reach.
+      const rooms = groupSessionInvites(this.items);
+      const [newest, ...older] = rooms;
+      if (newest) this.listEl.appendChild(this.renderInviteRow(newest));
+      if (older.length > 0) {
+        if (older.length <= SESSION_FOLD_AFTER - 1) {
+          for (const room of older) this.listEl.appendChild(this.renderInviteRow(room));
+        } else {
+          this.listEl.appendChild(this.renderSessionFold(older));
+          if (this.sessionsExpanded) {
+            for (const room of older) this.listEl.appendChild(this.renderInviteRow(room));
+          } else {
+            // Folded rows still prefetch their seed so a later Join works offline.
+            for (const room of older) prefetchRoom(room);
+          }
+        }
+      }
       for (const item of [...this.items].reverse()) {
+        if (parseRoomInvite(item)) continue;
         this.listEl.appendChild(this.renderRow(item));
       }
     }
@@ -314,8 +337,6 @@ export class ReceivePillController {
   }
 
   private renderRow(item: InboxItem): HTMLLIElement {
-    const invite = parseRoomInvite(item);
-    if (invite) return this.renderInviteRow(item, invite);
     const row = document.createElement('li');
     row.className = 'pmd-receive-row';
     if (!item.read) row.classList.add('pmd-receive-row-unread');
@@ -389,25 +410,53 @@ export class ReceivePillController {
     return row;
   }
 
-  /** A session invite: not draggable/insertable — its action is Join.
-   *  Old clients never see these rows (the envelope's version floor
-   *  drops the message in main with the update toast); a client with
-   *  the collab gate closed shows the row without the Join button. */
-  private renderInviteRow(
-    item: InboxItem,
-    invite: { shareCode: string; title: string },
-  ): HTMLLIElement {
-    // Eagerly prefetch the room's encrypted seed (§4.1) so accepting
-    // this invite later — offline — still joins. Fire-and-forget; the
-    // module is light (no wasm) and dedupes/staleness-checks itself.
-    if (collabEnabled()) {
-      void import('../collab/collab-prefetch.js').then((m) =>
-        m.prefetchInviteSeed(invite.shareCode),
-      );
-    }
+  /** "N more session invites" — toggles the older session rows. */
+  private renderSessionFold(older: SessionRoom[]): HTMLLIElement {
+    const li = document.createElement('li');
+    li.className = 'pmd-receive-row pmd-receive-session-fold';
+    if (older.some((r) => r.items.some((it) => !it.read))) li.classList.add('pmd-receive-row-unread');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pmd-receive-session-fold-btn';
+    btn.setAttribute('aria-expanded', String(this.sessionsExpanded));
+    const n = older.length;
+    btn.textContent = this.sessionsExpanded
+      ? `Hide ${n} older session invite${n === 1 ? '' : 's'}`
+      : `${n} more session invite${n === 1 ? '' : 's'}`;
+    btn.title = older
+      .slice(0, 12)
+      .map((r) => `${r.title || 'Untitled session'} \u2014 ${resolveSender(r.newest)}`)
+      .join('\n');
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.sessionsExpanded = !this.sessionsExpanded;
+      this.render();
+    });
+    li.appendChild(btn);
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'pmd-receive-session-fold-clear';
+    clear.textContent = 'Clear these';
+    clear.title = 'Remove these older session invites (the newest stays)';
+    clear.addEventListener('click', (e) => {
+      e.stopPropagation();
+      for (const room of older) removeRoom(room);
+    });
+    li.appendChild(clear);
+    return li;
+  }
+
+  /** A session's invites (an edit invite, a watch invite, or both): not
+   *  draggable/insertable — its actions are Join and Watch. Old clients
+   *  never see these rows (the envelope's version floor drops the message
+   *  in main with the update toast); a client with the collab gate closed
+   *  shows the row without the buttons. */
+  private renderInviteRow(room: SessionRoom): HTMLLIElement {
+    prefetchRoom(room);
+    const item = room.newest;
     const row = document.createElement('li');
     row.className = 'pmd-receive-row pmd-receive-row-invite';
-    if (!item.read) row.classList.add('pmd-receive-row-unread');
+    if (room.items.some((it) => !it.read)) row.classList.add('pmd-receive-row-unread');
 
     const badge = document.createElement('span');
     badge.className = 'pmd-dropzone-row-type pmd-dropzone-row-type-generic';
@@ -420,19 +469,20 @@ export class ReceivePillController {
     label.className = 'pmd-receive-row-label';
     // A `cmview1.` code is a SPECTATE invite: joining watches the document
     // live without editing (the session is view-only end to end).
-    const view = invite.shareCode.startsWith('cmview');
-    label.textContent = view
-      ? invite.title
-        ? `Invited you to watch “${invite.title}”`
-        : 'Invited you to watch a collaboration session'
-      : invite.title
-        ? `Invited you to collaborate on “${invite.title}”`
-        : 'Invited you to a collaboration session';
-    label.title = label.textContent;
+    const watchOnly = !room.edit;
+    label.textContent = room.title
+      ? `\u201c${room.title}\u201d`
+      : watchOnly
+        ? 'A session to watch'
+        : 'A collaboration session';
+    label.title = watchOnly
+      ? `Invited you to watch ${room.title ? `\u201c${room.title}\u201d` : 'a collaboration session'}`
+      : `Invited you to collaborate on ${room.title ? `\u201c${room.title}\u201d` : 'a collaboration session'}`;
     main.appendChild(label);
     const meta = document.createElement('span');
     meta.className = 'pmd-receive-row-meta';
-    meta.textContent = `${resolveSender(item)} · ${relTime(item.receivedAt)}`;
+    const senders = [...new Set(room.items.map((it) => resolveSender(it)))];
+    meta.textContent = `${senders.join(', ')}${watchOnly ? ' \u00b7 view only' : ''} \u00b7 ${relTime(item.receivedAt)}`;
     meta.title = meta.textContent;
     main.appendChild(meta);
     row.appendChild(main);
@@ -455,13 +505,13 @@ export class ReceivePillController {
     }
 
     const joiner = collabEnabled() ? collabInviteJoiner() : null;
-    if (joiner) {
+    const joinButton = (code: string, view: boolean): HTMLButtonElement => {
       const join = document.createElement('button');
       join.type = 'button';
       join.className = 'pmd-receive-row-join';
       join.textContent = view ? 'Watch' : 'Join';
       join.title = view
-        ? 'Watch the session live (view only — no editing)'
+        ? 'Watch the session live (view only \u2014 no editing)'
         : 'Join the collaboration session';
       join.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -470,11 +520,15 @@ export class ReceivePillController {
         // prompt must not burn the share code (the host would have to
         // re-invite for every retry). A dead room (session ended) reports
         // true from the flow so the useless row still clears.
-        void joiner(invite.shareCode).then((joined) => {
-          if (joined) void inboxStore.remove(item.id);
+        void joiner!(code).then((joined) => {
+          if (joined) for (const it of room.items) void inboxStore.remove(it.id);
         });
       });
-      row.appendChild(join);
+      return join;
+    };
+    if (joiner) {
+      if (room.edit) row.appendChild(joinButton(room.edit, false));
+      if (room.view) row.appendChild(joinButton(room.view, true));
     }
 
     const del = document.createElement('button');
@@ -485,10 +539,7 @@ export class ReceivePillController {
     setIcon(del, 'close');
     del.addEventListener('click', (e) => {
       e.stopPropagation();
-      void inboxStore.remove(item.id);
-      // Declined invite — drop its prefetched seed too.
-      const roomId = invite.shareCode.split('.')[1];
-      if (roomId) void deletePrefetch(roomId);
+      removeRoom(room);
     });
     row.appendChild(del);
 
@@ -633,4 +684,75 @@ export function previewMostRecentReceived(): boolean {
     subtitle: `${resolveSender(item)} · ${relTime(item.receivedAt)}`,
     sliceJson: item.sliceJson,
   });
+}
+
+// ---- Session invite grouping ---------------------------------------
+
+/** From the third session on, older invites fold behind one line. */
+const SESSION_FOLD_AFTER = 3;
+
+/** Every invite to one session (room), newest first. */
+export interface SessionRoom {
+  roomId: string;
+  title: string;
+  /** Newest edit (share) code, if any invite lets you edit. */
+  edit: string | null;
+  /** Newest view (spectate) code, if any invite lets you watch. */
+  view: string | null;
+  newest: InboxItem;
+  items: InboxItem[];
+}
+
+const roomIdOf = (code: string): string => code.split('.')[1] ?? code;
+
+/** Group the inbox's session invites by room, newest room first. A room
+ *  invited to twice (re-sent, or by two teammates) is one row. */
+export function groupSessionInvites(items: readonly InboxItem[]): SessionRoom[] {
+  const byRoom = new Map<string, SessionRoom>();
+  const sorted = [...items].sort((a, b) => b.receivedAt - a.receivedAt);
+  for (const it of sorted) {
+    const inv = parseRoomInvite(it);
+    if (!inv) continue;
+    const id = roomIdOf(inv.shareCode);
+    let room = byRoom.get(id);
+    if (!room) {
+      room = { roomId: id, title: inv.title, edit: null, view: null, newest: it, items: [] };
+      byRoom.set(id, room);
+    }
+    room.items.push(it);
+    if (!room.title && inv.title) room.title = inv.title;
+    if (inv.shareCode.startsWith('cmview')) room.view ??= inv.shareCode;
+    else room.edit ??= inv.shareCode;
+  }
+  return [...byRoom.values()];
+}
+
+/** The badge's total: each session counts once, each card once. */
+export function inboxDisplayCount(items: readonly InboxItem[]): number {
+  const rooms = groupSessionInvites(items);
+  const invites = rooms.reduce((n, r) => n + r.items.length, 0);
+  return items.length - invites + rooms.length;
+}
+
+/** Unread, counted the same way (a session with any unread invite counts once). */
+export function inboxDisplayUnread(items: readonly InboxItem[]): number {
+  const rooms = groupSessionInvites(items);
+  const cards = items.filter((it) => !it.read && !parseRoomInvite(it)).length;
+  return cards + rooms.filter((r) => r.items.some((it) => !it.read)).length;
+}
+
+function prefetchRoom(room: SessionRoom): void {
+  // Eagerly prefetch the room's encrypted seed (§4.1) so accepting
+  // this invite later — offline — still joins. Fire-and-forget; the
+  // module is light (no wasm) and dedupes/staleness-checks itself.
+  if (!collabEnabled()) return;
+  const code = room.edit ?? room.view;
+  if (!code) return;
+  void import('../collab/collab-prefetch.js').then((m) => m.prefetchInviteSeed(code));
+}
+
+/** Remove a session's invites and its prefetched seed (a declined invite). */
+function removeRoom(room: SessionRoom): void {
+  for (const it of room.items) void inboxStore.remove(it.id);
+  void deletePrefetch(room.roomId);
 }

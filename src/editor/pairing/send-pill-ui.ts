@@ -752,29 +752,110 @@ export class SendPillController {
     showToast(sendOutcomeToast(`…${code.slice(-6)}`, { ok, fail, authFail }));
   }
 
-  /** Append the per-contact "invite to collaborate" button. Hidden by CSS
-   *  until the pill is opened by a click (invite mode); clicking it starts a
-   *  session on the current doc (if none) and invites that recipient/group. */
+  /** Append the per-contact "Invite" button. Hidden by CSS until the pill
+   *  is opened by a click (invite mode). It opens a small menu, Invite to
+   *  edit / Invite to watch, each saying what the other person can do;
+   *  choosing one starts a session on the current doc (if none) and invites
+   *  that recipient/group. One wide labeled button, not two 24px icons:
+   *  people missed the icons or couldn't tell them apart in a round. */
   private addInviteButton(row: HTMLElement): void {
     const target = this.targets.get(row);
     if (!target) return;
-    const mk = (icon: string, label: string, mode: 'edit' | 'view'): HTMLButtonElement => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'pmd-send-invite-btn' + (mode === 'view' ? ' pmd-send-invite-btn-view' : '');
-      btn.title = label;
-      btn.setAttribute('aria-label', label);
-      btn.innerHTML = icon;
-      btn.addEventListener('click', (e) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pmd-send-invite-btn';
+    btn.title = `Invite ${target.label} to a session on this document`;
+    btn.setAttribute('aria-label', `Invite ${target.label}`);
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.innerHTML = COLLAB_INVITE_ICON + '<span>Invite</span><span class="pmd-send-invite-caret" aria-hidden="true">\u25be</span>';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleInviteMenu(btn, target);
+    });
+    row.appendChild(btn);
+  }
+
+  private inviteMenu: HTMLElement | null = null;
+  private inviteMenuKey: ((e: KeyboardEvent) => void) | null = null;
+
+  private closeInviteMenu(): void {
+    this.inviteMenu?.remove();
+    this.inviteMenu = null;
+    if (this.inviteMenuKey) document.removeEventListener('keydown', this.inviteMenuKey, true);
+    this.inviteMenuKey = null;
+  }
+
+  /** The Invite menu beside a row's button. Mounted inside the pill root
+   *  so the pill's outside-click close leaves it alone. */
+  private toggleInviteMenu(anchor: HTMLElement, target: SendTarget): void {
+    const reopen = this.inviteMenu?.dataset['for'] !== target.label;
+    this.closeInviteMenu();
+    if (!reopen) return;
+    const menu = document.createElement('div');
+    menu.className = 'pmd-send-invite-menu';
+    menu.dataset['for'] = target.label;
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', `Invite ${target.label}`);
+    const head = document.createElement('div');
+    head.className = 'pmd-send-invite-menu-head';
+    head.textContent = `Invite ${target.label}`;
+    menu.appendChild(head);
+    const items: HTMLButtonElement[] = [];
+    const add = (icon: string, label: string, detail: string, mode: 'edit' | 'view'): void => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pmd-send-invite-menu-item';
+      b.setAttribute('role', 'menuitem');
+      b.dataset['mode'] = mode;
+      b.innerHTML = `<span class="pmd-send-invite-menu-icon" aria-hidden="true">${icon}</span>`;
+      const text = document.createElement('span');
+      text.className = 'pmd-send-invite-menu-text';
+      const l = document.createElement('span');
+      l.className = 'pmd-send-invite-menu-label';
+      l.textContent = label;
+      const d = document.createElement('span');
+      d.className = 'pmd-send-invite-menu-detail';
+      d.textContent = detail;
+      text.append(l, d);
+      b.appendChild(text);
+      b.addEventListener('click', (e) => {
         e.stopPropagation();
+        this.closeInviteMenu();
         this.collapse();
         collabInviter()?.({ codes: target.codes, label: target.label, via: target.via, mode });
       });
-      return btn;
+      items.push(b);
+      menu.appendChild(b);
     };
-    row.appendChild(mk(COLLAB_INVITE_ICON, 'Invite to collaborate', 'edit'));
-    // Spectate: they see every edit live and cannot change anything.
-    row.appendChild(mk(VIEW_ICON, 'Invite to spectate', 'view'));
+    add(COLLAB_INVITE_ICON, 'Invite to edit', 'They edit this document with you, live', 'edit');
+    add(VIEW_ICON, 'Invite to watch', 'They see every change live but can\u2019t edit', 'view');
+    menu.addEventListener('click', (e) => e.stopPropagation());
+    this.root.appendChild(menu);
+    // Beside the button: to its right when there's room, else to its left;
+    // bottom-aligned with it, kept on screen.
+    const r = anchor.getBoundingClientRect();
+    const w = menu.offsetWidth || 240;
+    const h = menu.offsetHeight || 120;
+    const left = r.right + 6 + w <= window.innerWidth - 8 ? r.right + 6 : Math.max(8, r.left - 6 - w);
+    const top = Math.max(8, Math.min(r.bottom - h, window.innerHeight - h - 8));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    this.inviteMenu = menu;
+    this.inviteMenuKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.closeInviteMenu();
+        anchor.focus();
+      } else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        const i = items.indexOf(document.activeElement as HTMLButtonElement);
+        const n = items.length;
+        items[(i + (ev.key === 'ArrowDown' ? 1 : n - 1) + n) % n]?.focus();
+      }
+    };
+    document.addEventListener('keydown', this.inviteMenuKey, true);
+    items[0]?.focus();
   }
 
   private sectionLabel(text: string): HTMLElement {
@@ -811,6 +892,11 @@ export class SendPillController {
     // Click-open mode: clicking the row sends (its invite button, which
     // stops propagation, still invites).
     row.addEventListener('click', () => {
+      // A click beside an open Invite menu just closes it.
+      if (this.inviteMenu) {
+        this.closeInviteMenu();
+        return;
+      }
       if (this.inviteMode && !this.recentRows.has(row)) this.sendFromRow(row);
     });
     return row;
@@ -946,6 +1032,7 @@ export class SendPillController {
   }
 
   private collapse(): void {
+    this.closeInviteMenu();
     if (this.inviteMode) {
       this.inviteMode = false;
       this.root.classList.remove('pmd-send-invite-mode');

@@ -15905,10 +15905,13 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+  height: 26px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
   border: 1px solid var(--pmd-c-border-soft);
   border-radius: 6px;
   background: var(--pmd-c-bg);
@@ -15922,9 +15925,71 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   background: var(--pmd-c-hover);
   border-color: var(--pmd-c-accent);
 }
-/* The second per-row invite button (spectate) sits right after the first. */
-.pmd-send-invite-mode .pmd-send-invite-btn-view {
-  margin-left: 2px;
+.pmd-send-invite-caret {
+  font-size: 0.7em;
+  opacity: 0.8;
+}
+/* The Invite menu (Invite to edit / Invite to watch) beside a row. */
+.pmd-send-invite-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 14rem;
+  max-width: min(20rem, calc(100vw - 16px));
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem;
+  background: var(--pmd-c-bg);
+  color: var(--pmd-c-text);
+  border: 1px solid var(--pmd-c-border-soft);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+.pmd-send-invite-menu-head {
+  padding: 0.2rem 0.5rem 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--pmd-c-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pmd-send-invite-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font: inherit;
+  text-align: left;
+  padding: 0.5rem 0.55rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.pmd-send-invite-menu-item:hover,
+.pmd-send-invite-menu-item:focus-visible {
+  background: var(--pmd-c-hover);
+  outline: none;
+}
+.pmd-send-invite-menu-icon {
+  flex: none;
+  color: var(--pmd-c-accent);
+  padding-top: 1px;
+}
+.pmd-send-invite-menu-icon svg { display: block; }
+.pmd-send-invite-menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.pmd-send-invite-menu-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.pmd-send-invite-menu-detail {
+  font-size: 0.78rem;
+  color: var(--pmd-c-text-secondary);
 }
 /* Click-open: clicking a row sends the cursor's card to it (its invite
    button still invites). */
@@ -15976,6 +16041,58 @@ body.pmd-multi-doc .pmd-cardcutter-trim {
   background: var(--pmd-c-accent);
   color: var(--pmd-c-bg, #fff);
 }
+
+/* Join / Watch are the row's action: filled, so they don't read as
+   another Preview. Add contact is secondary: quiet text. */
+.pmd-receive-row-invite .pmd-receive-row-join:not(.pmd-receive-row-add-contact) {
+  background: var(--pmd-c-accent);
+  color: var(--pmd-c-bg, #fff);
+  padding: 3px 10px;
+}
+.pmd-receive-row-invite .pmd-receive-row-join:not(.pmd-receive-row-add-contact):hover {
+  filter: brightness(1.1);
+}
+.pmd-receive-row-invite .pmd-receive-row-add-contact {
+  border-color: transparent;
+  color: var(--pmd-c-text-secondary);
+  font-weight: 500;
+}
+.pmd-receive-row-invite .pmd-receive-row-add-contact:hover {
+  background: var(--pmd-c-hover);
+  color: var(--pmd-c-text);
+}
+.pmd-receive-row-invite { cursor: default; }
+/* "N more session invites": folds older sessions in a busy round. */
+.pmd-receive-session-fold {
+  align-items: center;
+  cursor: default;
+  padding: 0.25rem 0.45rem;
+}
+.pmd-receive-session-fold-btn {
+  flex: 1 1 auto;
+  text-align: left;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--pmd-c-accent);
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.pmd-receive-session-fold-btn:hover { text-decoration: underline; }
+.pmd-receive-session-fold-clear {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--pmd-c-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.pmd-receive-session-fold-clear:hover { background: var(--pmd-c-hover); color: var(--pmd-c-text); }
 
 .pmd-card-preview-pane {
   flex: 1;

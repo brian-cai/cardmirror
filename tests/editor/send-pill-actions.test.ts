@@ -140,7 +140,7 @@ describe('send pill actions row + hidden recipients', () => {
     expect(root.querySelector('.pmd-send-actions')!.firstElementChild!.classList.contains('pmd-send-action-contact')).toBe(true);
   });
 
-  it('each contact row offers invite-to-collaborate and invite-to-spectate', () => {
+  it('each contact row has one Invite button whose menu offers edit and watch', () => {
     vi.spyOn(collabGate, 'collabEnabled').mockReturnValue(true);
     setCollabSessionStarter(vi.fn());
     const invites: unknown[] = [];
@@ -150,10 +150,19 @@ describe('send pill actions row + hidden recipients', () => {
     (root.querySelector('.pmd-send-bar') as HTMLElement).click();
     const row = root.querySelector('.pmd-send-target') as HTMLElement;
     const btns = row.querySelectorAll('.pmd-send-invite-btn');
-    expect(btns.length).toBe(2);
-    expect(btns[1]!.getAttribute('aria-label')).toBe('Invite to spectate');
-    (btns[1] as HTMLElement).click();
+    expect(btns.length).toBe(1);
+    expect(btns[0]!.textContent).toContain('Invite');
+    (btns[0] as HTMLElement).click();
+    const items = root.querySelectorAll('.pmd-send-invite-menu-item');
+    expect([...items].map((b) => b.querySelector('.pmd-send-invite-menu-label')!.textContent)).toEqual([
+      'Invite to edit',
+      'Invite to watch',
+    ]);
+    // Opening the menu sent nothing; choosing Watch invites view-only.
+    expect(invites).toEqual([]);
+    (items[1] as HTMLElement).click();
     expect(invites).toEqual([{ codes: ['cmk1.aaa'], label: 'Awake', via: undefined, mode: 'view' }]);
+    expect(root.querySelector('.pmd-send-invite-menu')).toBeNull();
     setCollabInviter(null);
   });
 
