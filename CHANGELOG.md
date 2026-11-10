@@ -5,6 +5,18 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.62 — 2026-11-10
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Watch keeps Join.** On a session row with both buttons, watching no
+  longer uses up the edit invite, so you can still Join later.
+- **Sessions sit in time order.** The session invites now sit among your
+  cards by when the newest one arrived, instead of always on top.
+
 ## 1.15.61 — 2026-11-10
 
 BCai's (@brian-cai) build of CardMirror, updating from
@@ -14,8 +26,9 @@ github.com/brian-cai/cardmirror.
 
 - **Session invites stay short in a busy round.** The Receive popup shows
   one row per session (an edit and a watch invite to the same session
-  share it, with Join and Watch side by side). From the third session on,
-  older invites fold behind "N more session invites", with Clear these.
+  share it, with Join and Watch side by side). With three or more
+  sessions, all but the newest fold behind "N more session invites", with
+  Clear these.
   The badge counts each session once. Join and Watch are filled buttons
   now, so they no longer look like Preview.
 - **Easier invites from Send.** Each contact has one labeled Invite button
