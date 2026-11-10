@@ -5,6 +5,23 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.61 — 2026-11-10
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Session invites stay short in a busy round.** The Receive popup shows
+  one row per session (an edit and a watch invite to the same session
+  share it, with Join and Watch side by side). From the third session on,
+  older invites fold behind "N more session invites", with Clear these.
+  The badge counts each session once. Join and Watch are filled buttons
+  now, so they no longer look like Preview.
+- **Easier invites from Send.** Each contact has one labeled Invite button
+  that opens Invite to edit or Invite to watch, each saying what the other
+  person can do. It replaces the two small icons.
+
 ## 1.15.60 — 2026-11-05
 
 BCai's (@brian-cai) build of CardMirror, updating from
