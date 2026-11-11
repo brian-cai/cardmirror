@@ -2644,6 +2644,15 @@ class MultiPaneShell {
     return null;
   }
 
+  handleForUid(uid: string): unknown {
+    for (const id of SLOT_IDS) {
+      for (const rec of this.slots[id].stack) {
+        if (rec.uid === uid) return rec.handle;
+      }
+    }
+    return null;
+  }
+
   filenameForUid(uid: string): string | null {
     for (const id of SLOT_IDS) {
       for (const rec of this.slots[id].stack) {
@@ -4099,6 +4108,7 @@ export function mountMultiPaneShell(): void {
     getAllFilenames: () => shell!.getAllFilenames(),
     getFilenameForUid: (uid) => shell!.filenameForUid(uid),
     getDocIdForUid: (uid) => shell!.docIdForUid(uid),
+    getHandleForUid: (uid) => shell!.handleForUid(uid),
     createSessionDoc: () => shell!.createSessionDocIntoSlot(),
     setFilenameForUid: (uid, name) => shell!.setFilenameForUid(uid, name),
     promptSaveAllForQuit: () => shell!.promptSaveAllForQuit(),

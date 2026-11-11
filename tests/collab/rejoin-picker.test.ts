@@ -80,7 +80,7 @@ describe('pickSessionToJoin', () => {
 
   it('lists each session and resolves the clicked one', async () => {
     const pending = pickSessionToJoin([cand('a', 'saved'), cand('b', 'left')]);
-    expect(rows().map((b) => b.querySelector('.pmd-home-recent-name')!.textContent)).toEqual(['Doc a', 'Doc b']);
+    expect(rows().map((b) => b.querySelector('.pmd-rejoin-card-name')!.textContent)).toEqual(['Doc a', 'Doc b']);
     // Same row anatomy as the home screen's Sessions list.
     expect(rows()[0]!.classList.contains('pmd-home-session-open')).toBe(true);
     expect(rows()[0]!.querySelector('.pmd-home-session-role')!.textContent).toBe('JOINED');
@@ -155,7 +155,7 @@ describe('finding the right session (2026-10-22)', () => {
     ...(relay ? { relay } : {}),
   });
   const visible = () =>
-    [...document.querySelectorAll<HTMLElement>('.pmd-rejoin-row')].filter((r) => !r.hidden).map((r) => r.querySelector('.pmd-home-recent-name')!.textContent);
+    [...document.querySelectorAll<HTMLElement>('.pmd-rejoin-row')].filter((r) => !r.hidden).map((r) => r.querySelector('.pmd-rejoin-card-name')!.textContent);
   const box = () => document.querySelector<HTMLInputElement>('.pmd-rejoin-input')!;
   const type = (t: string) => {
     box().value = t;
@@ -175,7 +175,7 @@ describe('finding the right session (2026-10-22)', () => {
   it('says which relay a session is on, and the pick carries it', async () => {
     settings.set('pairingRelayUrl', '');
     const pending = pickSessionToJoin([cand('a', 'Aff blocks', 'https://relay.example/r/college')]);
-    const meta = document.querySelector('.pmd-rejoin-row .pmd-home-recent-path')!.textContent!;
+    const meta = document.querySelector('.pmd-rejoin-row')!.textContent!;
     expect(meta).toContain('on relay.example/r/college (switches relay)');
     type('college');
     expect(visible()).toEqual(['Aff blocks']);

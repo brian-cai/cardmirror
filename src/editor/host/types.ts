@@ -164,6 +164,21 @@ export interface HistoryChangeTime {
   at: number;
 }
 
+/** Who and what a session was, for the Join dialog's Past sessions. Every
+ *  field is optional: files written before this existed have none. */
+export interface HistoryInfo {
+  /** This machine's role in the room. */
+  role?: 'host' | 'participant' | 'spectator';
+  /** The name of whoever started the session, when known. */
+  startedBy?: string;
+  /** Names seen in the session (this user included), first seen first. */
+  people?: string[];
+  /** The local document the session was in, by name. */
+  fileName?: string;
+  /** Its path on disk when it was saved to a file (desktop). */
+  filePath?: string;
+}
+
 /** On-disk envelope of a `{roomId}.cmir-history` session-history file
  *  ({userData}/journals, beside the crash journals but with its own
  *  extension so the crash-recovery scanner never offers it). Written
@@ -179,6 +194,7 @@ export interface HistoryEnvelope {
   startedAt: number;
   updatedAt: number;
   changeTimes: HistoryChangeTime[];
+  info?: HistoryInfo;
   /** Full Loro snapshot (state + complete oplog), base64. */
   snapshotB64: string;
 }
@@ -194,6 +210,7 @@ export interface HistoryEnvelopeWrite {
   startedAt: number;
   updatedAt: number;
   changeTimes: HistoryChangeTime[];
+  info?: HistoryInfo;
   snapshot: Uint8Array;
 }
 
@@ -205,6 +222,9 @@ export interface HistoryMeta {
   startedAt: number;
   updatedAt: number;
   sizeBytes: number;
+  info?: HistoryInfo;
+  /** The local file's last save (its modified time), when it still exists. */
+  savedAt?: number | null;
 }
 
 /** The interface every platform host implements. New methods land

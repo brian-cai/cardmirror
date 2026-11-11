@@ -1205,6 +1205,7 @@ let multiDocGetAllFilenames: (() => (string | null)[]) | null = null;
  *  collab to name a session after its OWNER doc, not the whole-window title. */
 let multiDocGetFilenameForUid: ((uid: string) => string | null) | null = null;
 let multiDocGetDocIdForUid: ((uid: string) => string | null) | null = null;
+let multiDocGetHandleForUid: ((uid: string) => unknown) | null = null;
 // Collab join/resume in the workspace (slot-picker session docs).
 let multiDocCreateSessionDoc: (() => Promise<string | null>) | null = null;
 let multiDocSetFilenameForUid: ((uid: string, name: string) => void) | null = null;
@@ -1336,6 +1337,7 @@ export function enableMultiDocMode(opts: {
    *  the whole-window title. */
   getFilenameForUid?: (uid: string) => string | null;
   getDocIdForUid?: (uid: string) => string | null;
+  getHandleForUid?: (uid: string) => unknown;
   /** Collab join/resume in the workspace: create a fresh unsaved doc in a
    *  user-picked slot to hold the session. Returns its uid, or null when the
    *  user cancels the slot picker. */
@@ -1398,6 +1400,7 @@ export function enableMultiDocMode(opts: {
   multiDocGetAllFilenames = opts.getAllFilenames ?? null;
   multiDocGetFilenameForUid = opts.getFilenameForUid ?? null;
   multiDocGetDocIdForUid = opts.getDocIdForUid ?? null;
+  multiDocGetHandleForUid = opts.getHandleForUid ?? null;
   multiDocCreateSessionDoc = opts.createSessionDoc ?? null;
   multiDocSetFilenameForUid = opts.setFilenameForUid ?? null;
   multiDocPromptSaveAllForQuit = opts.promptSaveAllForQuit ?? null;
@@ -1558,6 +1561,14 @@ function resolveDocFilename(uid: string): string | null {
   return uid === currentDocUid ? currentDocFilename : null;
 }
 
+/** A doc's file path on disk (desktop handles are path strings), or null. */
+function resolveDocPath(uid: string): string | null {
+  const handle = multiDocActive && multiDocGetHandleForUid
+    ? multiDocGetHandleForUid(uid)
+    : uid === currentDocUid ? currentDocHandle : null;
+  return typeof handle === 'string' && handle ? handle : null;
+}
+
 /** Persistent docId for a doc uid (null before first save) — stamped
  *  into session records so open-from-disk can match a file to its
  *  session (see checkSessionRejoinForOpenedDoc). */
@@ -1577,6 +1588,7 @@ function loadCollabUi(): Promise<typeof import('./collab/collab-ui.js')> {
     // title, which in multi-pane is every open doc joined by " · ".
     m.setCollabDocTitleResolver((uid) => resolveDocFilename(uid));
     m.setCollabDocIdResolver((uid) => resolveDocPersistentId(uid));
+    m.setCollabDocPathResolver((uid) => resolveDocPath(uid));
     return m;
   }));
 }

@@ -98,6 +98,19 @@ export async function openRecoverPreviousVersion(
   openVersionDialog(envelope, openDoc, solo?.currentDoc ?? null);
 }
 
+/** A past session's history (Join dialog → Past sessions): its version
+ *  list, each one opening as a new unsaved document. */
+export async function openSessionHistory(roomId: string, openDoc?: OpenRecoveredDoc): Promise<void> {
+  const host = getElectronHost();
+  if (!host) return;
+  const envelope = await host.readHistory({ roomId }).catch(() => null);
+  if (!envelope) {
+    showToast('This session\u2019s history is no longer on this computer.');
+    return;
+  }
+  openVersionDialog(envelope, openDoc, null);
+}
+
 async function pickEnvelopeFromFile(): Promise<HistoryEnvelope | null> {
   const host = getElectronHost();
   if (!host) return null;

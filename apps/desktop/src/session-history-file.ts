@@ -12,6 +12,38 @@
 
 import { promises as fs } from 'node:fs';
 
+/** Who and what a session was (mirrors the renderer's HistoryInfo). */
+export interface HistoryInfoIpc {
+  role?: 'host' | 'participant' | 'spectator';
+  startedBy?: string;
+  people?: string[];
+  fileName?: string;
+  filePath?: string;
+}
+
+const str = (v: unknown, max: number): string | undefined =>
+  typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined;
+
+/** Keep only well-formed info fields (the file is ours, but a torn or
+ *  hand-edited one must not put junk in the dialog). */
+export function sanitizeHistoryInfo(raw: unknown): HistoryInfoIpc | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const out: HistoryInfoIpc = {};
+  if (r['role'] === 'host' || r['role'] === 'participant' || r['role'] === 'spectator') out.role = r['role'];
+  const startedBy = str(r['startedBy'], 80);
+  if (startedBy) out.startedBy = startedBy;
+  if (Array.isArray(r['people'])) {
+    const people = r['people'].map((x) => str(x, 80)).filter((x): x is string => !!x).slice(0, 60);
+    if (people.length) out.people = people;
+  }
+  const fileName = str(r['fileName'], 260);
+  if (fileName) out.fileName = fileName;
+  const filePath = str(r['filePath'], 4096);
+  if (filePath) out.filePath = filePath;
+  return Object.keys(out).length ? out : undefined;
+}
+
 export interface HistoryEnvelopeIpc {
   v: 1;
   roomId: string;
@@ -19,6 +51,7 @@ export interface HistoryEnvelopeIpc {
   startedAt: number;
   updatedAt: number;
   changeTimes: { peer: string; counter: number; at: number }[];
+  info?: HistoryInfoIpc;
   snapshotB64: string;
 }
 
@@ -28,6 +61,7 @@ export interface HistoryHeader {
   startedAt: number;
   updatedAt: number;
   sizeBytes: number;
+  info?: HistoryInfoIpc;
 }
 
 export function parseHistoryEnvelope(text: string): HistoryEnvelopeIpc | null {
@@ -45,9 +79,11 @@ export function parseHistoryEnvelope(text: string): HistoryEnvelopeIpc | null {
     ) {
       return null;
     }
+    const info = sanitizeHistoryInfo(p.info);
     return {
       v: 1,
       roomId: p.roomId,
+      ...(info ? { info } : {}),
       docTitle: typeof p.docTitle === 'string' ? p.docTitle : 'Untitled',
       startedAt: p.startedAt,
       updatedAt: p.updatedAt,
@@ -123,5 +159,6 @@ function toHeader(env: HistoryEnvelopeIpc, sizeBytes: number): HistoryHeader {
     startedAt: env.startedAt,
     updatedAt: env.updatedAt,
     sizeBytes,
+    ...(env.info ? { info: env.info } : {}),
   };
 }

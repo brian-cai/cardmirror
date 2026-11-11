@@ -527,7 +527,8 @@ describe('Join dialog team section', () => {
     await vi.waitFor(() => expect(document.querySelectorAll('.pmd-rejoin-team-btn').length).toBe(2));
     const text = document.querySelector('.pmd-rejoin-team')!.textContent!;
     expect(text).toContain('Open one');
-    expect(text).toContain('2 people in it · started by Sam');
+    expect(text).toContain('Started by Sam');
+    expect(text).toContain('2 people in it');
     const [join, ask] = [...document.querySelectorAll<HTMLButtonElement>('.pmd-rejoin-team-btn')];
     expect(ask!.textContent).toBe('Request to join');
     join!.click();

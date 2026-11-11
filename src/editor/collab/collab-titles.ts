@@ -9,6 +9,13 @@ import { type CollabUiDeps, docTitleResolver } from './collab-ui-state.js';
  *  host predates title publishing or hasn't named the doc). */
 /** Meta flag: the host typed a session name of their own (not the doc's). */
 export const META_TITLE_CUSTOM = 'titleCustom';
+/** Meta key: the display name of whoever started the session. */
+export const META_STARTED_BY = 'startedBy';
+
+export function sharedStartedBy(session: CollabSession): string {
+  const v = session.loroDoc.getMap('meta').get(META_STARTED_BY);
+  return typeof v === 'string' ? v.trim().slice(0, 80) : '';
+}
 
 export function titleIsCustom(session: CollabSession): boolean {
   return session.loroDoc.getMap('meta').get(META_TITLE_CUSTOM) === true;

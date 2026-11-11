@@ -24,9 +24,10 @@ import { collabRepairPlugin, lowestPeerIsLeader } from './collab-repair.js';
 import { saveRecentRoom, deleteRecentRoom } from './collab-store.js';
 import { resetSessionCommentIds } from '../comments-plugin.js';
 import { CollabSession } from './collab-session.js';
-import { type ActiveSession, type CollabUiDeps, META_COMMIT_ORIGIN, claimRoom, docIdResolver, releaseRoomClaim, sessions } from './collab-ui-state.js';
+import { type ActiveSession, type CollabUiDeps, META_COMMIT_ORIGIN, claimRoom, docIdResolver, docPathResolver, releaseRoomClaim, sessions } from './collab-ui-state.js';
 import { refreshPresenceDots } from './collab-chip.js';
-import { adoptSharedTitle, sessionLabel } from './collab-titles.js';
+import { adoptSharedTitle, sessionDocTitle, sessionLabel, sharedStartedBy } from './collab-titles.js';
+import { settings } from '../settings.js';
 import { startTeamWatch } from './collab-team-listing.js';
 import { teardownPolicy, type TeardownReason } from './collab-session-policy.js';
 
@@ -138,7 +139,19 @@ export function installSeams(
     session,
     () => sessionLabel(ownerUid, session),
     undefined,
-    { onFailure: (n) => noteWriterFailure('collab-history-failing', 'session history', n) },
+    {
+      onFailure: (n) => noteWriterFailure('collab-history-failing', 'session history', n),
+      // Read at each write (the first is seconds after install, so
+      // `cursors` below is set by then).
+      describe: () => ({
+        role: session.role,
+        selfName: settings.get('pairingDisplayName'),
+        startedBy: sharedStartedBy(session),
+        present: cursors.presence().map((p) => ({ peer: p.peer, name: p.name })),
+        fileName: sessionDocTitle(ownerUid),
+        filePath: docPathResolver?.(ownerUid) ?? null,
+      }),
+    },
   );
   const cursors = installCursorPresence(session, ownerView);
   const unloadCleanup = installUnloadHooks(session, cursors);

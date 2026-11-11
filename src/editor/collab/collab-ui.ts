@@ -33,7 +33,7 @@ import { teamSessionsSupportWithin } from './team-sessions.js';
 import { buildJoinLink, parseJoinLinkHash } from './join-link.js';
 import { resolveStarredTarget } from '../pairing/send-to-starred.js';
 import { loadSessionRecord, loadPrefetch, deletePrefetch, deleteRecentRoom } from './collab-store.js';
-import { loadRejoinCandidates, pickSessionToJoin } from './rejoin-picker.js';
+import { loadRejoinCandidates, loadSessionHistory, pickSessionToJoin, withSessionHistory } from './rejoin-picker.js';
 import { importRoomKey, decryptBlob, viewCodeFromShareCode } from './collab-crypto.js';
 import { collabEnabled } from './collab-gate.js';
 import { decodeShareCode } from './collab-crypto.js';
@@ -48,13 +48,13 @@ import { sessionPrepOverlay, sessionProgressOverlay } from './collab-overlays.js
 import { sessionCallbacks } from './collab-session-callbacks.js';
 import { relayFailureMessage, resumeFailure, roomIsGone, roomsStatus, sessionRelayPlan } from './collab-session-policy.js';
 import { installSeams, teardownFor } from './collab-seams.js';
-import { META_TITLE_CUSTOM, adoptSharedTitle, defaultSessionName, namedDocTitle, sessionDocTitle, sharedDocTitle, titleIsCustom } from './collab-titles.js';
+import { META_STARTED_BY, META_TITLE_CUSTOM, adoptSharedTitle, defaultSessionName, namedDocTitle, sessionDocTitle, sharedDocTitle, titleIsCustom } from './collab-titles.js';
 import { listStartedSession, relistSession, sendInviteTo, teamContext, teamJoinSource } from './collab-team-listing.js';
 import { joinSessionWithCode, onSessionRelay } from './collab-join-flows.js';
 
 // Moved to their own modules; re-exported so callers keep importing them from here.
 export type { CollabUiDeps } from './collab-ui-state.js';
-export { roomLiveInWindow, setCollabDocIdResolver, setCollabDocTitleResolver, setCollabFocusResolver } from './collab-ui-state.js';
+export { roomLiveInWindow, setCollabDocIdResolver, setCollabDocPathResolver, setCollabDocTitleResolver, setCollabFocusResolver } from './collab-ui-state.js';
 export { refreshChipForFocus } from './collab-chip.js';
 export { __setOfflineNoticeMsForTests } from './collab-session-callbacks.js';
 export { relayFailureMessage } from './collab-session-policy.js';
@@ -269,6 +269,9 @@ async function startSessionFlowInner(
       // title, so joiners can name their unsaved copy.
       sess.commentsSync.seedFromView(view);
       session.loroDoc.getMap('meta').set('title', sessionName);
+      // Who started it, for everyone's Past sessions (older clients ignore it).
+      const starter = settings.get('pairingDisplayName').trim();
+      if (starter) session.loroDoc.getMap('meta').set(META_STARTED_BY, starter);
       if (customName) session.loroDoc.getMap('meta').set(META_TITLE_CUSTOM, true);
       session.loroDoc.commit({ origin: META_COMMIT_ORIGIN });
       deps.refreshPlugins();
@@ -321,11 +324,22 @@ export async function joinSessionFlow(deps: CollabUiDeps): Promise<void> {
   // the single-window shell picking it spawned a window first, whose resume
   // then refused the room and left that window empty.
   const elsewhere = await Promise.all(listed.map((c) => roomLiveElsewhere(c.roomId)));
-  const candidates = listed.filter((_, i) => !elsewhere[i]);
+  // Every session this machine kept history for: details on the rows
+  // above, and the rest (ended, or past their week) as Past sessions.
+  const { candidates, past } = withSessionHistory(
+    listed.filter((_, i) => !elsewhere[i]),
+    await loadSessionHistory(),
+    (roomId) => roomLiveInWindow(roomId) || listed.some((c, i) => elsewhere[i] && c.roomId === roomId),
+  );
   // One dialog: the paste box on top (focused — a new join is paste and
   // Enter), the sessions to get back into below it.
-  const pick = await pickSessionToJoin(candidates, teamJoinSource());
+  const pick = await pickSessionToJoin(candidates, teamJoinSource(), past);
   if (!pick) return;
+  if (pick.kind === 'history') {
+    const m = await import('./collab-recover-ui.js');
+    await m.openSessionHistory(pick.roomId);
+    return;
+  }
   if (pick.kind === 'rejoin') {
     if (!(await onSessionRelay(pick.relay))) return;
     await joinSessionWithCode(deps, pick.shareCode, { guestPass: pick.guestPass });

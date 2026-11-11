@@ -12783,6 +12783,50 @@ body.pmd-multi-nav-empty.pmd-multi-doc #status-bar {
 .pmd-rejoin-team-note[hidden] {
   display: none;
 }
+/* Session rows (Recent, Team, Past): the name first and largest, then who
+   started it, then who was in it, when, and the local file. */
+.pmd-rejoin-card {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.1rem;
+}
+.pmd-rejoin-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.pmd-rejoin-card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pmd-rejoin-list .pmd-rejoin-card-chip {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.pmd-rejoin-card-by {
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--pmd-c-text);
+}
+.pmd-rejoin-card-meta {
+  font-size: 0.8rem;
+  color: var(--pmd-c-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pmd-rejoin-card-by,
+.pmd-rejoin-card-meta {
+  min-width: 0;
+}
 
 /* Team sessions: "Alex wants to join: Approve / Deny" in the status bar,
    next to the session chip (collab/team-sessions-ui.ts). */

@@ -150,6 +150,7 @@ import {
 import {
   parseHistoryEnvelope,
   readHistoryHeader,
+  sanitizeHistoryInfo,
   type HistoryEnvelopeIpc,
   type HistoryHeader,
 } from './session-history-file.js';
@@ -2122,6 +2123,7 @@ interface HistoryWriteIpc {
   startedAt: number;
   updatedAt: number;
   changeTimes: { peer: string; counter: number; at: number }[];
+  info?: unknown;
   snapshot: unknown;
 }
 
@@ -2144,6 +2146,7 @@ ipcMain.handle('host:write-history', (_event, entry: HistoryWriteIpc) => {
   if (snapshot.length === 0) {
     throw new Error('host:write-history: snapshot bytes are required.');
   }
+  const info = sanitizeHistoryInfo(entry.info);
   const previous = historyWriteTails.get(entry.roomId) ?? Promise.resolve();
   const next = previous.catch(() => {}).then(async () => {
     await ensureJournalsDir();
@@ -2154,6 +2157,8 @@ ipcMain.handle('host:write-history', (_event, entry: HistoryWriteIpc) => {
       startedAt: entry.startedAt,
       updatedAt: entry.updatedAt,
       changeTimes: entry.changeTimes,
+      // Before the snapshot: the listing reads only the file's head.
+      ...(info ? { info } : {}),
       snapshotB64: snapshot.toString('base64'),
     };
     const finalPath = historyPathFor(entry.roomId);
@@ -2243,7 +2248,16 @@ ipcMain.handle('host:list-history', async () => {
     }
   }
   rows.sort((a, b) => b.updatedAt - a.updatedAt);
-  return rows;
+  // The session's local file: its modified time is its last save, and a
+  // file that's gone (moved, deleted) shows as unsaved.
+  return Promise.all(
+    rows.map(async (r) => {
+      const p = r.info?.filePath;
+      if (!p || !path.isAbsolute(p)) return r;
+      const st = await fs.stat(p).catch(() => null);
+      return { ...r, savedAt: st?.isFile() ? st.mtimeMs : null };
+    }),
+  );
 });
 
 ipcMain.handle(

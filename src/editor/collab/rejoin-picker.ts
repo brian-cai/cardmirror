@@ -35,6 +35,7 @@ import {
 } from './collab-store.js';
 import { currentRelayTag, relayLabelForTag } from '../pairing/contact-relays.js';
 import type { SessionRole } from './session-role.js';
+import type { HistoryMeta } from '../host/types.js';
 
 export interface RejoinCandidate {
   roomId: string;
@@ -47,6 +48,29 @@ export interface RejoinCandidate {
   at: number;
   /** The relay the room lives on (contact-relays.ts tag), when recorded. */
   relay?: string;
+  /** From the room's session-history file, when this machine kept one. */
+  details?: SessionDetails;
+}
+
+/** Who and what a session was, from its history file. */
+export interface SessionDetails {
+  startedBy?: string;
+  people: string[];
+  /** First and last time this machine was in it. */
+  usedFrom: number;
+  usedTo: number;
+  fileName?: string;
+  /** The local file's last save; null = no file (never saved, or gone). */
+  savedAt: number | null;
+}
+
+/** An ended (or no longer rejoinable) session this machine has history
+ *  for: opening it offers its versions as a new document. */
+export interface PastSession {
+  roomId: string;
+  title: string;
+  role?: SessionRole;
+  details: SessionDetails;
 }
 
 /** A team session row for the dialog (team-sessions.ts TeamSessionEntry). */
@@ -85,13 +109,11 @@ export function whoIsIn(row: Pick<TeamSessionRow, 'participants' | 'people'>): s
   return rest > 0 ? `${shown.join(', ')} and ${rest} other${rest === 1 ? '' : 's'}` : shown.join(', ').replace(/, ([^,]*)$/, ' and $1');
 }
 
-function teamMeta(row: TeamSessionRow): string {
-  const at = row.lastActivity > 0 ? ` \u00b7 active ${relativeTime(row.lastActivity)}` : '';
-  return `${whoIsIn(row)} \u00b7 started by ${row.startedBy}${at}`;
-}
 
 export type RejoinPick =
   | { kind: 'rejoin'; shareCode: string; guestPass: string | null; relay?: string }
+  /** A past session: open a version of it from its history file. */
+  | { kind: 'history'; roomId: string; title: string }
   /** What was typed or pasted into the box: a share code or an invite link. */
   | { kind: 'code'; text: string };
 
@@ -140,6 +162,129 @@ export async function loadRejoinCandidates(isLive: (roomId: string) => boolean):
   return buildRejoinCandidates(records, recents, isLive);
 }
 
+/** This machine's session-history files (desktop; kept 30 days). */
+export async function loadSessionHistory(): Promise<HistoryMeta[]> {
+  try {
+    return (await getElectronHost()?.listHistory()) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export function detailsFromHistory(m: HistoryMeta): SessionDetails {
+  return {
+    ...(m.info?.startedBy ? { startedBy: m.info.startedBy } : {}),
+    people: m.info?.people ?? [],
+    usedFrom: m.startedAt,
+    usedTo: m.updatedAt,
+    ...(m.info?.fileName ? { fileName: m.info.fileName } : {}),
+    savedAt: m.savedAt ?? null,
+  };
+}
+
+/** Give rejoinable rows their history details, and list every other
+ *  history file as a past session (newest first). Rooms live in this
+ *  window are neither. */
+export function withSessionHistory(
+  candidates: readonly RejoinCandidate[],
+  history: readonly HistoryMeta[],
+  isLive: (roomId: string) => boolean,
+): { candidates: RejoinCandidate[]; past: PastSession[] } {
+  const byRoom = new Map(history.map((m) => [m.roomId, m]));
+  const out = candidates.map((c) => {
+    const m = byRoom.get(c.roomId);
+    return m ? { ...c, details: detailsFromHistory(m) } : c;
+  });
+  const listed = new Set(candidates.map((c) => c.roomId));
+  const past = history
+    .filter((m) => !listed.has(m.roomId) && !isLive(m.roomId))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((m) => ({
+      roomId: m.roomId,
+      title: m.docTitle,
+      ...(m.info?.role ? { role: m.info.role } : {}),
+      details: detailsFromHistory(m),
+    }));
+  return { candidates: out, past };
+}
+
+const fmtDay = (t: number): string =>
+  new Date(t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const fmtTime = (t: number): string => new Date(t).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+/** "Nov 9, 3:10 PM – 5:42 PM" (one day) or "Nov 9, 3:10 PM – Nov 10, 9:02 AM". */
+export function usedRange(from: number, to: number): string {
+  if (!from || !to || to - from < 60_000) return fmtDay(to || from);
+  const sameDay = new Date(from).toDateString() === new Date(to).toDateString();
+  return `${fmtDay(from)} \u2013 ${sameDay ? fmtTime(to) : fmtDay(to)}`;
+}
+
+/** "Alex, Sam, Jo and 2 others". */
+export function namesLine(names: readonly string[], max = 4): string {
+  const shown = names.slice(0, max);
+  const rest = names.length - shown.length;
+  if (rest > 0) return `${shown.join(', ')} and ${rest} other${rest === 1 ? '' : 's'}`;
+  return shown.join(', ').replace(/, ([^,]*)$/, ' and $1');
+}
+
+/** The local-file part of a row: "Aff.cmir · saved 2h ago". */
+export function fileLine(d: Pick<SessionDetails, 'fileName' | 'savedAt'>): string {
+  const name = d.fileName && !/^untitled\b/iu.test(d.fileName) ? d.fileName : '';
+  if (d.savedAt) return `${name || 'Your copy'} \u00b7 saved ${relativeTime(d.savedAt)}`;
+  return name ? `${name} \u00b7 not saved` : 'not saved to a file';
+}
+
+/** A row's body: the name first and largest, then who started it, then
+ *  who was in it, then when and the local file. Lines with nothing to
+ *  say are left out. Returns the text the search box matches. */
+function fillSessionBody(
+  body: HTMLElement,
+  o: { title: string; chip?: string; startedBy?: string; people?: string; when?: string; extra?: string },
+): string {
+  const top = document.createElement('span');
+  top.className = 'pmd-rejoin-card-top';
+  const name = document.createElement('span');
+  name.className = 'pmd-rejoin-card-name';
+  name.textContent = o.title || 'Collaboration session';
+  name.title = name.textContent;
+  top.appendChild(name);
+  if (o.chip) {
+    const chip = document.createElement('span');
+    chip.className = 'pmd-home-recent-format pmd-home-session-role pmd-rejoin-card-chip';
+    chip.textContent = o.chip;
+    top.appendChild(chip);
+  }
+  body.appendChild(top);
+  const line = (cls: string, text: string | undefined): void => {
+    if (!text) return;
+    const el = document.createElement('span');
+    el.className = cls;
+    el.textContent = text;
+    el.title = text;
+    body.appendChild(el);
+  };
+  line('pmd-rejoin-card-by', o.startedBy ? `Started by ${o.startedBy}` : undefined);
+  line('pmd-rejoin-card-meta', o.people);
+  line('pmd-rejoin-card-meta', o.when);
+  line('pmd-rejoin-card-meta', o.extra);
+  return [o.title, o.startedBy, o.people, o.when, o.extra].filter(Boolean).join(' ').toLowerCase();
+}
+
+const roleChip = (role: SessionRole | undefined): string | undefined =>
+  role === 'host' ? 'HOST' : role === 'spectator' ? 'WATCHED' : role === 'participant' ? 'JOINED' : undefined;
+
+function detailLines(d: SessionDetails | undefined, role: SessionRole | undefined): {
+  startedBy?: string;
+  people?: string;
+  when?: string;
+} {
+  if (!d) return {};
+  const startedBy = d.startedBy ?? (role === 'host' ? 'you' : undefined);
+  const people = d.people.length ? `With ${namesLine(d.people)}` : undefined;
+  const when = `Used ${usedRange(d.usedFrom, d.usedTo)} \u00b7 ${fileLine(d)}`;
+  return { ...(startedBy ? { startedBy } : {}), ...(people ? { people } : {}), when };
+}
+
 function describe(c: RejoinCandidate): string {
   // "last here", not "left": a crash records no leave time.
   const when = c.kind === 'saved' ? `saved ${relativeTime(c.at)}` : `last here ${relativeTime(c.at)}`;
@@ -156,6 +301,7 @@ const looksLikeCode = (t: string): boolean => /^cmshare|#|^https?:/i.test(t.trim
 export function pickSessionToJoin(
   candidates: RejoinCandidate[],
   team?: TeamSessionsSource,
+  past: readonly PastSession[] = [],
 ): Promise<RejoinPick | null> {
   return new Promise((resolve) => {
     const restoreFocus = captureFocusForDialog();
@@ -243,23 +389,17 @@ export function pickSessionToJoin(
         row.type = 'button';
         row.className = 'pmd-home-session-open pmd-rejoin-btn';
         row.title = c.kind === 'saved' ? 'Rejoin with your saved copy (syncs your edits)' : 'Rejoin this session';
-        const chip = document.createElement('span');
-        chip.className = 'pmd-home-recent-format pmd-home-session-role';
-        chip.textContent = c.role === 'host' ? 'HOST' : c.role === 'spectator' ? 'WATCHING' : 'JOINED';
-        row.appendChild(chip);
-        const name = document.createElement('span');
-        name.className = 'pmd-home-recent-name';
-        name.textContent = c.title || 'Collaboration session';
-        name.title = name.textContent;
-        row.appendChild(name);
-        const meta = document.createElement('span');
-        meta.className = 'pmd-home-recent-path';
-        meta.textContent = describe(c);
-        row.appendChild(meta);
+        row.classList.add('pmd-rejoin-card');
+        const search = fillSessionBody(row, {
+          title: c.title,
+          chip: c.role === 'host' ? 'HOST' : c.role === 'spectator' ? 'WATCHING' : 'JOINED',
+          ...detailLines(c.details, c.role),
+          extra: describe(c),
+        });
         row.addEventListener('click', () =>
           finish({ kind: 'rejoin', shareCode: c.shareCode, guestPass: c.guestPass, ...(c.relay ? { relay: c.relay } : {}) }),
         );
-        wrap.dataset['search'] = `${c.title} ${describe(c)}`.toLowerCase();
+        wrap.dataset['search'] = search;
         wrap.appendChild(row);
 
         // Forgetting a LEFT room only drops its remembered credentials.
@@ -320,16 +460,13 @@ export function pickSessionToJoin(
           wrap.className = 'pmd-home-session pmd-rejoin-row';
           wrap.setAttribute('role', 'listitem');
           const info = document.createElement('div');
-          info.className = 'pmd-home-session-open pmd-rejoin-team-info';
-          const name = document.createElement('span');
-          name.className = 'pmd-home-recent-name';
-          name.textContent = r.name;
-          name.title = r.name;
-          info.appendChild(name);
-          const meta = document.createElement('span');
-          meta.className = 'pmd-home-recent-path';
-          meta.textContent = teamMeta(r);
-          info.appendChild(meta);
+          info.className = 'pmd-home-session-open pmd-rejoin-team-info pmd-rejoin-card';
+          const search = fillSessionBody(info, {
+            title: r.name,
+            startedBy: r.startedBy,
+            people: whoIsIn(r),
+            ...(r.lastActivity > 0 ? { when: `Active ${relativeTime(r.lastActivity)}` } : {}),
+          });
           wrap.appendChild(info);
           const btn = document.createElement('button');
           btn.type = 'button';
@@ -356,7 +493,7 @@ export function pickSessionToJoin(
             });
           }
           wrap.appendChild(btn);
-          wrap.dataset['search'] = `${r.name} ${teamMeta(r)}`.toLowerCase();
+          wrap.dataset['search'] = search;
           teamList.appendChild(wrap);
         }
       };
@@ -372,6 +509,43 @@ export function pickSessionToJoin(
       };
       loadTeam();
       teamTimer = setInterval(loadTeam, team.refreshMs ?? 15_000);
+    }
+
+    // ── Past sessions: history this machine kept (30 days) ────────────
+    if (past.length) {
+      const pastSection = document.createElement('div');
+      pastSection.className = 'pmd-rejoin-section pmd-rejoin-past';
+      const pastHeading = document.createElement('div');
+      pastHeading.className = 'pmd-rejoin-heading';
+      pastHeading.textContent = 'Past sessions';
+      pastSection.appendChild(pastHeading);
+      const pastList = document.createElement('div');
+      pastList.className = 'pmd-home-sessions pmd-rejoin-list';
+      pastList.setAttribute('role', 'list');
+      for (const p of past) {
+        const wrap = document.createElement('div');
+        wrap.className = 'pmd-home-session pmd-rejoin-row';
+        wrap.setAttribute('role', 'listitem');
+        const info = document.createElement('div');
+        info.className = 'pmd-home-session-open pmd-rejoin-team-info pmd-rejoin-card';
+        const chip = roleChip(p.role);
+        wrap.dataset['search'] = fillSessionBody(info, {
+          title: p.title,
+          ...(chip ? { chip } : {}),
+          ...detailLines(p.details, p.role),
+        });
+        wrap.appendChild(info);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pmd-rejoin-team-btn';
+        btn.textContent = 'Open a copy';
+        btn.title = 'Pick a point in this session and open it as a new document';
+        btn.addEventListener('click', () => finish({ kind: 'history', roomId: p.roomId, title: p.title }));
+        wrap.appendChild(btn);
+        pastList.appendChild(wrap);
+      }
+      pastSection.appendChild(pastList);
+      dialog.appendChild(pastSection);
     }
 
     const footer = document.createElement('div');

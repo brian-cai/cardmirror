@@ -31,7 +31,7 @@ import { createNodeFromLoroObj } from 'loro-prosemirror';
 import type { Node as PMNode } from 'prosemirror-model';
 import { schema } from '../../schema/index.js';
 import { getElectronHost } from '../host/index.js';
-import type { HistoryChangeTime, HistoryEnvelope, HistoryEnvelopeWrite } from '../host/types.js';
+import type { HistoryChangeTime, HistoryEnvelope, HistoryEnvelopeWrite, HistoryInfo } from '../host/types.js';
 import { base64ToBytes } from './collab-crypto.js';
 import { configTextStyle, type CollabSession } from './collab-session.js';
 
@@ -80,7 +80,12 @@ export function attachSessionHistory(
   session: CollabSession,
   getDocTitle: () => string,
   hostForTests?: HistoryHostLike,
-  opts: { onFailure?: (consecutive: number) => void } = {},
+  opts: {
+    onFailure?: (consecutive: number) => void;
+    /** What the Join dialog's Past sessions shows: who is here now (peer
+     *  ids are Loro peers), this user's name, the local file. */
+    describe?: () => SessionDescription;
+  } = {},
 ): HistoryHandle {
   const host: HistoryHostLike | null = hostForTests ?? getElectronHost();
   let disposed = false;
@@ -97,6 +102,13 @@ export function attachSessionHistory(
   let seeded = false;
   let lastSnapshotBytes = 0;
   let failures = 0;
+  /** Everyone seen, by Loro peer — names survive their owner leaving. */
+  const names = new Map<string, string>();
+  let priorInfo: HistoryInfo | undefined;
+  // The seeding peer never changes; finding it decodes the whole op log,
+  // so once per session (and only for a joiner who needs it).
+  let seed: string | null | undefined;
+  const seedOnce = (): string | null => (seed === undefined ? (seed = seedPeer(session)) : seed);
 
   const writeInner = async (): Promise<void> => {
     if (disposed || !host) return;
@@ -107,6 +119,7 @@ export function attachSessionHistory(
         // so earlier observation times (and the true start) survive.
         const prior = await host.readHistory({ roomId: session.roomId });
         if (prior) {
+          priorInfo = prior.info;
           startedAt = Math.min(startedAt, prior.startedAt);
           changeTimes = [...prior.changeTimes];
           for (const t of changeTimes) {
@@ -127,6 +140,8 @@ export function attachSessionHistory(
         }
       }
       const snapshot = session.exportSnapshot();
+      const info = opts.describe ? sessionInfo(opts.describe(), names, seedOnce, priorInfo) : undefined;
+      if (info) priorInfo = info;
       const envelope: HistoryEnvelopeWrite = {
         v: 1,
         roomId: session.roomId,
@@ -134,6 +149,7 @@ export function attachSessionHistory(
         startedAt,
         updatedAt: now,
         changeTimes,
+        ...(info ? { info } : {}),
         snapshot,
       };
       await host.writeHistory(envelope);
@@ -207,6 +223,66 @@ export function attachSessionHistory(
   }
   liveHandles.set(session.roomId, handle);
   return handle;
+}
+
+/** What the writer is told about the session at each write. */
+export interface SessionDescription {
+  role: 'host' | 'participant' | 'spectator';
+  selfName: string;
+  /** The starter's name as the host published it in the room's meta. */
+  startedBy?: string | null;
+  present: { peer: string; name: string }[];
+  fileName?: string | null;
+  filePath?: string | null;
+}
+
+/** The peer that seeded the room: its first change has the lowest
+ *  lamport (the host seeds before anyone joins). */
+export function seedPeer(session: Pick<CollabSession, 'loroDoc'>): string | null {
+  let best: { peer: string; lamport: number } | null = null;
+  try {
+    for (const [peer, changes] of session.loroDoc.getAllChanges()) {
+      const first = changes[0];
+      if (first && (!best || first.lamport < best.lamport)) best = { peer, lamport: first.lamport };
+    }
+  } catch {
+    return null;
+  }
+  return best?.peer ?? null;
+}
+
+/** Fold one write's view of the session into the stored info: names
+ *  accumulate (this run's and the file's earlier ones), the starter is
+ *  kept once known. Exported for tests. */
+export function sessionInfo(
+  d: SessionDescription,
+  names: Map<string, string>,
+  seed: () => string | null,
+  prior?: HistoryInfo,
+): HistoryInfo {
+  for (const p of d.present) if (p.name.trim()) names.set(p.peer, p.name.trim());
+  const people: string[] = [];
+  const add = (n: string | undefined): void => {
+    const t = n?.trim();
+    if (t && !people.includes(t)) people.push(t);
+  };
+  for (const n of prior?.people ?? []) add(n);
+  add(d.selfName);
+  for (const n of names.values()) add(n);
+  let startedBy = prior?.startedBy;
+  if (d.role === 'host') startedBy = d.selfName.trim() || startedBy;
+  else if (d.startedBy?.trim()) startedBy = d.startedBy.trim();
+  else if (!startedBy) {
+    const peer = seed();
+    startedBy = peer ? names.get(peer) : undefined;
+  }
+  const out: HistoryInfo = { role: d.role, people: people.slice(0, 60) };
+  if (startedBy) out.startedBy = startedBy;
+  const fileName = d.fileName?.trim() || prior?.fileName;
+  if (fileName) out.fileName = fileName;
+  const filePath = d.filePath || prior?.filePath;
+  if (filePath) out.filePath = filePath;
+  return out;
 }
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {

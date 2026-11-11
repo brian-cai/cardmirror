@@ -103,6 +103,13 @@ export function setCollabDocTitleResolver(fn: ((uid: string) => string | null) |
   docTitleResolver = fn;
 }
 
+/** Resolve a doc uid → its file path on disk (null when never saved, or
+ *  on the web). Recorded in session history for Past sessions. */
+export let docPathResolver: ((uid: string) => string | null) | null = null;
+export function setCollabDocPathResolver(fn: ((uid: string) => string | null) | null): void {
+  docPathResolver = fn;
+}
+
 /** Resolve a doc uid → its persistent docId (null before first save).
  *  The persistence manager stamps it into the session record so the
  *  open-from-disk path can match a file back to its session. */

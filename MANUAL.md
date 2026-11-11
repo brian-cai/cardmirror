@@ -1777,9 +1777,15 @@ same for files) opens with a box for a session code or invite link, ready to
 paste into: paste and press Enter to join a new session. Below it are the
 sessions you can get back into: saved copies (the same ones as the home
 screen's Sessions list; rejoining syncs your offline edits) and sessions you
-left in the last week, while they are still running. Click one to rejoin. A
-session the host ended can't be rejoined and drops off the list; the ✕ on a
-left session forgets it.
+left in the last week, while they are still running. Click one to rejoin. The
+✕ on a left session forgets it. Typing in the box searches every list by
+session name, who started it and who was in it.
+
+**Past sessions** (desktop) lists every session from the last 30 days that
+can't be rejoined anymore: the host ended it, or it went idle. Each row shows
+the session's name, who started it, who was in it, when you used it, and your
+local file with when it was last saved. **Open a copy** lets you pick any
+point in the session and opens it as a new document.
 
 **Cutting cards in a shared document.** Cut (Cmd/Ctrl-X, or Cut in the
 nav pane's menu) on a whole card or section does not remove it: the card
