@@ -41,6 +41,9 @@ export interface NudgeInputs {
 export function shouldNudge(i: NudgeInputs): boolean {
   return (
     !!i.state &&
+    // Still downloading: nothing to install or open yet; the chip shows the
+    // percent and the next focus after it finishes asks.
+    i.state.state !== 'downloading' &&
     i.now.getDay() === NUDGE_DAY &&
     i.lastDay !== localDayKey(i.now) &&
     !i.paused &&
@@ -58,7 +61,7 @@ export function nudgeText(s: UpdateChipState): { title: string; message: string;
           'Restarting installs it and takes a few seconds; save your work first.',
         okLabel: 'Restart and update',
       }
-    : s.reason === 'move'
+    : s.state === 'available' && s.reason === 'move'
       ? {
           title: `CardMirror ${s.version} is out`,
           message:
