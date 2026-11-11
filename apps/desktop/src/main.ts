@@ -3691,6 +3691,27 @@ function buildMenu(): Menu {
           void shell.openExternal(MANUAL_URL);
         },
       },
+      // Guides on extinction.gg, the same pages the site links: tips for
+      // everyday cutting and the walkthroughs for co-editing over a relay.
+      {
+        label: 'Tips and Tricks',
+        click: () => {
+          void shell.openExternal(GUIDE_URLS.tips);
+        },
+      },
+      {
+        label: 'Set Up Co-Editing',
+        click: () => {
+          void shell.openExternal(GUIDE_URLS.relaySetup);
+        },
+      },
+      {
+        label: 'Move Your Team to CardMirror',
+        click: () => {
+          void shell.openExternal(GUIDE_URLS.teamStart);
+        },
+      },
+      { type: 'separator' },
       {
         label: 'Privacy Policy',
         click: () => {
@@ -3990,6 +4011,13 @@ ipcMain.handle('host:set-update-source', async (event, input: unknown) => {
 /** The user manual (MANUAL.md), rendered on GitHub. Linked from the Help
  *  menu so the full guide is one click away. */
 const MANUAL_URL = 'https://github.com/brian-cai/cardmirror/blob/xtgg/MANUAL.md';
+
+/** Guides on extinction.gg, linked from the Help menu. */
+const GUIDE_URLS = {
+  tips: 'https://extinction.gg/cardmirror/tips',
+  relaySetup: 'https://extinction.gg/relay/setup',
+  teamStart: 'https://extinction.gg/relay/start',
+} as const;
 
 /** The privacy policy (PRIVACY.md), rendered on GitHub. Linked from the Help
  *  menu alongside the manual (and from Settings → General). */

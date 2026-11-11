@@ -132,6 +132,13 @@ press the shortcuts, and try things as you read. When you're done, turn
 it off in **Settings → Files → "Onboarding doc for new documents"** and
 new documents will open blank instead.
 
+Guides on extinction.gg are one click away in the **Help** menu: **Tips
+and Tricks** (cutting, the nav pane, file search, read mode), **Set Up
+Co-Editing** (connecting to your team's relay), and **Move Your Team to
+CardMirror** (for coaches). Using Send, Receive or a session before
+sharing is set up offers the same setup guide next to the invite-link and
+team-file options.
+
 ### A two-minute tour of the ribbon
 
 The ribbon across the top is grouped into panels, left to right:

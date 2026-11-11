@@ -10,6 +10,11 @@
 import { settings } from '../settings.js';
 import { promptForRouteChoice, promptForText } from '../text-prompt.js';
 import { relayUsable } from '../collab/collab-relay.js';
+import { getElectronHost } from '../host/index.js';
+
+/** The step-by-step guide on extinction.gg, for someone with no link or
+ *  team file yet (or a coach setting the team up). */
+export const RELAY_SETUP_GUIDE_URL = 'https://extinction.gg/relay/setup';
 
 /** Whether this computer can share right now: collaboration on and a
  *  relay it can use. Collaboration is on by default, so a fresh install
@@ -21,7 +26,7 @@ export function sharingReady(): boolean {
 
 /** Offer the ways to set sharing up. `why` names what the user tried. */
 export async function offerSharingSetup(why?: string): Promise<void> {
-  const choice = await promptForRouteChoice<'link' | 'team' | 'settings'>({
+  const choice = await promptForRouteChoice<'link' | 'team' | 'settings' | 'guide'>({
     message: 'Set up card sharing and co-editing',
     detail:
       (why ? `${why} needs sharing set up on this computer. ` : 'Sharing isn’t set up on this computer yet. ') +
@@ -42,6 +47,11 @@ export async function offerSharingSetup(why?: string): Promise<void> {
         label: 'Set up in Settings',
         description: 'Turn on collaboration and connect a relay or account yourself.',
       },
+      {
+        value: 'guide',
+        label: 'Read the setup guide',
+        description: 'No link or team file yet? The walkthrough at extinction.gg/relay/setup, for students and coaches.',
+      },
     ],
   });
   if (choice === 'link') {
@@ -61,6 +71,9 @@ export async function offerSharingSetup(why?: string): Promise<void> {
     await m.importTeamFile();
   } else if (choice === 'settings') {
     const m = await import('../settings-ui.js');
-    m.openSettings({ category: 'pairing' });
+    m.openSettings({ category: 'pairing' });  } else if (choice === 'guide') {
+    const electron = getElectronHost();
+    if (electron) void electron.openExternal(RELAY_SETUP_GUIDE_URL);
+    else window.open(RELAY_SETUP_GUIDE_URL, '_blank', 'noopener,noreferrer');
   }
 }
