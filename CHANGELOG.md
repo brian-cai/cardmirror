@@ -5,6 +5,17 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.15.63 — 2026-11-10
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Group invites stay quiet.** A session invite sent to a group you're in
+  is still listed in Receive, but it no longer flashes the pill or counts
+  in "N new". Invites sent to you by name, and cards, still do.
+
 ## 1.15.62 — 2026-11-10
 
 BCai's (@brian-cai) build of CardMirror, updating from
