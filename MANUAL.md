@@ -1666,6 +1666,8 @@ row:
   to spectate (both when you got both). Each session gets one row however
   many invites to it arrive; with three or more sessions, all but the
   newest fold behind **N more session invites** (with **Clear these**).
+  An invite that came through a group is listed but stays quiet: it
+  doesn't flash the pill or count as new. Invites sent to you by name do.
   A bundled
   multi-selection send shows a **×N** count and is taken as one piece —
   click, drag, and ✕ all act on the whole bundle.

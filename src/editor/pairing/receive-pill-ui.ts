@@ -187,7 +187,7 @@ export class ReceivePillController {
       // session — they haven't been seen yet, so the reminder continues.
       if (
         settings.get('pairingReceiveFlash') === 'repeat' &&
-        inboxStore.unreadCount() > 0 &&
+        inboxDisplayUnread(this.items) > 0 &&
         !this.open
       ) {
         this.handleArrival();
@@ -224,7 +224,9 @@ export class ReceivePillController {
   }
 
   private onStoreChange(items: InboxItem[]): void {
-    const arrivals = items.filter((it) => !this.seenIds.has(it.id) && !it.read);
+    // A session invite that came through a group is listed but quiet: only
+    // cards and invites sent to you by name flash the pill.
+    const arrivals = items.filter((it) => !this.seenIds.has(it.id) && !it.read && !isGroupInvite(it));
     for (const it of items) this.seenIds.add(it.id);
     this.items = items;
     this.render();
@@ -258,7 +260,7 @@ export class ReceivePillController {
   private startRepeat(): void {
     this.stopRepeat();
     this.flashTimer = window.setInterval(() => {
-      if (!settings.get('pairingEnabled') || inboxStore.unreadCount() === 0 || this.open) {
+      if (!settings.get('pairingEnabled') || inboxDisplayUnread(this.items) === 0 || this.open) {
         this.stopRepeat();
         return;
       }
@@ -420,7 +422,7 @@ export class ReceivePillController {
   private renderSessionFold(older: SessionRoom[]): HTMLLIElement {
     const li = document.createElement('li');
     li.className = 'pmd-receive-row pmd-receive-session-fold';
-    if (older.some((r) => r.items.some((it) => !it.read))) li.classList.add('pmd-receive-row-unread');
+    if (older.some(roomUnread)) li.classList.add('pmd-receive-row-unread');
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'pmd-receive-session-fold-btn';
@@ -462,7 +464,7 @@ export class ReceivePillController {
     const item = room.newest;
     const row = document.createElement('li');
     row.className = 'pmd-receive-row pmd-receive-row-invite';
-    if (room.items.some((it) => !it.read)) row.classList.add('pmd-receive-row-unread');
+    if (roomUnread(room)) row.classList.add('pmd-receive-row-unread');
 
     const badge = document.createElement('span');
     badge.className = 'pmd-dropzone-row-type pmd-dropzone-row-type-generic';
@@ -742,11 +744,24 @@ export function inboxDisplayCount(items: readonly InboxItem[]): number {
   return items.length - invites + rooms.length;
 }
 
-/** Unread, counted the same way (a session with any unread invite counts once). */
+/** A session invite sent to a group you're in (the sender picked a group,
+ *  not you): listed, but never "new". In a round many teams' sessions
+ *  arrive this way. */
+export function isGroupInvite(it: InboxItem): boolean {
+  return !!it.via && parseRoomInvite(it) !== null;
+}
+
+/** A session with an unread invite sent to you by name. */
+function roomUnread(room: SessionRoom): boolean {
+  return room.items.some((it) => !it.read && !isGroupInvite(it));
+}
+
+/** The badge's "N new": unread cards, plus sessions with an unread invite
+ *  sent to you by name (each once). Group invites don't count. */
 export function inboxDisplayUnread(items: readonly InboxItem[]): number {
   const rooms = groupSessionInvites(items);
   const cards = items.filter((it) => !it.read && !parseRoomInvite(it)).length;
-  return cards + rooms.filter((r) => r.items.some((it) => !it.read)).length;
+  return cards + rooms.filter(roomUnread).length;
 }
 
 function prefetchRoom(room: SessionRoom): void {

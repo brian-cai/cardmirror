@@ -64,6 +64,20 @@ describe('groupSessionInvites', () => {
   });
 });
 
+describe('group invites are quiet', () => {
+  it('an invite sent through a group is listed but never new; one sent to you by name is', () => {
+    const viaGroup = { ...invite('cmshare2.rG.k', 'G', 1), via: 'Lexington' };
+    const direct = invite('cmshare2.rD.k', 'D', 2);
+    expect(inboxDisplayCount([viaGroup, direct])).toBe(2);
+    expect(inboxDisplayUnread([viaGroup])).toBe(0);
+    expect(inboxDisplayUnread([viaGroup, direct])).toBe(1);
+    // A card sent through a group still counts: only session invites go quiet.
+    expect(inboxDisplayUnread([{ ...card(3), via: 'Lexington' }])).toBe(1);
+    // A room invited both ways counts once, as new.
+    expect(inboxDisplayUnread([viaGroup, { ...invite('cmshare2.rG.k', 'G', 4) }])).toBe(1);
+  });
+});
+
 describe('Receive pill session rows', () => {
   const S = 'pmd-pairing-inbox';
   async function mount(items: InboxItem[]): Promise<HTMLElement> {
