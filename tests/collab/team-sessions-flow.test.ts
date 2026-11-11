@@ -34,6 +34,8 @@ let mock: RoomsMock;
 const realFetch = globalThis.fetch;
 const ext = {
   supported: true,
+  /** Delay before the discovery GET answers (a slow relay). */
+  discoveryDelayMs: 0,
   log: [] as string[],
   listings: new Map<string, string>(),
   requests: new Map<string, { requestId: string; blob: string; createdAt: number }[]>(),
@@ -60,6 +62,7 @@ const fetchStub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   else if (method === 'DELETE' && /^\/rooms\/[^/]+$/.test(path)) ext.log.push(`${method} ${path}`);
   if (!isExt) return realFetch(input, init);
   if (path === '/ext/team-sessions/v1') {
+    if (ext.discoveryDelayMs) await new Promise((r) => setTimeout(r, ext.discoveryDelayMs));
     return ext.supported ? json(200, { v: 1, maxBlobBytes: 4096, requestTtlSeconds: 86400 }) : json(404, { detail: 'Not Found' });
   }
   const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as { blob: string }) : null;
@@ -169,6 +172,7 @@ beforeEach(() => {
   __resetTeamSessionsForTests();
   __resetJoinRequestsUiForTests();
   ext.supported = true;
+  ext.discoveryDelayMs = 0;
   ext.log = [];
   ext.listings.clear();
   ext.requests.clear();
@@ -263,6 +267,22 @@ describe('team sessions in the session flows', () => {
     const roomId = collabUi.activeSession()!.roomId;
     await vi.waitFor(() => expect(ext.listings.has(roomId)).toBe(true));
     expect(await openTeamBlob(KEY, ext.listings.get(roomId)!)).toMatchObject({ mode: 'open', shareCode });
+    await end(d);
+    view.current.destroy();
+  }, 20_000);
+
+  it('a relay slower than 3 s to answer discovery still lists the session once it does', async () => {
+    ext.discoveryDelayMs = 3_600;
+    const view = { current: mkView() };
+    const d = deps(view);
+    const p = collabUi.startSessionFlow(d);
+    await vi.waitFor(() => expect(document.querySelector('.pmd-text-prompt-dialog')).not.toBeNull(), { timeout: 5_000 });
+    // The relay hadn't answered when the prompt opened: the opt-out still shows.
+    expect(document.querySelector('.pmd-text-prompt-check')).not.toBeNull();
+    button('Start Session').click();
+    await p;
+    const roomId = collabUi.activeSession()!.roomId;
+    await vi.waitFor(() => expect(ext.listings.has(roomId)).toBe(true), { timeout: 5_000 });
     await end(d);
     view.current.destroy();
   }, 20_000);

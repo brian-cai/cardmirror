@@ -29,7 +29,7 @@ import { promptForText, confirmDialog } from '../text-prompt.js';
 import { setCollabCopresenceProvider, setCollabCloseActions, setCollabHandoffProvider, setCollabSessionCountProvider, setCollabLiveRoomProbe, setCollabFocusChangeHandler, setCollabShareCodeGetter, setCollabInviteLinkGetter, setCollabViewCodeGetter, setCollabViewLinkGetter } from './collab-hooks.js';
 import { getElectronHost } from '../host/index.js';
 import { ensureBakedRelay, relayClient, relayClientWithGuestPass, endRoomOnRelay } from './collab-relay.js';
-import { teamSessionsSupportWithin } from './team-sessions.js';
+import { teamSessionsSupport, teamSessionsSupportWithin } from './team-sessions.js';
 import { buildJoinLink, parseJoinLinkHash } from './join-link.js';
 import { resolveStarredTarget } from '../pairing/send-to-starred.js';
 import { loadSessionRecord, loadPrefetch, deletePrefetch, deleteRecentRoom } from './collab-store.js';
@@ -200,9 +200,19 @@ async function startSessionFlowInner(
   const docName = namedDocTitle(startName);
   const fallbackName = defaultSessionName(docName, settings.get('pairingDisplayName'));
   // Team sessions: offer the per-session opt-out only when this session
-  // would be listed (team key + a relay that answers discovery quickly).
+  // would be listed (team key + a relay that supports listings). The
+  // prompt waits at most 3 s for the relay's answer; a relay slower than
+  // that still gets the checkbox, and the listing goes out once it does
+  // answer (it used to be dropped, so sessions started on a slow
+  // connection never showed in the team's Join dialog).
   const teamCtx = teamContext();
-  const teamListable = !!teamCtx && !!(await teamSessionsSupportWithin(teamCtx, 3000));
+  const teamSupport = teamCtx ? teamSessionsSupport(teamCtx.client, teamCtx.baseUrl) : Promise.resolve(null);
+  let teamAnswered = false;
+  void teamSupport.then(() => {
+    teamAnswered = true;
+  });
+  const teamQuick = teamCtx ? await teamSessionsSupportWithin(teamCtx, 3000) : null;
+  const teamListable = !!teamCtx && (!!teamQuick || !teamAnswered);
   let dontList = false;
   const typed = await promptForText({
     message: 'Start a co-editing session',
@@ -287,7 +297,15 @@ async function startSessionFlowInner(
     }
     sess.lastStatus = { connected: true, queuedUpdates: 0 };
     updateChip({ connected: true, queuedUpdates: 0 });
-    if (teamListable && !dontList) listStartedSession(session.roomId, sessionName, shareCode);
+    if (teamListable && !dontList) {
+      if (teamQuick) listStartedSession(session.roomId, sessionName, shareCode);
+      else {
+        const roomId = session.roomId;
+        void teamSupport.then((ok) => {
+          if (ok && roomLiveInWindow(roomId)) listStartedSession(roomId, sessionName, shareCode);
+        });
+      }
+    }
     // Web hosts copy the INVITE LINK (their partner most likely joins in
     // a browser; the link carries the guest pass so an account-less
     // joiner works). Desktop keeps the bare code — its partners are
