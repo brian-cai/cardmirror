@@ -5,12 +5,19 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
-## 1.15.63 — 2026-11-10
+## 1.17.3 — 2026-11-10
 
 BCai's (@brian-cai) build of CardMirror, updating from
-github.com/brian-cai/cardmirror.
+github.com/brian-cai/cardmirror. The version jumps from 1.15 to 1.17 to
+stay ahead of the original CardMirror (1.17.2), so installing this build
+over it is an upgrade.
 
 ### Collaboration
+
+- **Watch invites arrive.** An invite to watch a session (from this build
+  or the original CardMirror) needs version 1.16 or newer, so 1.15 builds
+  dropped every one with an "update required" message. They now arrive
+  with a Watch button.
 
 - **Group invites stay quiet.** A session invite sent to a group you're in
   is still listed in Receive, but it no longer flashes the pill or counts

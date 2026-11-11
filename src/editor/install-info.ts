@@ -50,7 +50,7 @@ export interface InstallInfoEntry {
  *  this fork can be told apart from the original CardMirror. */
 export const BUILD_LABEL = "BCai's build";
 
-/** The About Version row: "1.15.60 (BCai's build)", or Lite's own label.
+/** The About Version row: "1.17.3 (BCai's build)", or Lite's own label.
  *  Exported for tests. */
 export function versionLabel(version: string, lite: boolean): string {
   return lite ? `${version} (CardMirror Lite)` : `${version} (${BUILD_LABEL})`;
@@ -62,7 +62,7 @@ export function getInstallInfo(): InstallInfoEntry[] {
   const entries: InstallInfoEntry[] = [
     // Edition rides on the Version row: "which build is this?" is the
     // first triage question on any bug report from a Lite install, and
-    // the fork's 1.15.x numbers read as older than the original's.
+    // which fork it is when the numbers are close.
     { label: 'Version', value: versionLabel(appVersion, isLiteBuild()) },
     {
       label: 'Host',
