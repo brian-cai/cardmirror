@@ -5,6 +5,22 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.17.4 — 2026-11-11
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Collaboration
+
+- **Past sessions.** Join session now lists every session from the last
+  30 days that can't be rejoined anymore (ended, or gone idle), not just
+  the few still running. **Open a copy** picks any point in one and opens
+  it as a new document.
+- **Session details at a glance.** Every row in Join session shows the
+  session's name first, then who started it, then who was in it, when you
+  used it, and your local file with when it was last saved. The search box
+  matches all of it, so typing a teammate's name finds their sessions.
+
 ## 1.17.3 — 2026-11-10
 
 BCai's (@brian-cai) build of CardMirror, updating from
