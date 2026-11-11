@@ -5,6 +5,44 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.17.5 — 2026-11-11
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror. Brings in the original CardMirror's
+1.17.0–1.17.2.
+
+### Fixed
+
+- **Co-editing windows no longer freeze when rejoining or catching up.**
+  A window could lock up at 100% CPU when it rejoined a session, came back
+  after a network change, or got a burst of partner edits, most often after
+  cards had been moved. The bundled CRDT library had the bug; this build
+  ships the fixed version (loro-crdt 1.13.9). It co-edits normally with
+  people still on older versions.
+- **A window that stops responding offers to restart itself** (Wait,
+  Restart Window, Close Window). Restart restores unsaved work from the
+  recovery journal.
+- **One very large edit no longer locks up a session** while it sends.
+- **Word opens exports whose image alt text has quotation marks.**
+- **Sessions on a slow connection show up for your team.** If the relay took
+  more than 3 seconds to answer when you started a session, the session
+  was never listed in your team's Join session. It's now listed once the
+  relay answers.
+
+### Added
+
+- **Guides in the Help menu:** Tips and Tricks, Set Up Co-Editing, and Move
+  Your Team to CardMirror open the guides on extinction.gg. The "set up
+  sharing" prompt also links the setup guide.
+- **Refresh File Search Index** (a command) re-scans your file search
+  folders right away; changing those folders in Settings re-scans too.
+- **Read mode shows hand-bolded cites** instead of hiding them.
+- **The update chip shows download progress** ("Downloading update… 42%").
+- **Inserting a received card marks it read.**
+- **Highlight underlined text only:** a word follows the double-click rule,
+  and with nothing underlined in the selection the key removes highlight
+  instead of doing nothing.
+
 ## 1.17.4 — 2026-11-11
 
 BCai's (@brian-cai) build of CardMirror, updating from
