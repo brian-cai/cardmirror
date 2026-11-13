@@ -363,6 +363,12 @@ export function pickSessionToJoin(
     entry.appendChild(join);
     dialog.appendChild(entry);
 
+    // The lists share one scrolling body between the box and the footer, so
+    // the dialog never grows past the window and Cancel stays on screen.
+    const body = document.createElement('div');
+    body.className = 'pmd-rejoin-body';
+    dialog.appendChild(body);
+
     // ── Sessions to get back into ─────────────────────────────────────
     const section = document.createElement('div');
     section.className = 'pmd-rejoin-section';
@@ -374,7 +380,7 @@ export function pickSessionToJoin(
     list.className = 'pmd-home-sessions pmd-rejoin-list';
     list.setAttribute('role', 'list');
     section.appendChild(list);
-    dialog.appendChild(section);
+    body.appendChild(section);
 
     const renderRows = (): void => {
       list.innerHTML = '';
@@ -449,7 +455,7 @@ export function pickSessionToJoin(
       teamNote.className = 'pmd-rejoin-team-note';
       teamNote.hidden = true;
       teamSection.appendChild(teamNote);
-      dialog.appendChild(teamSection);
+      body.appendChild(teamSection);
 
       const sent = new Set<string>();
       const renderTeam = (rows: TeamSessionRow[]): void => {
@@ -545,7 +551,7 @@ export function pickSessionToJoin(
         pastList.appendChild(wrap);
       }
       pastSection.appendChild(pastList);
-      dialog.appendChild(pastSection);
+      body.appendChild(pastSection);
     }
 
     const footer = document.createElement('div');

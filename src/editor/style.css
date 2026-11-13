@@ -17825,9 +17825,41 @@ html.pmd-frame-shared-off:not(.pmd-frame-speech-off) .pmd-qcs-row-speech.pmd-qcs
   min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 7px; background: var(--pmd-c-accent);
   color: var(--pmd-c-text-on-accent); font-size: 10px; font-weight: 600; line-height: 14px; text-align: center; }
 
-/* Join or rejoin a session: roomier, and the lists scroll inside it. */
-.pmd-rejoin-dialog { width: min(42rem, 94vw); max-width: none; }
-.pmd-rejoin-dialog .pmd-rejoin-list { max-height: min(22rem, 40vh); overflow-y: auto; }
+/* Join or rejoin a session: never taller or wider than the window. The box
+   and Cancel stay put; the lists scroll together in .pmd-rejoin-body (one
+   scroll bar, not one per list). */
+.pmd-rejoin-dialog {
+  width: min(36rem, calc(100vw - 32px));
+  min-width: 0;
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.pmd-rejoin-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0 -0.5rem;
+  padding: 0 0.5rem;
+}
+.pmd-rejoin-dialog .pmd-rejoin-list { max-height: none; overflow: visible; }
+/* A scroll bar that's always drawn (macOS hides overlay scroll bars until
+   you scroll, so a long list looked cut off). */
+.pmd-rejoin-body::-webkit-scrollbar { width: 10px; }
+.pmd-rejoin-body::-webkit-scrollbar-track { background: transparent; }
+.pmd-rejoin-body::-webkit-scrollbar-thumb {
+  background: var(--pmd-c-border, rgba(127, 127, 127, 0.45));
+  border-radius: 5px;
+  border: 2px solid var(--pmd-c-bg);
+}
+.pmd-rejoin-dialog .pmd-rejoin-entry,
+.pmd-rejoin-dialog .pmd-rejoin-footer,
+.pmd-rejoin-dialog .pmd-route-header { flex: 0 0 auto; }
 .pmd-rejoin-row[hidden] { display: none; }
 
 /* Settings → Collaboration: groups teammates suggest. */
