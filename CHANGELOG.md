@@ -5,6 +5,30 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.17.6 — 2026-11-12
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Changed
+
+- **It's clear which CardMirror this is.** Window titles read
+  "file — CardMirror (BCai's build)", the home screen has a BCai's build
+  badge, the status bar shows BCai's build (click it for About this
+  install), and the Mac About panel, the installer window and the Windows
+  uninstall list name it too. The app is still called CardMirror on disk,
+  so it installs over the original and keeps your settings.
+- **Teammates' new names reach your contacts.** When someone on your
+  team's relay changes their display name, your contact for them updates
+  within a minute (or as soon as you open Send). A name you gave a
+  contact yourself is kept.
+
+### Fixed
+
+- **Join session fits the window.** With many sessions it no longer runs
+  off the screen: the lists scroll, with a visible scroll bar, and Cancel
+  stays in view.
+
 ## 1.17.5 — 2026-11-11
 
 BCai's (@brian-cai) build of CardMirror, updating from

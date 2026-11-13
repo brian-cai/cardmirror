@@ -50,7 +50,7 @@ export interface InstallInfoEntry {
  *  this fork can be told apart from the original CardMirror. */
 export const BUILD_LABEL = "BCai's build";
 
-/** The About Version row: "1.17.5 (BCai's build)", or Lite's own label.
+/** The About Version row: "1.17.6 (BCai's build)", or Lite's own label.
  *  Exported for tests. */
 export function versionLabel(version: string, lite: boolean): string {
   return lite ? `${version} (CardMirror Lite)` : `${version} (${BUILD_LABEL})`;
