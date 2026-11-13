@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CardMirror layout harness</title>
+    <!-- Dev/CI only (scripts/layout-check.cjs): opens the app's dialogs with
+         big fixture data and checks they fit the window. Never shipped. -->
+    <link rel="stylesheet" href="/src/editor/style.css" />
+    <link rel="stylesheet" href="/src/editor/icons.css" />
+    <!-- Startup notices (the web build's relay warning) would cover every screenshot. -->
+    <style>.pmd-toast { display: none !important; }</style>
+  </head>
+  <body>
+    <script>addEventListener("error", (e) => { if (e.error) console.error("Uncaught: " + e.error.stack); });</script>
+    <script type="module" src="./boot.ts"></script>
+  </body>
+</html>

@@ -20,5 +20,5 @@
     "noEmit": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*", "tests/**/*", "benchmarks/**/*", "vitest.config.ts", "vite.config.ts"]
+  "include": ["src/**/*", "tests/**/*", "benchmarks/**/*", "dev/layout-harness/**/*", "vitest.config.ts", "vite.config.ts"]
 }

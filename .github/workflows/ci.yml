@@ -97,3 +97,51 @@ jobs:
         timeout-minutes: 13
         # An empty test-scope (linux/mac) runs the full suite.
         run: npm test -- ${{ matrix.test-scope }} --reporter=default --reporter=hanging-process
+
+  layout:
+    # Real layout in Electron's Chromium (jsdom has none): every dialog in
+    # dev/layout-harness opens with large fixture data at a laptop and a
+    # small window size, and fails if it leaves the window, hides a button,
+    # can't scroll to its content, or spills sideways. The Join session
+    # dialog that ran off screen (1.17.6) is the case this was built for.
+    # Screenshots of every dialog are uploaded either way, for a look.
+    name: Dialog layout check
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install desktop dependencies (Electron)
+        run: npm --prefix apps/desktop ci
+
+      - name: Start the dev server
+        run: |
+          npx vite --port 5199 --strictPort > vite.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5199/dev/layout-harness/ > /dev/null && exit 0
+            sleep 2
+          done
+          cat vite.log
+          exit 1
+
+      - name: Check dialog layout
+        timeout-minutes: 12
+        run: apps/desktop/node_modules/.bin/electron scripts/layout-check.cjs --url http://localhost:5199/dev/layout-harness/ --out layout-shots
+
+      - name: Upload dialog screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dialog-layout-screenshots
+          path: layout-shots/
+          retention-days: 14
+
