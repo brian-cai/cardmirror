@@ -42,8 +42,8 @@ import { relayMatchKey, tokenFingerprint } from '../relay-protocol.js';
 import { relayTag, tagImported } from '../pairing/contact-relays.js';
 import { queueTeamReview } from '../pairing/team-review.js';
 
-/** Background refresh cadence: a conditional GET (usually a 304), so cheap enough that a teammate who joins mid-practice shows up within minutes. */
-export const TEAM_DIRECTORY_REFRESH_MS = 5 * 60_000;
+/** Background refresh cadence: a conditional GET (usually a 304), so cheap enough to run every minute: a teammate who joins or renames themselves shows up within a minute (xtgg; was 5 minutes). */
+export const TEAM_DIRECTORY_REFRESH_MS = 60_000;
 /** A forced refresh (settings opened) this close to the last one reuses it. */
 const FORCE_FLOOR_MS = 5_000;
 /** The spec caps a person's name at 60 characters. */
@@ -443,6 +443,28 @@ function heldSinceLastChange(
  *  teammates from your relay" when N > 0. What it holds for a yes is
  *  offered on every refresh, not only when the list changed (the review
  *  doesn't survive a restart; "Don't add" and "not now" keep it quiet). */
+/** Contacts follow the names on the team list (xtgg): when a teammate
+ *  renames themselves (or a manager renames them), every install that has
+ *  them updates on its next refresh. `dirName` is the list's name last
+ *  applied; a contact whose name differs from it was renamed here (a
+ *  nickname) and keeps it. A contact with no `dirName` yet (made by hand,
+ *  or from before this) keeps its name too and follows from the next
+ *  rename on. Exported for tests. */
+export function followDirectoryNames(
+  partners: readonly PairingPartner[],
+  dir: Pick<TeamDirectory, 'people'>,
+): PairingPartner[] {
+  const names = new Map(dir.people.map((p) => [p.code, p.name.trim()] as const));
+  return partners.map((p) => {
+    const listed = names.get(normalizePairingCode(p.code));
+    if (!listed) return p;
+    if (p.dirName === undefined) return { ...p, dirName: listed };
+    if (p.name !== p.dirName) return p.dirName === listed ? p : { ...p, dirName: listed };
+    if (p.name === listed) return p;
+    return { ...p, name: listed, dirName: listed };
+  });
+}
+
 function applyImported(dir: TeamDirectory, tag: string, key: string): ApplyResult {
   const before = settings.get('pairingPartners');
   const state = directoryState(key);
@@ -455,7 +477,10 @@ function applyImported(dir: TeamDirectory, tag: string, key: string): ApplyResul
     groupIds: state.groupIds,
   });
   // Everyone on this relay's list is on this relay (contact-relays.ts).
-  const tagged = tagImported(merged.partners, before, dir.people.map((p) => p.code), tag, { retag: changed });
+  const tagged = followDirectoryNames(
+    tagImported(merged.partners, before, dir.people.map((p) => p.code), tag, { retag: changed }),
+    dir,
+  );
   if (merged.addedPeople || merged.addedGroups || JSON.stringify(tagged) !== JSON.stringify(before)) {
     settings.set('pairingPartners', tagged);
     settings.set('pairingGroups', merged.groups);
@@ -829,7 +854,10 @@ export async function importTeamDirectory(
     groups: settings.get('pairingGroups'),
     groupIds: directoryState(key).groupIds,
   });
-  settings.set('pairingPartners', tagImported(merged.partners, before, dir.people.map((p) => p.code), relayTag(ctx.baseUrl)));
+  settings.set(
+    'pairingPartners',
+    followDirectoryNames(tagImported(merged.partners, before, dir.people.map((p) => p.code), relayTag(ctx.baseUrl)), dir),
+  );
   settings.set('pairingGroups', merged.groups);
   // Team key: taken when this machine has none; a different one never
   // replaces yours (the team file's quiet notice instead).

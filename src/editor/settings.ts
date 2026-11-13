@@ -218,6 +218,10 @@ export interface PairingPartner {
    *  URLs or 'builtin'. Absent = every relay, the original behaviour; the
    *  original CardMirror ignores the field. */
   relays?: string[];
+  /** The name the relay's team list last gave this contact
+   *  (collab/team-directory.ts followDirectoryNames): while `name` equals
+   *  it, a rename on the list carries over; a name changed here is kept. */
+  dirName?: string;
 }
 
 /** A named set of partners (e.g. a coach's "Smith/Jones" partnership).
@@ -6849,6 +6853,9 @@ export function sanitizePairingPartners(raw: unknown): PairingPartner[] {
       name,
       ...((p as PairingPartner).hidden === true ? { hidden: true } : {}),
       ...(relays.length ? { relays } : {}),
+      ...(typeof (p as PairingPartner).dirName === 'string'
+        ? { dirName: String((p as PairingPartner).dirName).trim().slice(0, 80) }
+        : {}),
     });
   }
   return out;

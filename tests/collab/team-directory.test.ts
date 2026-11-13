@@ -369,13 +369,13 @@ describe('offer and Not now', () => {
     expect(currentOffer()).toBeNull();
   });
 
-  it('fetches at most every 5 minutes unless forced', async () => {
+  it('fetches at most every minute unless forced', async () => {
     const relay = fakeRelay();
     await refreshTeamDirectory(relay.ctx, { now: clock });
     const n = relay.sent.length;
-    await refreshTeamDirectory(relay.ctx, { now: clock + 60_000 });
+    await refreshTeamDirectory(relay.ctx, { now: clock + 30_000 });
     expect(relay.sent.length).toBe(n);
-    await refreshTeamDirectory(relay.ctx, { now: clock + 60_000, force: true });
+    await refreshTeamDirectory(relay.ctx, { now: clock + 30_000, force: true });
     expect(relay.sent.length).toBe(n + 1);
   });
 });
@@ -416,9 +416,10 @@ describe('import', () => {
     expect(put.body).toEqual({ code: ME, name: 'Sam Lee' });
     expect(settings.get('pairingDisplayName')).toBe('Sam Lee');
     // Ana was a contact before (on every relay); Ben is new, so he's tied to this relay.
+    // A name of your own is kept; dirName remembers the list's, for renames.
     expect(settings.get('pairingPartners')).toEqual([
-      { code: ANA, name: 'Ana (mine)' },
-      { code: BEN, name: 'Ben Wu', relays: [BASE] },
+      { code: ANA, name: 'Ana (mine)', dirName: 'Ana Lopez' },
+      { code: BEN, name: 'Ben Wu', relays: [BASE], dirName: 'Ben Wu' },
     ]);
     expect(settings.get('pairingGroups').map((g) => [g.label, g.memberCodes])).toEqual([['Varsity', [ANA, BEN]]]);
     expect(directoryState(key).imported).toBe(true);
@@ -1010,5 +1011,24 @@ describe('relay switched mid-refresh', () => {
     expect(out.ok).toBe(false);
     expect(settings.get('pairingPartners')).toEqual([]);
     expect(settings.get('teamSessionsKey')).toBe('');
+  });
+});
+
+// ── renames ───────────────────────────────────────────────────────────
+
+describe('a teammate renames themselves', () => {
+  it('every imported install shows the new name on its next refresh; a nickname stays', async () => {
+    const relay = fakeRelay();
+    settings.set('pairingPartners', [{ code: BEN, name: 'Benny' }]);
+    const dir = (await refreshTeamDirectory(relay.ctx, { now: clock }))!;
+    await importTeamDirectory(relay.ctx, dir, 'Sam Lee');
+    const nameOf = (code: string) => settings.get('pairingPartners').find((p) => p.code === code)?.name;
+    expect(nameOf(ANA)).toBe('Ana Lopez');
+    expect(nameOf(BEN)).toBe('Benny');
+
+    relay.edit({ people: [{ code: ANA, name: 'Ana L.', self: true }, { code: BEN, name: 'Ben W.' }, { code: ME, name: 'Sam Lee', self: true }] });
+    await refreshTeamDirectory(relay.ctx, { now: clock + TEAM_DIRECTORY_REFRESH_MS + 1 });
+    expect(nameOf(ANA)).toBe('Ana L.');
+    expect(nameOf(BEN)).toBe('Benny');
   });
 });

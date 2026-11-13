@@ -624,7 +624,14 @@ export class SendPillController {
     offer.className = 'pmd-send-offer';
     offer.hidden = true;
     this.panel.appendChild(offer);
-    void import('../collab/team-directory-ui.js').then((m) => m.renderOffer()).catch(() => {});
+    // Opening Send also asks the team list what changed (a teammate's new
+    // name shows here at once; at most every 5 s).
+    void import('../collab/team-directory-ui.js')
+      .then((m) => {
+        m.renderOffer();
+        void m.refreshTeamDirectoryNow(true);
+      })
+      .catch(() => {});
     this.panel.appendChild(search);
     this.panel.appendChild(actions);
   }
