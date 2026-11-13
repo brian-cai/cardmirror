@@ -1047,22 +1047,9 @@ startTournamentModeWatch();
     void import('./tournament-mode-ui.js').then((m) => m.initTournamentChip(tournamentChipEl));
   }
 }
-// Build chip (xtgg): "BCai's build" in the status bar while a doc is open,
-// so this is never mistaken for the original CardMirror. Opens About.
-{
-  // The title bar names the build from the first paint, before any doc
-  // sets it (index.html's <title> is shared with Lite).
-  if (document.title === 'CardMirror') document.title = windowTitle(null);
-  const buildChipEl = document.getElementById('build-chip') as HTMLButtonElement | null;
-  if (buildChipEl && !isLiteBuild()) {
-    buildChipEl.hidden = false;
-    buildChipEl.addEventListener('click', () => {
-      void loadSettingsUi().then((m) =>
-        m.openSettings({ category: 'general', anchor: 'about-this-install' }),
-      );
-    });
-  }
-}
+// The title bar names the build (BCai's build) from the first paint, before
+// any doc sets it (index.html's <title> is shared with Lite).
+if (document.title === 'CardMirror') document.title = windowTitle(null);
 // Update chip (install-on-confirm) — desktop only; the element stays
 // hidden on web / when the packaged shell predates the chip API.
 {
