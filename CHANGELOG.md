@@ -5,6 +5,18 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.17.8 — 2026-11-12
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Fixed
+
+- **Long messages no longer push OK and Cancel off the screen.** An alert
+  or confirmation with a long message (a list of files, a long error)
+  could grow taller than the window. Every such dialog now stays inside
+  the window and its text scrolls.
+
 ## 1.17.7 — 2026-11-12
 
 BCai's (@brian-cai) build of CardMirror, updating from
