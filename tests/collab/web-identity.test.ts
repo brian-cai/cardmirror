@@ -228,8 +228,8 @@ describe('web account linking', () => {
     await new Promise((r) => setTimeout(r, 0));
     fetchMock.mockClear(); // the schedule's own immediate check
     window.dispatchEvent(new Event('online'));
-    await new Promise((r) => setTimeout(r, 20));
-    expect(fetchMock, 'online → renewal attempted').toHaveBeenCalled();
+    // Wait for the call, not a fixed 20 ms (a loaded CI runner missed it).
+    await vi.waitFor(() => expect(fetchMock, 'online → renewal attempted').toHaveBeenCalled(), { timeout: 2000, interval: 5 });
     __resetWebAccountForTests();
   });
 

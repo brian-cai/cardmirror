@@ -515,15 +515,21 @@ describe('RoomStream backoff policy (2026-09-01 review)', () => {
       },
       callbacks: noop,
     });
-    stream.start();
-    await sleep(400);
-    stream.stop();
+    // A fake clock: the gaps are the delays the stream asked for, exactly.
+    // On real timers a loaded CI runner overshot them (flaky on macOS).
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    try {
+      stream.start();
+      await vi.advanceTimersByTimeAsync(400);
+      stream.stop();
+    } finally {
+      vi.useRealTimers();
+      rand.mockRestore();
+    }
     const gaps = stamps.slice(1).map((t, i) => t - stamps[i]!);
     expect(gaps.length).toBeGreaterThan(4);
-    rand.mockRestore();
-    // Timer slop only (loaded CI runners overshoot by 10-20 ms): never the
-    // old cap×1.3 = 65.
-    for (const g of gaps) expect(g).toBeLessThan(65);
+    // Never the old cap×1.3 = 65: at most the 50 ms cap.
+    for (const g of gaps) expect(g).toBeLessThanOrEqual(50);
   });
 
   it('backoff resets only after a connection SURVIVES, so a hello-then-close relay is not hammered', async () => {

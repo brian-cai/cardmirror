@@ -607,8 +607,10 @@ describe('collab UI flows through the editor seams', () => {
     const hostView = mkView(rawHost.plugins());
     await settle();
     rawHost.start();
-    await sleep(80);
     const decoded = decodeShareCode(shareCode)!;
+    // Waited for, not slept on: the host's stream must be in before the
+    // nine fillers, or the room isn't full when F joins.
+    await vi.waitFor(() => expect(mock.streamCount(decoded.roomId)).toBe(1), { timeout: 5000, interval: 20 });
     // Fill the room: the host holds one stream; nine raw ones reach the cap.
     const raws: AbortController[] = [];
     for (let i = 0; i < 9; i++) {
@@ -823,8 +825,10 @@ describe('spectators through the UI flows (view-only sessions, 2026-10-24)', () 
     const hostView = mkView(rawHost.plugins());
     await settle();
     rawHost.start();
-    await sleep(80);
     const decoded = decodeShareCode(shareCode)!;
+    // Waited for, not slept on: the host's stream must be in before the
+    // nine fillers, or the room isn't full when F joins.
+    await vi.waitFor(() => expect(mock.streamCount(decoded.roomId)).toBe(1), { timeout: 5000, interval: 20 });
     const viewS = mkIndexStyleView('doc-S');
     const depsS = {
       getView: () => viewS,
@@ -886,8 +890,10 @@ describe('spectators through the UI flows (view-only sessions, 2026-10-24)', () 
     const hostView = mkView(rawHost.plugins());
     await settle();
     rawHost.start();
-    await sleep(80);
     const decoded = decodeShareCode(shareCode)!;
+    // Waited for, not slept on: the host's stream must be in before the
+    // nine fillers, or the room isn't full when F joins.
+    await vi.waitFor(() => expect(mock.streamCount(decoded.roomId)).toBe(1), { timeout: 5000, interval: 20 });
     const raws: AbortController[] = [];
     for (let i = 0; i < 9; i++) {
       const ac = new AbortController();
@@ -897,7 +903,10 @@ describe('spectators through the UI flows (view-only sessions, 2026-10-24)', () 
         signal: ac.signal,
       }).catch(() => {});
     }
-    await sleep(150);
+    // The room is full (10 editors) before F tries to join. A fixed 150 ms
+    // sleep let a slow macOS runner join a room that wasn't full yet, so no
+    // "Watch" offer came (flaky CI, 2026-11-11).
+    await vi.waitFor(() => expect(mock.streamCount(decoded.roomId)).toBe(10), { timeout: 5000, interval: 20 });
     const viewF = mkIndexStyleView('doc-F');
     const depsF = {
       getView: () => viewF,
