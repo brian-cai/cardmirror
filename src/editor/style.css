@@ -12887,7 +12887,24 @@ body.pmd-multi-nav-empty.pmd-multi-doc #status-bar {
    chrome so it sits in the same modal vocabulary as the New-doc
    overwrite dialog. */
 .pmd-text-prompt-dialog {
-  min-width: 420px;
+  min-width: min(420px, calc(100vw - 32px));
+  max-width: min(640px, calc(100vw - 32px));
+}
+/* Every route dialog fits the window (found by the layout check,
+   scripts/layout-check.cjs): an alert or confirm with a long message and
+   no title put the message in the header, which grew past the screen and
+   pushed OK / Cancel off it. The text part scrolls; the buttons stay. */
+.pmd-route-dialog {
+  max-height: calc(100vh - 32px);
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+}
+.pmd-route-dialog > .pmd-route-header,
+.pmd-route-dialog > .pmd-choice-prompt-detail {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
 }
 /* Optional checkbox under the prompt's input (Start session's "Don't list
    this session for my team"). */
