@@ -5,6 +5,17 @@ changes in each release, written for users of the editor. For
 in-depth rationale and implementation context behind each entry,
 see `DETAILED_CHANGELOG.md`.
 
+## 1.17.7 — 2026-11-12
+
+BCai's (@brian-cai) build of CardMirror, updating from
+github.com/brian-cai/cardmirror.
+
+### Changed
+
+- **Less BCai's build on screen.** The window title still says
+  "CardMirror (BCai's build)"; the home-screen badge and the status-bar
+  chip from 1.17.6 are gone (the home screen keeps its small label).
+
 ## 1.17.6 — 2026-11-12
 
 BCai's (@brian-cai) build of CardMirror, updating from
