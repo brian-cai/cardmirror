@@ -21,7 +21,7 @@
     "release": "npm run fetch:koffi-cross && npm run build:native && npm run build:renderer && npm run build:main && npm run build:service && electron-builder --publish always",
     "fetch:koffi-cross": "bash scripts/fetch-koffi-cross.sh",
     "pack:lite": "node scripts/inject-lite-build.cjs 1 && VITE_LITE=1 npm run pack -- -c.productName=\"CardMirror Lite\" -c.appId=com.cardmirror.lite -c.executableName=\"CardMirror Lite\"; node scripts/inject-lite-build.cjs 0",
-    "dist:lite": "node scripts/inject-lite-build.cjs 1 && VITE_LITE=1 npm run dist -- -c.appId=com.cardmirror.lite -c.productName=\"CardMirror Lite\" -c.mac.artifactName=\"CardMirror-Lite-${version}-${arch}.${ext}\" -c.win.artifactName=\"CardMirror-Lite-Setup-${version}.${ext}\" -c.linux.artifactName=\"cardmirror-lite-${version}.${ext}\" -c.executableName=\"CardMirror Lite\" -c.linux.executableName=cardmirror-lite; node scripts/inject-lite-build.cjs 0"
+    "dist:lite": "node scripts/inject-lite-build.cjs 1 && VITE_LITE=1 npm run dist -- -c.appId=com.cardmirror.lite -c.productName=\"CardMirror Lite\" -c.dmg.title=\"CardMirror Lite\" -c.nsis.uninstallDisplayName=\"CardMirror Lite\" -c.mac.artifactName=\"CardMirror-Lite-${version}-${arch}.${ext}\" -c.win.artifactName=\"CardMirror-Lite-Setup-${version}.${ext}\" -c.linux.artifactName=\"cardmirror-lite-${version}.${ext}\" -c.executableName=\"CardMirror Lite\" -c.linux.executableName=cardmirror-lite; node scripts/inject-lite-build.cjs 0"
   },
   "build": {
     "appId": "com.cardmirror.app",
@@ -106,6 +106,12 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "x64ArchFiles": "**/node_modules/@koromix/**"
+    },
+    "dmg": {
+      "title": "CardMirror ${version} (BCai's build)"
+    },
+    "nsis": {
+      "uninstallDisplayName": "CardMirror (BCai's build) ${version}"
     },
     "win": {
       "target": [

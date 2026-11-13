@@ -2,6 +2,7 @@
  * What a session is called: the published title, the default "Filename - Display Name", and the owner doc's name. Split out of collab-ui.ts.
  */
 
+import { stripAppTitle } from '../app-title.js';
 import { CollabSession } from './collab-session.js';
 import { type CollabUiDeps, docTitleResolver } from './collab-ui-state.js';
 
@@ -65,8 +66,5 @@ export function adoptSharedTitle(deps: CollabUiDeps, session: CollabSession): vo
 export function sessionDocTitle(ownerUid: string | null | undefined): string {
   const byUid = ownerUid ? docTitleResolver?.(ownerUid) : null;
   if (byUid != null) return byUid.trim();
-  const t = document.title;
-  const cut = t.lastIndexOf(' — CardMirror');
-  if (cut > 0) return t.slice(0, cut);
-  return t === 'CardMirror' ? '' : t;
+  return stripAppTitle(document.title);
 }

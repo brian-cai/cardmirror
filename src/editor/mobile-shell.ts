@@ -18,6 +18,7 @@
  * click-to-jump keep working unchanged.
  */
 
+import { stripAppTitle } from './app-title.js';
 import { TextSelection } from 'prosemirror-state';
 import { confirmDialog } from './text-prompt.js';
 import { settings, ZOOM_MIN_PCT, ZOOM_MAX_PCT } from './settings.js';
@@ -124,7 +125,7 @@ function buildAppBar(): HTMLElement {
  *  open/save/dirty change; observing it avoids new exports. */
 function syncTitle(el: HTMLSpanElement): void {
   const apply = (): void => {
-    el.textContent = document.title.replace(/\s*[—-]\s*CardMirror\s*$/, '') || 'CardMirror';
+    el.textContent = stripAppTitle(document.title) || 'CardMirror';
   };
   apply();
   const titleEl = document.querySelector('title');

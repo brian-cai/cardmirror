@@ -37,6 +37,7 @@
  * dropdown — which edits the same global active-tags filter.
  */
 
+import { stripAppTitle } from './app-title.js';
 import type { EditorView } from 'prosemirror-view';
 import { flattenSelfRefsInSlice } from './self-transclusion.js';
 import { Slice, type Node as PMNode } from 'prosemirror-model';
@@ -781,8 +782,8 @@ const categoryLabel = (id: SettingsCategory): string =>
  *  the app suffix (a home-screen or untitled window is just "CardMirror"). */
 export function windowLabel(w: WindowListEntry): string {
   if (w.docNames.length > 0) return w.docNames.join(' · ');
-  const title = w.title.replace(/\s+—\s+CardMirror$/, '').trim();
-  return title && title !== 'CardMirror' ? title : 'Untitled window';
+  const title = stripAppTitle(w.title);
+  return title || 'Untitled window';
 }
 
 /** Window source (`w `) — every OTHER CardMirror window, in the

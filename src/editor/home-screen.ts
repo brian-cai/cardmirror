@@ -169,13 +169,20 @@ class HomeScreen {
     const title = document.createElement('h1');
     title.className = 'pmd-home-title';
     title.textContent = 'CardMirror';
+    // Which CardMirror this is, loudly (xtgg): a badge on the title and a
+    // line saying it isn't the original. Lite has its own name.
+    if (!isLiteBuild()) {
+      const badge = document.createElement('span');
+      badge.className = 'pmd-home-build-badge';
+      badge.textContent = BUILD_LABEL;
+      title.appendChild(badge);
+    }
     header.appendChild(title);
-    // Which CardMirror this is: the fork's 1.15.x reads as older than the
-    // original's, so say so quietly under the title. Lite has its own name.
     if (!isLiteBuild()) {
       const build = document.createElement('p');
       build.className = 'pmd-home-build';
-      build.textContent = BUILD_LABEL;
+      build.textContent =
+        "An independent build of CardMirror by BCai, not the original. Updates come from github.com/brian-cai/cardmirror.";
       header.appendChild(build);
     }
     const tagline = document.createElement('p');

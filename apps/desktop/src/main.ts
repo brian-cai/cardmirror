@@ -47,6 +47,21 @@ import { registerFlowIpc } from './flow-bridge.js';
 import { registerDocCacheIpc } from './doc-cache-ipc.js';
 import { registerPairingIpc, relayUrl } from './pairing-ipc.js';
 import { LITE_BUILD } from './lite-build.js';
+
+/** Which CardMirror this is, in the window title and the Mac About panel
+ *  (xtgg). The installed app stays "CardMirror" (same productName and
+ *  appId as the original, so it installs on top and keeps its settings). */
+const BUILD_LABEL = "BCai's build";
+const APP_TITLE = LITE_BUILD ? 'CardMirror' : `CardMirror (${BUILD_LABEL})`;
+if (!LITE_BUILD) {
+  app.setAboutPanelOptions({
+    applicationName: APP_TITLE,
+    credits:
+      "An independent build of CardMirror by BCai, not the original.\n" +
+      'Updates come from github.com/brian-cai/cardmirror.\n' +
+      'Based on CardMirror by Anthony Trufanov.',
+  });
+}
 import {
   RELAY_JOIN_SCHEME,
   isRelayJoinArg,
@@ -744,7 +759,7 @@ function createWindow(initialDoc?: InitialDocPayload): BrowserWindow {
     // degradation from there.
     minWidth: 0,
     minHeight: 0,
-    title: 'CardMirror',
+    title: APP_TITLE,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -3750,7 +3765,7 @@ function buildMenu(): Menu {
           {
             label: app.name,
             submenu: [
-              { role: 'about' as const },
+              { role: 'about' as const, label: `About ${APP_TITLE}` },
               { type: 'separator' as const },
               settingsItem,
               { type: 'separator' as const },

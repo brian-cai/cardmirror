@@ -4503,12 +4503,33 @@ html.pmd-home-active #speech-doc-banner {
   color: var(--pmd-c-text-muted);
   font-size: 0.95rem;
 }
-/* Which build this is (BCai's build): small and quiet, under the title. */
+/* Which build this is (BCai's build): an accent badge on the title and a
+   line under it, so nobody mistakes it for the original CardMirror. */
+.pmd-home-build-badge {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 0.6rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--pmd-c-accent);
+  color: var(--pmd-c-accent-contrast, #fff);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  position: relative;
+  top: -0.15em;
+}
 .pmd-home-build {
-  margin: 0.1rem 0 0;
-  color: var(--pmd-c-text-muted);
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
+  margin: 0.3rem 0 0;
+  color: var(--pmd-c-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+/* Status-bar copy of the build name (xtgg): always there while a doc is
+   open; click → About this install. */
+#build-chip {
+  color: var(--pmd-c-accent);
+  font-weight: 700;
 }
 /* Home screen's copy of the update chip (styled with #update-chip). */
 .pmd-home-update {

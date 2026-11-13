@@ -26,6 +26,7 @@ import { nativeBytesToDocx } from './native-to-docx.js';
 import type { Thread, Comment } from './comments-plugin.js';
 import type { LocalComment } from './learn-store.js';
 import { NavigationPanel, showNavContextMenu } from './nav-panel.js';
+import { windowTitle } from './app-title.js';
 import { initUpdateChip } from './update-chip.js';
 import { initUpdateNudge } from './update-nudge.js';
 import { initNameNudge } from './name-nudge.js';
@@ -1044,6 +1045,22 @@ startTournamentModeWatch();
   const tournamentChipEl = document.getElementById('tournament-chip') as HTMLButtonElement | null;
   if (tournamentChipEl) {
     void import('./tournament-mode-ui.js').then((m) => m.initTournamentChip(tournamentChipEl));
+  }
+}
+// Build chip (xtgg): "BCai's build" in the status bar while a doc is open,
+// so this is never mistaken for the original CardMirror. Opens About.
+{
+  // The title bar names the build from the first paint, before any doc
+  // sets it (index.html's <title> is shared with Lite).
+  if (document.title === 'CardMirror') document.title = windowTitle(null);
+  const buildChipEl = document.getElementById('build-chip') as HTMLButtonElement | null;
+  if (buildChipEl && !isLiteBuild()) {
+    buildChipEl.hidden = false;
+    buildChipEl.addEventListener('click', () => {
+      void loadSettingsUi().then((m) =>
+        m.openSettings({ category: 'general', anchor: 'about-this-install' }),
+      );
+    });
   }
 }
 // Update chip (install-on-confirm) — desktop only; the element stays
@@ -8563,7 +8580,8 @@ function syncRepresentedFile(handle: unknown): void {
  *  of truth where the OS title isn't visible (frameless Electron
  *  windows, tiling WMs, hidden title-bar themes). Cheap; called on
  *  open / save / multi-doc focus change. Title format: single-doc
- *  `${filename} — CardMirror` ('CardMirror' if untitled); multi-pane
+ *  `${filename} — CardMirror (BCai's build)` (just the app title if
+ *  untitled; see app-title.ts); multi-pane
  *  joins every non-empty slot's name — the per-pane chip already
  *  identifies the focused doc, so the title serves as a workspace
  *  summary. */
@@ -8575,13 +8593,9 @@ function updateWindowTitle(): void {
   syncRepresentedFile(focused.handle);
   if (multiDocActive && multiDocGetAllFilenames) {
     const names = multiDocGetAllFilenames().filter((n): n is string => !!n);
-    document.title = names.length > 0
-      ? `${names.join(' · ')} — CardMirror`
-      : 'CardMirror';
+    document.title = windowTitle(names.length > 0 ? names.join(' · ') : null);
   } else {
-    document.title = focused.filename
-      ? `${focused.filename} — CardMirror`
-      : 'CardMirror';
+    document.title = windowTitle(focused.filename);
   }
   // In-app filename chip. The chip itself is CSS-hidden in
   // multi-pane mode (each per-pane chip shows the pane's own
